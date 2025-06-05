@@ -6,6 +6,8 @@ An MCP (Model Context Protocol) server for interacting with a Paperless-NGX API 
 
 ## Quick Start
 
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-light.svg)](https://cursor.com/install-mcp?name=paperless&config=eyJjb21tYW5kIjoibnB4IC15IEBiYXJ1Y2hpcm8vcGFwZXJsZXNzLW1jcEBsYXRlc3QiLCJlbnYiOnsiUEFQRVJMRVNTX1VSTCI6Imh0dHA6Ly95b3VyLXBhcGVybGVzcy1pbnN0YW5jZTo4MDAwIiwiUEFQRVJMRVNTX0FQSV9LRVkiOiJ5b3VyLWFwaS10b2tlbiJ9fQ%3D%3D)
+
 ### Installing via Smithery
 
 To install Paperless NGX MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@baruchiro/paperless-mcp):

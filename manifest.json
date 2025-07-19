@@ -1,0 +1,106 @@
+{
+  "dxt_version": "0.1",
+  "name": "@baruchiro/paperless-mcp",
+  "display_name": "Paperless-ngx",
+  "version": "0.0.2",
+  "description": "Model Context Protocol (MCP) server for interacting with Paperless-NGX document management system. Enables AI assistants to manage documents, tags, correspondents, and document types through the Paperless-NGX API.",
+  "author": {
+    "name": "Baruch Odem"
+  },
+  "homepage": "https://github.com/baruchiro/paperless-mcp",
+  "documentation": "https://github.com/baruchiro/paperless-mcp",
+  "support": "https://github.com/baruchiro/paperless-mcp",
+
+  "server": {
+    "type": "node",
+    "entry_point": "build/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/build/index.js"],
+      "env": {
+        "PAPERLESS_URL": "${user_config.url}",
+        "PAPERLESS_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "list_documents",
+      "description": "Get a paginated list of all documents."
+    },
+    {
+      "name": "get_document",
+      "description": "Get a specific document by ID."
+    },
+    {
+      "name": "search_documents",
+      "description": "Full-text search across documents."
+    },
+    {
+      "name": "download_document",
+      "description": "Download a document file by ID."
+    },
+    {
+      "name": "bulk_edit_documents",
+      "description": "Perform bulk operations on multiple documents."
+    },
+    {
+      "name": "post_document",
+      "description": "Upload a new document to Paperless-NGX."
+    },
+    {
+      "name": "list_tags",
+      "description": "Get all tags."
+    },
+    {
+      "name": "create_tag",
+      "description": "Create a new tag."
+    },
+    {
+      "name": "list_correspondents",
+      "description": "Get all correspondents."
+    },
+    {
+      "name": "create_correspondent",
+      "description": "Create a new correspondent."
+    },
+    {
+      "name": "list_document_types",
+      "description": "Get all document types."
+    },
+    {
+      "name": "create_document_type",
+      "description": "Create a new document type."
+    }
+  ],
+  "user_config": {
+    "url": {
+      "type": "string",
+      "title": "Paperless URL",
+      "description": "The full URL to your Paperless-NGX instance (including https://)",
+      "required": true,
+      "sensitive": false
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Your Paperless-NGX API key",
+      "required": true,
+      "sensitive": true
+    }
+  },
+  "keywords": [
+    "mcp",
+    "paperless-ngx",
+    "document-management",
+    "ai",
+    "claude",
+    "model-context-protocol",
+    "paperless"
+  ],
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/baruchiro/paperless-mcp.git"
+  }
+}

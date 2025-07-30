@@ -32,7 +32,8 @@ Add these to your MCP config file:
   ],
   "env": {
     "PAPERLESS_URL": "http://your-paperless-instance:8000",
-    "PAPERLESS_API_KEY": "your-api-token"
+    "PAPERLESS_API_KEY": "your-api-token",
+    "PAPERLESS_PUBLIC_URL": "https://your-public-domain.com"
   }
 }
 ```
@@ -49,7 +50,8 @@ Add these to your MCP config file:
   ],
   "env": {
     "PAPERLESS_URL": "http://your-paperless-instance:8000",
-    "PAPERLESS_API_KEY": "your-api-token"
+    "PAPERLESS_API_KEY": "your-api-token",
+    "PAPERLESS_PUBLIC_URL": "https://your-public-domain.com"
   }
 }
 ```
@@ -63,6 +65,7 @@ Add these to your MCP config file:
 4. Replace the placeholders in your MCP config:
    - `http://your-paperless-instance:8000` with your Paperless-NGX URL
    - `your-api-token` with the token you just generated
+   - `https://your-public-domain.com` with your public Paperless-NGX URL (optional, falls back to PAPERLESS_URL)
 
 That's it! Now you can ask Claude to help you manage your Paperless-NGX documents.
 

@@ -12,24 +12,27 @@ import { registerDocumentTypeTools } from "./tools/documentTypes";
 import { registerTagTools } from "./tools/tags";
 
 const {
-  values: { baseUrl, token, http: useHttp, port },
+  values: { baseUrl, token, http: useHttp, port, publicUrl },
 } = parseArgs({
   options: {
     baseUrl: { type: "string" },
     token: { type: "string" },
     http: { type: "boolean", default: false },
     port: { type: "string" },
+    publicUrl: { type: "string", default: "" },
   },
   allowPositionals: true,
 });
 
 const resolvedBaseUrl = baseUrl || process.env.PAPERLESS_URL;
 const resolvedToken = token || process.env.PAPERLESS_API_KEY;
+const resolvedPublicUrl =
+  publicUrl || process.env.PAPERLESS_PUBLIC_URL || resolvedBaseUrl;
 const resolvedPort = port ? parseInt(port, 10) : 3000;
 
 if (!resolvedBaseUrl || !resolvedToken) {
   console.error(
-    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>]"
+    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>]"
   );
   console.error(
     "Or set PAPERLESS_URL and PAPERLESS_API_KEY environment variables."
@@ -40,7 +43,21 @@ if (!resolvedBaseUrl || !resolvedToken) {
 async function main() {
   // Initialize API client and server once
   const api = new PaperlessAPI(resolvedBaseUrl!, resolvedToken!);
-  const server = new McpServer({ name: "paperless-ngx", version: "1.0.0" });
+  const server = new McpServer(
+    { name: "paperless-ngx", version: "1.0.0" },
+    {
+      instructions: `
+Paperless-NGX MCP Server Instructions
+
+To view documents in your Paperless-NGX web interface, construct URLs using this pattern:
+${resolvedBaseUrl}/documents/{document_id}/
+
+Example: If your base URL is "http://localhost:8000", the web interface URL would be "http://localhost:8000/documents/123/" for document ID 123.
+
+The document tools return JSON data with document IDs that you can use to construct these URLs.
+      `,
+    }
+  );
   registerDocumentTools(server, api);
   registerTagTools(server, api);
   registerCorrespondentTools(server, api);

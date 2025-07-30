@@ -1,3 +1,5 @@
+<!-- [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/nloui-paperless-mcp-badge.png)](https://mseep.ai/app/nloui-paperless-mcp) -->
+
 # Paperless-NGX MCP Server
 
 [![smithery badge](https://smithery.ai/badge/@baruchiro/paperless-mcp)](https://smithery.ai/server/@baruchiro/paperless-mcp)

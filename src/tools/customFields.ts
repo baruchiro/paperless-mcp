@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
-import { errorMiddleware } from "./utils/middlewares";
+import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
 export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
@@ -17,7 +17,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
-    errorMiddleware(async (args = {}) => {
+    withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const response = await api.request(
@@ -37,7 +37,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "get_custom_field",
     { id: z.number() },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.getCustomField(args.id);
       return {
@@ -50,10 +50,20 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
     "create_custom_field",
     {
       name: z.string(),
-      data_type: z.enum(["string", "url", "date", "boolean", "integer", "float", "monetary", "documentlink", "select"]),
+      data_type: z.enum([
+        "string",
+        "url",
+        "date",
+        "boolean",
+        "integer",
+        "float",
+        "monetary",
+        "documentlink",
+        "select",
+      ]),
       extra_data: z.any().optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createCustomField(args);
       return {
@@ -67,10 +77,22 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
     {
       id: z.number(),
       name: z.string().optional(),
-      data_type: z.enum(["string", "url", "date", "boolean", "integer", "float", "monetary", "documentlink", "select"]).optional(),
+      data_type: z
+        .enum([
+          "string",
+          "url",
+          "date",
+          "boolean",
+          "integer",
+          "float",
+          "monetary",
+          "documentlink",
+          "select",
+        ])
+        .optional(),
       extra_data: z.any().optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
       const response = await api.updateCustomField(id, data);
@@ -83,7 +105,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "delete_custom_field",
     { id: z.number() },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       await api.deleteCustomField(args.id);
       return {
@@ -100,7 +122,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
       custom_fields: z.array(z.number()),
       operation: z.enum(["delete"]),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.bulkEditObjects(
         args.custom_fields,

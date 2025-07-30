@@ -3,7 +3,7 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { DocumentsResponse } from "../api/types";
-import { errorMiddleware } from "./utils/middlewares";
+import { withErrorHandling } from "./utils/middlewares";
 
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
@@ -63,7 +63,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       pages: z.string().optional(),
       degrees: z.number().optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { documents, method, ...parameters } = args;
       const response = await api.bulkEditDocuments(
@@ -96,7 +96,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       archive_serial_number: z.string().optional(),
       custom_fields: z.array(z.number()).optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const binaryData = Buffer.from(args.file, "base64");
       const blob = new Blob([binaryData]);
@@ -135,7 +135,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       created__lte: z.string().optional(),
       ordering: z.string().optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const query = new URLSearchParams();
       if (args.page) query.set("page", args.page.toString());
@@ -164,15 +164,16 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       id: z.number(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
-      const [correspondents, documentTypes, tags, customFields] = await Promise.all([
-        api.getCorrespondents(),
-        api.getDocumentTypes(),
-        api.getTags(),
-        api.getCustomFields(),
-      ]);
+      const [correspondents, documentTypes, tags, customFields] =
+        await Promise.all([
+          api.getCorrespondents(),
+          api.getDocumentTypes(),
+          api.getTags(),
+          api.getCustomFields(),
+        ]);
       const correspondentMap = new Map(
         (correspondents.results || []).map((c) => [c.id, c.name])
       );
@@ -234,7 +235,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       query: z.string(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const docsResponse = await api.searchDocuments(args.query);
       return convertDocsWithNames(docsResponse, api);
@@ -247,7 +248,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       id: z.number(),
       original: z.boolean().optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.downloadDocument(args.id, args.original);
       const filename =

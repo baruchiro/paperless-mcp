@@ -1,7 +1,7 @@
 import { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp";
 import { ZodRawShape } from "zod";
 
-export const errorMiddleware = <Args extends ZodRawShape>(
+export const withErrorHandling = <Args extends ZodRawShape>(
   cb: ToolCallback<Args>
 ): ToolCallback<Args> => {
   return (async (args, extra) => {

@@ -1,0 +1,158 @@
+---
+description: when adding a new tool to the MCP
+alwaysApply: false
+---
+# MCP Server Patterns
+
+## Tool Registration
+
+All tools must be registered in [src/index.ts](mdc:src/index.ts) following the established pattern.
+
+### Tool Structure
+
+Follow the pattern in [src/tools/customFields.ts](mdc:src/tools/customFields.ts):
+
+```typescript
+export function registerEntityTools(server: McpServer, api: PaperlessAPI) {
+  server.tool(
+    "list_entities",
+    "Description with IMPORTANT notes about caching and efficiency",
+    {
+      // Zod schema for parameters
+    },
+    errorMiddleware(async (args, extra) => {
+      // Implementation
+    })
+  );
+}
+```
+
+## Tool Implementation Patterns
+
+### Parameter Validation
+
+- Use Zod schemas for all parameters
+- Include optional parameters with proper defaults
+- Support filtering and pagination parameters
+- Validate enum values against API specification
+
+### Error Handling
+
+- Always use `errorMiddleware` wrapper
+- Check for API connection before operations
+- Provide descriptive error messages
+- Handle API errors gracefully
+
+### Response Format
+
+- Return JSON stringified responses
+- Use consistent content structure
+- Include proper type information
+- Handle empty results appropriately
+
+### Caching and Efficiency
+
+- Fetch related entities upfront for name resolution
+- Cache entity mappings for the session
+- Search locally before making additional API calls
+- Use large page sizes to reduce requests
+
+## API Integration
+
+- Use the `PaperlessAPI` instance passed to tools
+- Follow the established request patterns
+- Handle pagination properly
+- Support query string building for filters
+
+## Tool Categories
+
+- **List tools**: `list_*` - Get paginated lists with filtering
+- **Get tools**: `get_*` - Get single entity by ID
+- **Create tools**: `create_*` - Create new entities
+- **Update tools**: `update_*` - Update existing entities
+- **Delete tools**: `delete_*` - Delete entities
+- **Bulk tools**: `bulk_edit_*` - Bulk operations
+
+## Documentation
+
+- Include clear descriptions for each tool
+- Document parameter types and constraints
+- Provide usage examples in README
+- Note any important efficiency considerations
+# MCP Server Patterns
+
+## Tool Registration
+
+All tools must be registered in [src/index.ts](mdc:src/index.ts) following the established pattern.
+
+### Tool Structure
+
+Follow the pattern in [src/tools/customFields.ts](mdc:src/tools/customFields.ts):
+
+```typescript
+export function registerEntityTools(server: McpServer, api: PaperlessAPI) {
+  server.tool(
+    "list_entities",
+    "Description with IMPORTANT notes about caching and efficiency",
+    {
+      // Zod schema for parameters
+    },
+    errorMiddleware(async (args, extra) => {
+      // Implementation
+    })
+  );
+}
+```
+
+## Tool Implementation Patterns
+
+### Parameter Validation
+
+- Use Zod schemas for all parameters
+- Include optional parameters with proper defaults
+- Support filtering and pagination parameters
+- Validate enum values against API specification
+
+### Error Handling
+
+- Always use `errorMiddleware` wrapper
+- Check for API connection before operations
+- Provide descriptive error messages
+- Handle API errors gracefully
+
+### Response Format
+
+- Return JSON stringified responses
+- Use consistent content structure
+- Include proper type information
+- Handle empty results appropriately
+
+### Caching and Efficiency
+
+- Fetch related entities upfront for name resolution
+- Cache entity mappings for the session
+- Search locally before making additional API calls
+- Use large page sizes to reduce requests
+
+## API Integration
+
+- Use the `PaperlessAPI` instance passed to tools
+- Follow the established request patterns
+- Handle pagination properly
+- Support query string building for filters
+
+## Tool Categories
+
+- **List tools**: `list_*` - Get paginated lists with filtering
+- **Get tools**: `get_*` - Get single entity by ID
+- **Create tools**: `create_*` - Create new entities
+- **Update tools**: `update_*` - Update existing entities
+- **Delete tools**: `delete_*` - Delete entities
+- **Bulk tools**: `bulk_edit_*` - Bulk operations
+
+## Documentation
+
+- Include clear descriptions for each tool
+- Document parameter types and constraints
+- Provide usage examples in README
+- Note any important efficiency considerations

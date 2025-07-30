@@ -13,6 +13,19 @@ export interface Tag {
   user_can_change: boolean;
 }
 
+export interface CustomField {
+  id: number;
+  name: string;
+  data_type: string;
+  extra_data?: any;
+  document_count: number;
+}
+
+export interface CustomFieldInstance {
+  field: number;
+  value: string | number | boolean | object | null;
+}
+
 export interface PaginationResponse<T> {
   count: number;
   next: string | null;
@@ -22,6 +35,9 @@ export interface PaginationResponse<T> {
 }
 
 export interface GetTagsResponse extends PaginationResponse<Tag> {}
+
+export interface GetCustomFieldsResponse
+  extends PaginationResponse<CustomField> {}
 
 export interface DocumentsResponse extends PaginationResponse<Document> {}
 
@@ -45,7 +61,7 @@ export interface Document {
   user_can_change: boolean;
   is_shared_by_requester: boolean;
   notes: any[];
-  custom_fields: any[];
+  custom_fields: CustomFieldInstance[];
   page_count: number;
   mime_type: string;
   __search_hit__?: SearchHit;

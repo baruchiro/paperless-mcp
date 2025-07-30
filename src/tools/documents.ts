@@ -17,6 +17,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         "add_tag",
         "remove_tag",
         "modify_tags",
+        "modify_custom_fields",
         "delete",
         "reprocess",
         "set_permissions",
@@ -31,6 +32,14 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       tag: z.number().optional(),
       add_tags: z.array(z.number()).optional(),
       remove_tags: z.array(z.number()).optional(),
+      custom_fields: z
+        .array(
+          z.object({
+            field: z.number(),
+            value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+          })
+        )
+        .optional(),
       permissions: z
         .object({
           owner: z.number().nullable().optional(),
@@ -158,10 +167,11 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     errorMiddleware(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
-      const [correspondents, documentTypes, tags] = await Promise.all([
+      const [correspondents, documentTypes, tags, customFields] = await Promise.all([
         api.getCorrespondents(),
         api.getDocumentTypes(),
         api.getTags(),
+        api.getCustomFields(),
       ]);
       const correspondentMap = new Map(
         (correspondents.results || []).map((c) => [c.id, c.name])
@@ -171,6 +181,9 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       );
       const tagMap = new Map(
         (tags.results || []).map((tag) => [tag.id, tag.name])
+      );
+      const customFieldMap = new Map(
+        (customFields.results || []).map((cf) => [cf.id, cf.name])
       );
       const docWithNames = {
         ...doc,
@@ -196,6 +209,13 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
               name: tagMap.get(tagId) || String(tagId),
             }))
           : doc.tags,
+        custom_fields: Array.isArray(doc.custom_fields)
+          ? doc.custom_fields.map((field) => ({
+              field: field.field,
+              name: customFieldMap.get(field.field) || String(field.field),
+              value: field.value,
+            }))
+          : doc.custom_fields,
       };
       return {
         content: [
@@ -268,10 +288,11 @@ async function convertDocsWithNames(
     };
   }
   // Fetch all related entities for name mapping
-  const [correspondents, documentTypes, tags] = await Promise.all([
+  const [correspondents, documentTypes, tags, customFields] = await Promise.all([
     api.getCorrespondents(),
     api.getDocumentTypes(),
     api.getTags(),
+    api.getCustomFields(),
   ]);
   const correspondentMap = new Map(
     (correspondents.results || []).map((c) => [c.id, c.name])
@@ -280,6 +301,9 @@ async function convertDocsWithNames(
     (documentTypes.results || []).map((dt) => [dt.id, dt.name])
   );
   const tagMap = new Map((tags.results || []).map((tag) => [tag.id, tag.name]));
+  const customFieldMap = new Map(
+    (customFields.results || []).map((cf) => [cf.id, cf.name])
+  );
 
   const docsWithNames = docsResponse.results.map((doc) => ({
     ...doc,
@@ -304,6 +328,13 @@ async function convertDocsWithNames(
           name: tagMap.get(tagId) || String(tagId),
         }))
       : doc.tags,
+    custom_fields: Array.isArray(doc.custom_fields)
+      ? doc.custom_fields.map((field) => ({
+          field: field.field,
+          name: customFieldMap.get(field.field) || String(field.field),
+          value: field.value,
+        }))
+      : doc.custom_fields,
   }));
   return {
     content: [

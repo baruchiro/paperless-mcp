@@ -3,10 +3,12 @@ import FormData from "form-data";
 import {
   BulkEditDocumentsResult,
   Correspondent,
+  CustomField,
   Document,
   DocumentsResponse,
   DocumentType,
   GetCorrespondentsResponse,
+  GetCustomFieldsResponse,
   GetDocumentTypesResponse,
   GetTagsResponse,
   Tag,
@@ -238,6 +240,38 @@ export class PaperlessAPI {
 
   async deleteDocumentType(id: number): Promise<void> {
     return this.request<void>(`/document_types/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
+  // Custom field operations
+  async getCustomFields(): Promise<GetCustomFieldsResponse> {
+    return this.request<GetCustomFieldsResponse>("/custom_fields/");
+  }
+
+  async getCustomField(id: number): Promise<CustomField> {
+    return this.request<CustomField>(`/custom_fields/${id}/`);
+  }
+
+  async createCustomField(data: Partial<CustomField>): Promise<CustomField> {
+    return this.request<CustomField>("/custom_fields/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCustomField(
+    id: number,
+    data: Partial<CustomField>
+  ): Promise<CustomField> {
+    return this.request<CustomField>(`/custom_fields/${id}/`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCustomField(id: number): Promise<void> {
+    return this.request<void>(`/custom_fields/${id}/`, {
       method: "DELETE",
     });
   }

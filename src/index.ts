@@ -170,6 +170,7 @@ The document tools return JSON data with document IDs that you can use to constr
         `MCP Stateless Streamable HTTP Server listening on port ${resolvedPort}`
       );
     });
+    // await new Promise((resolve) => setTimeout(resolve, 1000000));
   } else {
     const transport = new StdioServerTransport();
     await server.connect(transport);

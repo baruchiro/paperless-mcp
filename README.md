@@ -461,3 +461,42 @@ npm run start -- <baseUrl> <token> --http --port 3000
 # Credits
 
 This project is a fork of [nloui/paperless-mcp](https://github.com/nloui/paperless-mcp). Many thanks to the original author for their work. Contributions and improvements may be returned upstream.
+
+## Debugging
+
+To debug the MCP server in VS Code, use the following launch configuration:
+
+```json
+{
+    "type": "node",
+    "request": "launch",
+    "name": "Debug Paperless MCP (HTTP, ts-node ESM)",
+    "program": "${workspaceFolder}/node_modules/ts-node/dist/bin.js",
+    "args": [
+        "--esm",
+        "src/index.ts",
+        "--http",
+        "--baseUrl",
+        "http://your-paperless-instance:8000",
+        "--token",
+        "your-api-token",
+        "--port",
+        "3002"
+    ],
+    "env": {
+        "NODE_OPTIONS": "--loader ts-node/esm",
+    },
+    "console": "integratedTerminal",
+    "skipFiles": [
+        "<node_internals>/**"
+    ]
+}
+```
+
+**Important:** Before debugging, uncomment the following line in `src/index.ts` (around line 175):
+
+```typescript
+// await new Promise((resolve) => setTimeout(resolve, 1000000));
+```
+
+This prevents the server from exiting immediately and allows you to set breakpoints and debug the code.

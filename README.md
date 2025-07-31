@@ -206,6 +206,15 @@ bulk_edit_documents({
   add_tags: [1, 2],
   remove_tags: [3, 4]
 })
+
+// Modify custom fields
+bulk_edit_documents({
+  documents: [12, 13],
+  method: "modify_custom_fields",
+  add_custom_fields: {
+    "2": "שנה"
+  }
+})
 ```
 
 #### post_document
@@ -232,7 +241,8 @@ post_document({
   correspondent: 1,
   document_type: 2,
   tags: [1, 3],
-  archive_serial_number: "2024-001"
+  archive_serial_number: "2024-001",
+  custom_fields: [1, 2]
 })
 ```
 
@@ -310,6 +320,85 @@ create_document_type({
   name: "Invoice",
   match: "invoice total amount due",
   matching_algorithm: "any"
+})
+```
+
+### Custom Field Operations
+
+#### list_custom_fields
+Get all custom fields.
+
+```typescript
+list_custom_fields()
+```
+
+#### get_custom_field
+Get a specific custom field by ID.
+
+Parameters:
+- id: Custom field ID
+
+```typescript
+get_custom_field({
+  id: 1
+})
+```
+
+#### create_custom_field
+Create a new custom field.
+
+Parameters:
+- name: Custom field name
+- data_type: One of "string", "url", "date", "boolean", "integer", "float", "monetary", "documentlink", "select"
+- extra_data (optional): Extra data for the custom field, such as select options
+
+```typescript
+create_custom_field({
+  name: "Invoice Number",
+  data_type: "string"
+})
+```
+
+#### update_custom_field
+Update an existing custom field.
+
+Parameters:
+- id: Custom field ID
+- name (optional): New custom field name
+- data_type (optional): New data type
+- extra_data (optional): Extra data for the custom field
+
+```typescript
+update_custom_field({
+  id: 1,
+  name: "Updated Invoice Number",
+  data_type: "string"
+})
+```
+
+#### delete_custom_field
+Delete a custom field.
+
+Parameters:
+- id: Custom field ID
+
+```typescript
+delete_custom_field({
+  id: 1
+})
+```
+
+#### bulk_edit_custom_fields
+Perform bulk operations on multiple custom fields.
+
+Parameters:
+- custom_fields: Array of custom field IDs
+- operation: One of "delete"
+
+```typescript
+bulk_edit_custom_fields({
+  custom_fields: [1, 2, 3],
+  operation: "delete"
 })
 ```
 

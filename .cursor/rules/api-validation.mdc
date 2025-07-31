@@ -1,0 +1,85 @@
+---
+description: validating endpoints and types against Paperless_ngx_REST_API.yaml
+alwaysApply: false
+---
+# API Validation and Type Safety
+
+## OpenAPI Specification Reference
+
+The authoritative source for all API endpoints, request/response schemas, and validation rules is [Paperless_ngx_REST_API.yaml](mdc:Paperless_ngx_REST_API.yaml). This OpenAPI 3.0.3 specification defines:
+
+- All available endpoints and HTTP methods
+- Request/response schemas and data types
+- Required vs optional parameters
+- Authentication requirements
+- Error response formats
+
+## Type Definitions
+
+All TypeScript interfaces must be defined in [src/api/types.ts](mdc:src/api/types.ts) and match the OpenAPI schema definitions exactly:
+
+### Core Patterns
+
+- **Pagination**: Use `PaginationResponse<T>` for list endpoints
+- **Entity Types**: Define interfaces matching API schema (e.g., `Tag`, `Document`, `Correspondent`)
+- **Request Types**: Use `Partial<T>` for create/update operations
+- **Response Types**: Extend `PaginationResponse<T>` for list responses
+
+### Validation Rules
+
+1. **Schema Compliance**: All types must match OpenAPI schema definitions exactly
+2. **Required Fields**: Mark required fields as non-optional in TypeScript
+3. **Optional Fields**: Use `?` for optional fields, `| null` for nullable fields
+4. **Enums**: Use union types for enum values defined in the API spec
+5. **Nested Objects**: Define separate interfaces for complex nested structures
+
+## API Implementation
+
+The [src/api/PaperlessAPI.ts](mdc:src/api/PaperlessAPI.ts) class implements all API operations:
+
+### Endpoint Patterns
+
+- **Base URL**: Always use `/api` prefix for all endpoints
+- **Authentication**: Include `Authorization: Token ${token}` header
+- **Content-Type**: Use `application/json` for JSON requests
+- **Version**: Include `Accept: application/json; version=5` header
+
+### Request/Response Handling
+
+1. **Type Safety**: Use generic types for all API calls
+2. **Error Handling**: Check HTTP status codes and handle errors gracefully
+3. **Response Parsing**: Return typed responses matching defined interfaces
+4. **File Uploads**: Use `FormData` for multipart requests
+
+## Validation Checklist
+
+When adding new endpoints or modifying existing ones:
+
+1. **OpenAPI Compliance**: Verify endpoint exists in [Paperless_ngx_REST_API.yaml](mdc:Paperless_ngx_REST_API.yaml)
+2. **Type Definitions**: Add/update interfaces in [src/api/types.ts](mdc:src/api/types.ts)
+3. **API Implementation**: Implement method in [src/api/PaperlessAPI.ts](mdc:src/api/PaperlessAPI.ts)
+4. **Tool Integration**: Add corresponding MCP tool following patterns in [src/tools/](mdc:src/tools/)
+5. **Error Handling**: Include proper error handling and validation
+6. **Testing**: Verify against actual API responses
+
+## Common Validation Issues
+
+- **Missing Required Fields**: Ensure all required fields from OpenAPI spec are included
+- **Type Mismatches**: Verify TypeScript types match API schema exactly
+- **Enum Values**: Use exact enum values from API specification
+- **Nullable Fields**: Handle `null` values properly for optional fields
+- **Date Formats**: Use ISO 8601 format for date/time fields
+
+## Schema Reference
+
+Key schemas from the OpenAPI specification:
+
+- `ApplicationConfiguration`: Config endpoints
+- `BulkEditObjectsRequest`: Bulk operations
+- `Document`: Document entity with all fields
+- `Tag`: Tag entity with validation rules
+- `Correspondent`: Correspondent entity
+- `DocumentType`: Document type entity
+- `CustomField`: Custom field definitions
+
+Always refer to the OpenAPI specification for the most up-to-date schema definitions and validation rules.

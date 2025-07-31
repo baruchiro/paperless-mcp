@@ -2,11 +2,14 @@ import axios from "axios";
 import FormData from "form-data";
 import {
   BulkEditDocumentsResult,
+  BulkEditParameters,
   Correspondent,
+  CustomField,
   Document,
   DocumentsResponse,
   DocumentType,
   GetCorrespondentsResponse,
+  GetCustomFieldsResponse,
   GetDocumentTypesResponse,
   GetTagsResponse,
   Tag,
@@ -51,7 +54,12 @@ export class PaperlessAPI {
           status: response.status,
           response: body,
         });
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorMessage =
+          (body as Record<string, unknown>)?.detail ||
+          (body as Record<string, unknown>)?.error ||
+          (body as Record<string, unknown>)?.message ||
+          `HTTP error! status: ${response.status}`;
+        throw new Error(String(errorMessage));
       }
 
       return body;
@@ -61,6 +69,8 @@ export class PaperlessAPI {
         message: error instanceof Error ? error.message : String(error),
         url,
         options,
+        responseData: (error as any)?.response?.data,
+        status: (error as any)?.response?.status,
       });
       throw error;
     }
@@ -70,7 +80,7 @@ export class PaperlessAPI {
   async bulkEditDocuments(
     documents: number[],
     method: string,
-    parameters = {}
+    parameters: BulkEditParameters = {}
   ): Promise<BulkEditDocumentsResult> {
     return this.request<BulkEditDocumentsResult>("/documents/bulk_edit/", {
       method: "POST",
@@ -136,6 +146,13 @@ export class PaperlessAPI {
 
   async getDocument(id: number): Promise<Document> {
     return this.request<Document>(`/documents/${id}/`);
+  }
+
+  async updateDocument(id: number, data: Partial<Document>): Promise<Document> {
+    return this.request<Document>(`/documents/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   }
 
   async searchDocuments(query: string): Promise<DocumentsResponse> {
@@ -238,6 +255,38 @@ export class PaperlessAPI {
 
   async deleteDocumentType(id: number): Promise<void> {
     return this.request<void>(`/document_types/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
+  // Custom field operations
+  async getCustomFields(): Promise<GetCustomFieldsResponse> {
+    return this.request<GetCustomFieldsResponse>("/custom_fields/");
+  }
+
+  async getCustomField(id: number): Promise<CustomField> {
+    return this.request<CustomField>(`/custom_fields/${id}/`);
+  }
+
+  async createCustomField(data: Partial<CustomField>): Promise<CustomField> {
+    return this.request<CustomField>("/custom_fields/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCustomField(
+    id: number,
+    data: Partial<CustomField>
+  ): Promise<CustomField> {
+    return this.request<CustomField>(`/custom_fields/${id}/`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCustomField(id: number): Promise<void> {
+    return this.request<void>(`/custom_fields/${id}/`, {
       method: "DELETE",
     });
   }

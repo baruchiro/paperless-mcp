@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { errorMiddleware } from "./utils/middlewares";
+import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
 export function registerDocumentTypeTools(server, api) {
@@ -15,7 +15,7 @@ export function registerDocumentTypeTools(server, api) {
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
-    errorMiddleware(async (args: any = {}, extra) => {
+    withErrorHandling(async (args: any = {}, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const response = await api.request(
@@ -35,7 +35,7 @@ export function registerDocumentTypeTools(server, api) {
   server.tool(
     "get_document_type",
     { id: z.number() },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/document_types/${args.id}/`);
       return {
@@ -53,7 +53,7 @@ export function registerDocumentTypeTools(server, api) {
         .enum(["any", "all", "exact", "regular expression", "fuzzy"])
         .optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createDocumentType(args);
       return {
@@ -72,7 +72,7 @@ export function registerDocumentTypeTools(server, api) {
         .enum(["any", "all", "exact", "regular expression", "fuzzy"])
         .optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/document_types/${args.id}/`, {
         method: "PUT",
@@ -86,9 +86,20 @@ export function registerDocumentTypeTools(server, api) {
 
   server.tool(
     "delete_document_type",
-    { id: z.number() },
-    errorMiddleware(async (args, extra) => {
+    "⚠️ DESTRUCTIVE: Permanently delete a document type from the entire system. This will affect ALL documents that use this type.",
+    {
+      id: z.number(),
+      confirm: z
+        .boolean()
+        .describe("Must be true to confirm this destructive operation"),
+    },
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      if (!args.confirm) {
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
+      }
       await api.request(`/document_types/${args.id}/`, { method: "DELETE" });
       return {
         content: [
@@ -100,9 +111,16 @@ export function registerDocumentTypeTools(server, api) {
 
   server.tool(
     "bulk_edit_document_types",
+    "Bulk edit document types. ⚠️ WARNING: 'delete' operation permanently removes document types from the entire system.",
     {
       document_type_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe(
+          "Must be true when operation is 'delete' to confirm destructive operation"
+        ),
       owner: z.number().optional(),
       permissions: z
         .object({
@@ -118,8 +136,13 @@ export function registerDocumentTypeTools(server, api) {
         .optional(),
       merge: z.boolean().optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      if (args.operation === "delete" && !args.confirm) {
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
+      }
       return api.bulkEditObjects(
         args.document_type_ids,
         "document_types",

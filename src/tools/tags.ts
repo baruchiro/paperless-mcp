@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
-import { errorMiddleware } from "./utils/middlewares";
+import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
 export function registerTagTools(server: McpServer, api: PaperlessAPI) {
@@ -17,7 +17,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
-    errorMiddleware(async (args = {}) => {
+    withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const tagsResponse = await api.request(
@@ -45,7 +45,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       match: z.string().optional(),
       matching_algorithm: z.number().int().min(0).max(4).optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const tag = await api.createTag(args);
       return {
@@ -71,7 +71,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       match: z.string().optional(),
       matching_algorithm: z.number().int().min(0).max(4).optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const tag = await api.updateTag(args.id, args);
       return {
@@ -87,11 +87,16 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "delete_tag",
+    "⚠️ DESTRUCTIVE: Permanently delete a tag from the entire system. This will remove the tag from ALL documents that use it. Use with extreme caution.",
     {
       id: z.number(),
+      confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      if (!args.confirm) {
+        throw new Error("Confirmation required for destructive operation. Set confirm: true to proceed.");
+      }
       await api.deleteTag(args.id);
       return {
         content: [
@@ -106,9 +111,11 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "bulk_edit_tags",
+    "Bulk edit tags. ⚠️ WARNING: 'delete' operation permanently removes tags from the entire system. Use with caution.",
     {
       tag_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),
+      confirm: z.boolean().optional().describe("Must be true when operation is 'delete' to confirm destructive operation"),
       owner: z.number().optional(),
       permissions: z
         .object({
@@ -124,8 +131,11 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .optional(),
       merge: z.boolean().optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      if (args.operation === "delete" && !args.confirm) {
+        throw new Error("Confirmation required for destructive operation. Set confirm: true to proceed.");
+      }
       return api.bulkEditObjects(
         args.tag_ids,
         "tags",

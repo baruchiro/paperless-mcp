@@ -148,6 +148,13 @@ export class PaperlessAPI {
     return this.request<Document>(`/documents/${id}/`);
   }
 
+  async updateDocument(id: number, data: Partial<Document>): Promise<Document> {
+    return this.request<Document>(`/documents/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
   async searchDocuments(query: string): Promise<DocumentsResponse> {
     const response = await this.request<DocumentsResponse>(
       `/documents/?query=${encodeURIComponent(query)}`

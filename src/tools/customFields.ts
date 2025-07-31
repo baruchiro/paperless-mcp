@@ -104,9 +104,16 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "delete_custom_field",
-    { id: z.number() },
+    "⚠️ DESTRUCTIVE: Permanently delete a custom field from the entire system. This will remove the field from ALL documents that use it.",
+    { 
+      id: z.number(),
+      confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
+    },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      if (!args.confirm) {
+        throw new Error("Confirmation required for destructive operation. Set confirm: true to proceed.");
+      }
       await api.deleteCustomField(args.id);
       return {
         content: [
@@ -118,12 +125,17 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "bulk_edit_custom_fields",
+    "Bulk edit custom fields. ⚠️ WARNING: 'delete' operation permanently removes custom fields from the entire system.",
     {
       custom_fields: z.array(z.number()),
       operation: z.enum(["delete"]),
+      confirm: z.boolean().optional().describe("Must be true when operation is 'delete' to confirm destructive operation"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      if (args.operation === "delete" && !args.confirm) {
+        throw new Error("Confirmation required for destructive operation. Set confirm: true to proceed.");
+      }
       const response = await api.bulkEditObjects(
         args.custom_fields,
         "custom_field",

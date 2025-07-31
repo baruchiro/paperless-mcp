@@ -50,6 +50,13 @@ async function main() {
       instructions: `
 Paperless-NGX MCP Server Instructions
 
+⚠️ CRITICAL: Always differentiate between operations on specific documents vs operations on the entire system:
+
+- REMOVE operations (e.g., remove_tag in bulk_edit_documents): Affect only the specified documents, items remain in the system
+- DELETE operations (e.g., delete_tag, delete_correspondent): Permanently delete items from the entire system, affecting ALL documents that use them
+
+When a user asks to "remove" something, prefer operations that affect specific documents. Only use DELETE operations when explicitly asked to delete from the system.
+
 To view documents in your Paperless-NGX web interface, construct URLs using this pattern:
 ${resolvedPublicUrl}/documents/{document_id}/
 

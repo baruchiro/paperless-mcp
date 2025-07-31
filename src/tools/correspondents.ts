@@ -86,9 +86,20 @@ export function registerCorrespondentTools(server: McpServer, api) {
 
   server.tool(
     "delete_correspondent",
-    { id: z.number() },
+    "⚠️ DESTRUCTIVE: Permanently delete a correspondent from the entire system. This will affect ALL documents that use this correspondent.",
+    {
+      id: z.number(),
+      confirm: z
+        .boolean()
+        .describe("Must be true to confirm this destructive operation"),
+    },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      if (!args.confirm) {
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
+      }
       await api.request(`/correspondents/${args.id}/`, { method: "DELETE" });
       return {
         content: [
@@ -100,9 +111,16 @@ export function registerCorrespondentTools(server: McpServer, api) {
 
   server.tool(
     "bulk_edit_correspondents",
+    "Bulk edit correspondents. ⚠️ WARNING: 'delete' operation permanently removes correspondents from the entire system.",
     {
       correspondent_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe(
+          "Must be true when operation is 'delete' to confirm destructive operation"
+        ),
       owner: z.number().optional(),
       permissions: z
         .object({
@@ -120,6 +138,11 @@ export function registerCorrespondentTools(server: McpServer, api) {
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      if (args.operation === "delete" && !args.confirm) {
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
+      }
       return api.bulkEditObjects(
         args.correspondent_ids,
         "correspondents",

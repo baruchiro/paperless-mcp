@@ -9,6 +9,7 @@ import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "bulk_edit_documents",
+    "Perform bulk operations on multiple documents. Note: 'remove_tag' removes a tag from specific documents (tag remains in system), while 'delete_tag' permanently deletes a tag from the entire system. ⚠️ WARNING: 'delete' method permanently deletes documents and requires confirmation.",
     {
       documents: z.array(z.number()),
       method: z.enum([
@@ -70,9 +71,13 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       delete_originals: z.boolean().optional(),
       pages: z.string().optional(),
       degrees: z.number().optional(),
+      confirm: z.boolean().optional().describe("Must be true when method is 'delete' to confirm destructive operation"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      if (args.method === "delete" && !args.confirm) {
+        throw new Error("Confirmation required for destructive operation. Set confirm: true to proceed.");
+      }
       const { documents, method, ...parameters } = args;
       const response = await api.bulkEditDocuments(
         documents,

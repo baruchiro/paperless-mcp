@@ -111,3 +111,28 @@ export interface GetDocumentTypesResponse
 export interface BulkEditDocumentsResult {
   result: string;
 }
+
+export interface BulkEditParameters {
+  custom_fields?: Array<{
+    field: number;
+    value: string | number | boolean | null;
+  }>;
+  add_tags?: number[];
+  remove_tags?: number[];
+  degrees?: number;
+  pages?: string;
+  metadata_document_id?: number;
+  delete_originals?: boolean;
+  correspondent?: number;
+  document_type?: number;
+  storage_path?: number;
+  tag?: number;
+  permissions?: {
+    owner?: number | null;
+    set_permissions?: {
+      view: { users: number[]; groups: number[] };
+      change: { users: number[]; groups: number[] };
+    };
+    merge?: boolean;
+  };
+}

@@ -2,6 +2,7 @@ import axios from "axios";
 import FormData from "form-data";
 import {
   BulkEditDocumentsResult,
+  BulkEditParameters,
   Correspondent,
   CustomField,
   Document,
@@ -53,7 +54,12 @@ export class PaperlessAPI {
           status: response.status,
           response: body,
         });
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorMessage =
+          (body as Record<string, unknown>)?.detail ||
+          (body as Record<string, unknown>)?.error ||
+          (body as Record<string, unknown>)?.message ||
+          `HTTP error! status: ${response.status}`;
+        throw new Error(String(errorMessage));
       }
 
       return body;
@@ -63,6 +69,8 @@ export class PaperlessAPI {
         message: error instanceof Error ? error.message : String(error),
         url,
         options,
+        responseData: (error as any)?.response?.data,
+        status: (error as any)?.response?.status,
       });
       throw error;
     }
@@ -72,7 +80,7 @@ export class PaperlessAPI {
   async bulkEditDocuments(
     documents: number[],
     method: string,
-    parameters = {}
+    parameters: BulkEditParameters = {}
   ): Promise<BulkEditDocumentsResult> {
     return this.request<BulkEditDocumentsResult>("/documents/bulk_edit/", {
       method: "POST",

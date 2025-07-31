@@ -69,7 +69,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const response = await api.bulkEditDocuments(
         documents,
         method,
-        parameters
+        parameters || {}
       );
       return {
         content: [
@@ -289,12 +289,14 @@ async function convertDocsWithNames(
     };
   }
   // Fetch all related entities for name mapping
-  const [correspondents, documentTypes, tags, customFields] = await Promise.all([
-    api.getCorrespondents(),
-    api.getDocumentTypes(),
-    api.getTags(),
-    api.getCustomFields(),
-  ]);
+  const [correspondents, documentTypes, tags, customFields] = await Promise.all(
+    [
+      api.getCorrespondents(),
+      api.getDocumentTypes(),
+      api.getTags(),
+      api.getCustomFields(),
+    ]
+  );
   const correspondentMap = new Map(
     (correspondents.results || []).map((c) => [c.id, c.name])
   );

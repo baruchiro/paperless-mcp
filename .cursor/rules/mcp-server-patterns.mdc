@@ -32,6 +32,7 @@ export function registerEntityTools(server: McpServer, api: PaperlessAPI) {
 ### Parameter Validation
 
 - Use Zod schemas for all parameters
+- **Prefer similar Zod schemas to the API when possible** - keep tool inputs similar to the API rather than reassignment logic in the code
 - Include optional parameters with proper defaults
 - Support filtering and pagination parameters
 - Validate enum values against API specification

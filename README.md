@@ -206,6 +206,15 @@ bulk_edit_documents({
   add_tags: [1, 2],
   remove_tags: [3, 4]
 })
+
+// Modify custom fields
+bulk_edit_documents({
+  documents: [12, 13],
+  method: "modify_custom_fields",
+  add_custom_fields: {
+    "2": "שנה"
+  }
+})
 ```
 
 #### post_document

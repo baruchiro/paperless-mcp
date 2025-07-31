@@ -4,6 +4,7 @@ import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { DocumentsResponse } from "../api/types";
 import { withErrorHandling } from "./utils/middlewares";
+import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
 
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
@@ -30,16 +31,22 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       document_type: z.number().optional(),
       storage_path: z.number().optional(),
       tag: z.number().optional(),
-      add_tags: z.array(z.number()).optional(),
-      remove_tags: z.array(z.number()).optional(),
-      custom_fields: z
-        .array(
-          z.object({
-            field: z.number(),
-            value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
-          })
+      add_tags: z.array(z.number()).optional().transform(arrayNotEmpty),
+      remove_tags: z.array(z.number()).optional().transform(arrayNotEmpty),
+      add_custom_fields: z
+        .record(
+          z.string(),
+          z.union([z.string(), z.number(), z.boolean(), z.null()])
         )
-        .optional(),
+        .optional()
+        .transform(objectNotEmpty),
+      remove_custom_fields: z
+        .record(
+          z.string(),
+          z.union([z.string(), z.number(), z.boolean(), z.null()])
+        )
+        .optional()
+        .transform(objectNotEmpty),
       permissions: z
         .object({
           owner: z.number().nullable().optional(),
@@ -57,7 +64,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
             .optional(),
           merge: z.boolean().optional(),
         })
-        .optional(),
+        .optional()
+        .transform(objectNotEmpty),
       metadata_document_id: z.number().optional(),
       delete_originals: z.boolean().optional(),
       pages: z.string().optional(),

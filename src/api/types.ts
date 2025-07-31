@@ -113,10 +113,8 @@ export interface BulkEditDocumentsResult {
 }
 
 export interface BulkEditParameters {
-  custom_fields?: Array<{
-    field: number;
-    value: string | number | boolean | null;
-  }>;
+  add_custom_fields?: Record<string, string | number | boolean | null>;
+  remove_custom_fields?: Record<string, string | number | boolean | null>;
   add_tags?: number[];
   remove_tags?: number[];
   degrees?: number;

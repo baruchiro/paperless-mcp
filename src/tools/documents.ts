@@ -34,19 +34,18 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       add_tags: z.array(z.number()).optional().transform(arrayNotEmpty),
       remove_tags: z.array(z.number()).optional().transform(arrayNotEmpty),
       add_custom_fields: z
-        .record(
-          z.string(),
-          z.union([z.string(), z.number(), z.boolean(), z.null()])
+        .array(
+          z.object({
+            field: z.number(),
+            value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+          })
         )
         .optional()
-        .transform(objectNotEmpty),
+        .transform(arrayNotEmpty),
       remove_custom_fields: z
-        .record(
-          z.string(),
-          z.union([z.string(), z.number(), z.boolean(), z.null()])
-        )
+        .array(z.number())
         .optional()
-        .transform(objectNotEmpty),
+        .transform(arrayNotEmpty),
       permissions: z
         .object({
           owner: z.number().nullable().optional(),
@@ -84,11 +83,21 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
-      const { documents, method, ...parameters } = args;
+      const { documents, method, add_custom_fields, ...parameters } = args;
+
+      // Transform add_custom_fields into the two separate API parameters
+      const apiParameters = { ...parameters };
+      if (add_custom_fields && add_custom_fields.length > 0) {
+        apiParameters.assign_custom_fields = add_custom_fields.map(
+          (cf) => cf.field
+        );
+        apiParameters.assign_custom_fields_values = add_custom_fields;
+      }
+
       const response = await api.bulkEditDocuments(
         documents,
         method,
-        parameters || {}
+        apiParameters
       );
       return {
         content: [

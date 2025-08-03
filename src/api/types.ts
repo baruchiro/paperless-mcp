@@ -26,6 +26,11 @@ export interface CustomFieldInstance {
   value: string | number | boolean | object | null;
 }
 
+export interface CustomFieldInstanceRequest {
+  field: number;
+  value: string | number | boolean | object | null;
+}
+
 export interface PaginationResponse<T> {
   count: number;
   next: string | null;
@@ -113,8 +118,9 @@ export interface BulkEditDocumentsResult {
 }
 
 export interface BulkEditParameters {
-  add_custom_fields?: Record<string, string | number | boolean | null>;
-  remove_custom_fields?: Record<string, string | number | boolean | null>;
+  assign_custom_fields?: number[];
+  assign_custom_fields_values?: CustomFieldInstanceRequest[];
+  remove_custom_fields?: number[];
   add_tags?: number[];
   remove_tags?: number[];
   degrees?: number;

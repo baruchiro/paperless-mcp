@@ -10,8 +10,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "ts-node src/index.ts",
     "build": "tsc",
+    "dxt-pack": "npx @anthropic-ai/dxt pack",
     "inspect": "npm run build && npx -y @modelcontextprotocol/inspector node build/index.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build && npm run dxt-pack"
   },
   "keywords": [
     "mcp",

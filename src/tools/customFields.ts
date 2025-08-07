@@ -61,7 +61,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
         "documentlink",
         "select",
       ]),
-      extra_data: z.any().optional(),
+      extra_data: z.record(z.unknown()).nullable().optional(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -90,7 +90,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
           "select",
         ])
         .optional(),
-      extra_data: z.any().optional(),
+      extra_data: z.record(z.unknown()).nullable().optional(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");

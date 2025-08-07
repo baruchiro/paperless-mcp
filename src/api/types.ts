@@ -17,7 +17,7 @@ export interface CustomField {
   id: number;
   name: string;
   data_type: string;
-  extra_data?: any;
+  extra_data?: Record<string, unknown> | null;
   document_count: number;
 }
 

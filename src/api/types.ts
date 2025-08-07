@@ -13,6 +13,24 @@ export interface Tag {
   user_can_change: boolean;
 }
 
+export interface CustomField {
+  id: number;
+  name: string;
+  data_type: string;
+  extra_data?: Record<string, unknown> | null;
+  document_count: number;
+}
+
+export interface CustomFieldInstance {
+  field: number;
+  value: string | number | boolean | object | null;
+}
+
+export interface CustomFieldInstanceRequest {
+  field: number;
+  value: string | number | boolean | object | null;
+}
+
 export interface PaginationResponse<T> {
   count: number;
   next: string | null;
@@ -22,6 +40,9 @@ export interface PaginationResponse<T> {
 }
 
 export interface GetTagsResponse extends PaginationResponse<Tag> {}
+
+export interface GetCustomFieldsResponse
+  extends PaginationResponse<CustomField> {}
 
 export interface DocumentsResponse extends PaginationResponse<Document> {}
 
@@ -45,7 +66,7 @@ export interface Document {
   user_can_change: boolean;
   is_shared_by_requester: boolean;
   notes: any[];
-  custom_fields: any[];
+  custom_fields: CustomFieldInstance[];
   page_count: number;
   mime_type: string;
   __search_hit__?: SearchHit;
@@ -94,4 +115,28 @@ export interface GetDocumentTypesResponse
 
 export interface BulkEditDocumentsResult {
   result: string;
+}
+
+export interface BulkEditParameters {
+  assign_custom_fields?: number[];
+  assign_custom_fields_values?: CustomFieldInstanceRequest[];
+  remove_custom_fields?: number[];
+  add_tags?: number[];
+  remove_tags?: number[];
+  degrees?: number;
+  pages?: string;
+  metadata_document_id?: number;
+  delete_originals?: boolean;
+  correspondent?: number;
+  document_type?: number;
+  storage_path?: number;
+  tag?: number;
+  permissions?: {
+    owner?: number | null;
+    set_permissions?: {
+      view: { users: number[]; groups: number[] };
+      change: { users: number[]; groups: number[] };
+    };
+    merge?: boolean;
+  };
 }

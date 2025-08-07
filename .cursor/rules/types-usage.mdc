@@ -1,17 +1,70 @@
 ---
-description: Ensuring all API and tool response types are defined and reused from a dedicated types file for consistency and maintainability.
-globs: 
-alwaysApply: false
+alwaysApply: true
 ---
-# Type Usage and Expectations
 
-- All core logic is implemented in TypeScript (.ts files), as described in [README.md](mdc:README.md).
-- Type safety is enforced throughout the codebase, especially for:
-  - API responses (e.g., from PaperlessAPI)
-  - Tool callback signatures (see [src/tools/tags.ts](mdc:src/tools/tags.ts))
-  - Server interactions using `@modelcontextprotocol/sdk` types (e.g., `CallToolResult`)
-- Types for API responses should be defined in a dedicated file (e.g., `src/api/types.ts`), and imported where needed for clarity and maintainability.
-- When defining tools, always use the correct callback signature and return types as required by the SDK.
+# TypeScript Type Safety Guidelines
+
+## Avoid Using `any` Type
+
+Never use `any` type unless absolutely necessary. Instead, use proper TypeScript types:
+
+### For API Parameters and Responses
+
+- Use specific interfaces/types for API parameters
+- Define proper types for function parameters and return values
+- Use `Record<string, unknown>` instead of `any` for object parameters
+- Use `unknown` instead of `any` when the type is truly unknown
+
+### Examples of Better Alternatives
+
+Instead of:
+
+```typescript
+let apiParameters: any = {};
+```
+
+Use:
+
+```typescript
+interface ApiParameters {
+  custom_fields?: Array<{
+    field: number;
+    value: string | number | boolean | null;
+  }>;
+  add_tags?: number[];
+  remove_tags?: number[];
+  degrees?: number;
+  pages?: string;
+  metadata_document_id?: number;
+  delete_originals?: boolean;
+}
+
+let apiParameters: ApiParameters = {};
+```
+
+### For Generic Objects
+
+Instead of `any`, use:
+
+- `Record<string, unknown>` for objects with unknown structure
+- `unknown` for truly unknown types
+- Specific interfaces for known structures
+- Union types for multiple possible types
+
+### Type Definitions
+
+- Define interfaces in [src/api/types.ts](mdc:src/api/types.ts)
+- Reuse existing types from the types file
+- Create specific types for each API endpoint's parameters
+
+### Error Handling
+
+- Use proper error types instead of `any`
+- Define custom error interfaces when needed
+- Use `unknown` for caught errors: `catch (error: unknown)`
+
+This ensures type safety, better IntelliSense, and catches potential runtime errors at compile time.
+
 - Prefer explicit type annotations for function arguments and return values, especially for exported functions and tool handlers.
 - Use Zod schemas for runtime validation of tool arguments where applicable.
 

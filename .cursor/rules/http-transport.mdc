@@ -1,6 +1,5 @@
 ---
-description:
-globs:
+globs: index.ts
 alwaysApply: false
 ---
 # HTTP Transport Mode for MCP Server

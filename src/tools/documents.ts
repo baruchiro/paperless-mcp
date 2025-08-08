@@ -159,8 +159,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       document_type: z.number().optional(),
       tag: z.number().optional(),
       storage_path: z.number().optional(),
-      created__gte: z.string().optional(),
-      created__lte: z.string().optional(),
+      created__date__gte: z.string().optional(),
+      created__date__lte: z.string().optional(),
       ordering: z.string().optional(),
     },
     withErrorHandling(async (args, extra) => {
@@ -176,8 +176,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       if (args.tag) query.set("tags__id", args.tag.toString());
       if (args.storage_path)
         query.set("storage_path__id", args.storage_path.toString());
-      if (args.created__gte) query.set("created__gte", args.created__gte);
-      if (args.created__lte) query.set("created__lte", args.created__lte);
+      if (args.created__date__gte) query.set("created__date__gte", args.created__date__gte);
+      if (args.created__date__lte) query.set("created__date__lte", args.created__date__lte);
       if (args.ordering) query.set("ordering", args.ordering);
 
       const docsResponse = await api.getDocuments(

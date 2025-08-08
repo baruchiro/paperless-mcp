@@ -1,13 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { z } from "zod";
+import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
-import { DocumentsResponse } from "../api/types";
-import { errorMiddleware } from "./utils/middlewares";
+import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
+import { withErrorHandling } from "./utils/middlewares";
 
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "bulk_edit_documents",
+    "Perform bulk operations on multiple documents. Note: 'remove_tag' removes a tag from specific documents (tag remains in system), while 'delete_tag' permanently deletes a tag from the entire system. ⚠️ WARNING: 'delete' method permanently deletes documents and requires confirmation.",
     {
       documents: z.array(z.number()),
       method: z.enum([
@@ -17,6 +18,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         "add_tag",
         "remove_tag",
         "modify_tags",
+        "modify_custom_fields",
         "delete",
         "reprocess",
         "set_permissions",
@@ -29,8 +31,21 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       document_type: z.number().optional(),
       storage_path: z.number().optional(),
       tag: z.number().optional(),
-      add_tags: z.array(z.number()).optional(),
-      remove_tags: z.array(z.number()).optional(),
+      add_tags: z.array(z.number()).optional().transform(arrayNotEmpty),
+      remove_tags: z.array(z.number()).optional().transform(arrayNotEmpty),
+      add_custom_fields: z
+        .array(
+          z.object({
+            field: z.number(),
+            value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+          })
+        )
+        .optional()
+        .transform(arrayNotEmpty),
+      remove_custom_fields: z
+        .array(z.number())
+        .optional()
+        .transform(arrayNotEmpty),
       permissions: z
         .object({
           owner: z.number().nullable().optional(),
@@ -48,19 +63,41 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
             .optional(),
           merge: z.boolean().optional(),
         })
-        .optional(),
+        .optional()
+        .transform(objectNotEmpty),
       metadata_document_id: z.number().optional(),
       delete_originals: z.boolean().optional(),
       pages: z.string().optional(),
       degrees: z.number().optional(),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe(
+          "Must be true when method is 'delete' to confirm destructive operation"
+        ),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const { documents, method, ...parameters } = args;
+      if (args.method === "delete" && !args.confirm) {
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
+      }
+      const { documents, method, add_custom_fields, ...parameters } = args;
+
+      // Transform add_custom_fields into the two separate API parameters
+      const apiParameters = { ...parameters };
+      if (add_custom_fields && add_custom_fields.length > 0) {
+        apiParameters.assign_custom_fields = add_custom_fields.map(
+          (cf) => cf.field
+        );
+        apiParameters.assign_custom_fields_values = add_custom_fields;
+      }
+
       const response = await api.bulkEditDocuments(
         documents,
         method,
-        parameters
+        apiParameters
       );
       return {
         content: [
@@ -87,7 +124,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       archive_serial_number: z.string().optional(),
       custom_fields: z.array(z.number()).optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const binaryData = Buffer.from(args.file, "base64");
       const blob = new Blob([binaryData]);
@@ -126,7 +163,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       created__date__lte: z.string().optional(),
       ordering: z.string().optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const query = new URLSearchParams();
       if (args.page) query.set("page", args.page.toString());
@@ -155,14 +192,16 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       id: z.number(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
-      const [correspondents, documentTypes, tags] = await Promise.all([
-        api.getCorrespondents(),
-        api.getDocumentTypes(),
-        api.getTags(),
-      ]);
+      const [correspondents, documentTypes, tags, customFields] =
+        await Promise.all([
+          api.getCorrespondents(),
+          api.getDocumentTypes(),
+          api.getTags(),
+          api.getCustomFields(),
+        ]);
       const correspondentMap = new Map(
         (correspondents.results || []).map((c) => [c.id, c.name])
       );
@@ -171,6 +210,9 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       );
       const tagMap = new Map(
         (tags.results || []).map((tag) => [tag.id, tag.name])
+      );
+      const customFieldMap = new Map(
+        (customFields.results || []).map((cf) => [cf.id, cf.name])
       );
       const docWithNames = {
         ...doc,
@@ -196,6 +238,13 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
               name: tagMap.get(tagId) || String(tagId),
             }))
           : doc.tags,
+        custom_fields: Array.isArray(doc.custom_fields)
+          ? doc.custom_fields.map((field) => ({
+              field: field.field,
+              name: customFieldMap.get(field.field) || String(field.field),
+              value: field.value,
+            }))
+          : doc.custom_fields,
       };
       return {
         content: [
@@ -214,7 +263,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       query: z.string(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const docsResponse = await api.searchDocuments(args.query);
       return convertDocsWithNames(docsResponse, api);
@@ -227,7 +276,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       id: z.number(),
       original: z.boolean().optional(),
     },
-    errorMiddleware(async (args, extra) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.downloadDocument(args.id, args.original);
       const filename =
@@ -251,66 +300,71 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       };
     })
   );
-}
 
-async function convertDocsWithNames(
-  docsResponse: DocumentsResponse,
-  api: PaperlessAPI
-): Promise<CallToolResult> {
-  if (!docsResponse.results?.length) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: "No documents found",
-        },
-      ],
-    };
-  }
-  // Fetch all related entities for name mapping
-  const [correspondents, documentTypes, tags] = await Promise.all([
-    api.getCorrespondents(),
-    api.getDocumentTypes(),
-    api.getTags(),
-  ]);
-  const correspondentMap = new Map(
-    (correspondents.results || []).map((c) => [c.id, c.name])
-  );
-  const documentTypeMap = new Map(
-    (documentTypes.results || []).map((dt) => [dt.id, dt.name])
-  );
-  const tagMap = new Map((tags.results || []).map((tag) => [tag.id, tag.name]));
+  server.tool(
+    "update_document",
+    "Update a specific document with new values. This tool allows you to modify any document field including title, correspondent, document type, storage path, tags, custom fields, and more. Only the fields you specify will be updated.",
+    {
+      id: z.number().describe("The ID of the document to update"),
+      title: z
+        .string()
+        .max(128)
+        .optional()
+        .describe("The new title for the document (max 128 characters)"),
+      correspondent: z
+        .number()
+        .nullable()
+        .optional()
+        .describe("The ID of the correspondent to assign"),
+      document_type: z
+        .number()
+        .nullable()
+        .optional()
+        .describe("The ID of the document type to assign"),
+      storage_path: z
+        .number()
+        .nullable()
+        .optional()
+        .describe("The ID of the storage path to assign"),
+      tags: z
+        .array(z.number())
+        .optional()
+        .describe("Array of tag IDs to assign to the document"),
+      content: z
+        .string()
+        .optional()
+        .describe("The raw text content of the document (used for searching)"),
+      created: z
+        .string()
+        .optional()
+        .describe("The creation date in YYYY-MM-DD format"),
+      archive_serial_number: z
+        .number()
+        .optional()
+        .describe("The archive serial number (0-4294967295)"),
+      owner: z
+        .number()
+        .nullable()
+        .optional()
+        .describe("The ID of the user who owns the document"),
+      custom_fields: z
+        .array(
+          z.object({
+            field: z.number().describe("The custom field ID"),
+            value: z
+              .union([z.string(), z.number(), z.boolean(), z.null()])
+              .describe("The value for the custom field"),
+          })
+        )
+        .optional()
+        .describe("Array of custom field values to assign"),
+    },
+    withErrorHandling(async (args, extra) => {
+      if (!api) throw new Error("Please configure API connection first");
+      const { id, ...updateData } = args;
+      const response = await api.updateDocument(id, updateData);
 
-  const docsWithNames = docsResponse.results.map((doc) => ({
-    ...doc,
-    correspondent: doc.correspondent
-      ? {
-          id: doc.correspondent,
-          name:
-            correspondentMap.get(doc.correspondent) ||
-            String(doc.correspondent),
-        }
-      : null,
-    document_type: doc.document_type
-      ? {
-          id: doc.document_type,
-          name:
-            documentTypeMap.get(doc.document_type) || String(doc.document_type),
-        }
-      : null,
-    tags: Array.isArray(doc.tags)
-      ? doc.tags.map((tagId) => ({
-          id: tagId,
-          name: tagMap.get(tagId) || String(tagId),
-        }))
-      : doc.tags,
-  }));
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(docsWithNames),
-      },
-    ],
-  };
+      return convertDocsWithNames(response, api);
+    })
+  );
 }

@@ -7,6 +7,7 @@ import express from "express";
 import { parseArgs } from "node:util";
 import { PaperlessAPI } from "./api/PaperlessAPI";
 import { registerCorrespondentTools } from "./tools/correspondents";
+import { registerCustomFieldTools } from "./tools/customFields";
 import { registerDocumentTools } from "./tools/documents";
 import { registerDocumentTypeTools } from "./tools/documentTypes";
 import { registerTagTools } from "./tools/tags";
@@ -49,8 +50,15 @@ async function main() {
       instructions: `
 Paperless-NGX MCP Server Instructions
 
+⚠️ CRITICAL: Always differentiate between operations on specific documents vs operations on the entire system:
+
+- REMOVE operations (e.g., remove_tag in bulk_edit_documents): Affect only the specified documents, items remain in the system
+- DELETE operations (e.g., delete_tag, delete_correspondent): Permanently delete items from the entire system, affecting ALL documents that use them
+
+When a user asks to "remove" something, prefer operations that affect specific documents. Only use DELETE operations when explicitly asked to delete from the system.
+
 To view documents in your Paperless-NGX web interface, construct URLs using this pattern:
-${resolvedBaseUrl}/documents/{document_id}/
+${resolvedPublicUrl}/documents/{document_id}/
 
 Example: If your base URL is "http://localhost:8000", the web interface URL would be "http://localhost:8000/documents/123/" for document ID 123.
 
@@ -62,6 +70,7 @@ The document tools return JSON data with document IDs that you can use to constr
   registerTagTools(server, api);
   registerCorrespondentTools(server, api);
   registerDocumentTypeTools(server, api);
+  registerCustomFieldTools(server, api);
 
   if (useHttp) {
     const app = express();
@@ -161,6 +170,7 @@ The document tools return JSON data with document IDs that you can use to constr
         `MCP Stateless Streamable HTTP Server listening on port ${resolvedPort}`
       );
     });
+    // await new Promise((resolve) => setTimeout(resolve, 1000000));
   } else {
     const transport = new StdioServerTransport();
     await server.connect(transport);

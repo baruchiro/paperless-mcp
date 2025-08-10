@@ -10,6 +10,8 @@ node_modules/
 dist/
 build/
 coverage/
+package/
+*.dxt
 
 # Logs
 logs/

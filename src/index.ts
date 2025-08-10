@@ -174,7 +174,6 @@ The document tools return JSON data with document IDs that you can use to constr
   } else {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.log("MCP server running with stdio transport");
   }
 }
 

@@ -10,9 +10,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "ts-node src/index.ts",
     "build": "tsc",
-    "dxt-pack": "npx @anthropic-ai/dxt pack",
+    "dxt-pack": "dxt pack",
     "inspect": "npm run build && npx -y @modelcontextprotocol/inspector node build/index.js",
-    "prepublishOnly": "npm run build && npm run dxt-pack"
+    "prepack": "npm run build && npm run dxt-pack"
   },
   "keywords": [
     "mcp",
@@ -33,7 +33,8 @@
   "files": [
     "build",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "paperless-mcp.dxt"
   ],
   "bugs": {
     "url": "https://github.com/baruchiro/paperless-mcp/issues"
@@ -47,6 +48,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@anthropic-ai/dxt": "^0.2.6",
     "@changesets/cli": "^2.29.4",
     "@types/express": "^5.0.2",
     "@types/node": "^22.15.17",

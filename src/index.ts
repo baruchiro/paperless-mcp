@@ -147,7 +147,6 @@ async function main() {
   } else {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("MCP server running with stdio transport");
   }
 }
 

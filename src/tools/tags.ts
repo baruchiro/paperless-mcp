@@ -43,7 +43,9 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .regex(/^#[0-9A-Fa-f]{6}$/)
         .optional(),
       match: z.string().optional(),
-      matching_algorithm: z.number().int().min(0).max(4).optional(),
+      matching_algorithm: z.number().int().min(0).max(6).optional().describe(
+        "Matching algorithm: 0=None, 1=Any word, 2=All words, 3=Exact match, 4=Regular expression, 5=Fuzzy word, 6=Automatic"
+      )
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -69,7 +71,9 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .regex(/^#[0-9A-Fa-f]{6}$/)
         .optional(),
       match: z.string().optional(),
-      matching_algorithm: z.number().int().min(0).max(4).optional(),
+      matching_algorithm: z.number().int().min(0).max(6).optional().describe(
+        "Matching algorithm: 0=None, 1=Any word, 2=All words, 3=Exact match, 4=Regular expression, 5=Fuzzy word, 6=Automatic"
+      )
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");

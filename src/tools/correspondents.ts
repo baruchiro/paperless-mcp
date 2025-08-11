@@ -49,9 +49,9 @@ export function registerCorrespondentTools(server: McpServer, api) {
     {
       name: z.string(),
       match: z.string().optional(),
-      matching_algorithm: z
-        .enum(["any", "all", "exact", "regular expression", "fuzzy"])
-        .optional(),
+      matching_algorithm: z.number().int().min(0).max(6).optional().describe(
+        "Matching algorithm: 0=None, 1=Any word, 2=All words, 3=Exact match, 4=Regular expression, 5=Fuzzy word, 6=Automatic"
+      )
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -68,9 +68,9 @@ export function registerCorrespondentTools(server: McpServer, api) {
       id: z.number(),
       name: z.string(),
       match: z.string().optional(),
-      matching_algorithm: z
-        .enum(["any", "all", "exact", "regular expression", "fuzzy"])
-        .optional(),
+      matching_algorithm: z.number().int().min(0).max(6).optional().describe(
+        "Matching algorithm: 0=None, 1=Any word, 2=All words, 3=Exact match, 4=Regular expression, 5=Fuzzy word, 6=Automatic"
+      )
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");

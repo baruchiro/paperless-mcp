@@ -100,7 +100,8 @@ export function registerDocumentTypeTools(
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.updateDocumentType(args.id, args);
+      const { id, ...payloadWithoutId } = args;
+      const response = await api.updateDocumentType(id, payloadWithoutId);
       const enhancedDocumentType = enhanceMatchingAlgorithm(response);
       return {
         content: [{ type: "text", text: JSON.stringify(enhancedDocumentType) }],

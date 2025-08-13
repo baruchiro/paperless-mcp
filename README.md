@@ -262,14 +262,21 @@ Parameters:
 - name: Tag name
 - color (optional): Hex color code (e.g. "#ff0000")
 - match (optional): Text pattern to match
-- matching_algorithm (optional): One of "any", "all", "exact", "regular expression", "fuzzy"
+- matching_algorithm (optional): Number between 0 and 6:
+  0 - None
+  1 - Any word
+  2 - All words
+  3 - Exact match
+  4 - Regular expression
+  5 - Fuzzy word
+  6 - Automatic
 
 ```typescript
 create_tag({
   name: "Invoice",
   color: "#ff0000",
   match: "invoice",
-  matching_algorithm: "fuzzy"
+  matching_algorithm: 5
 })
 ```
 
@@ -288,13 +295,20 @@ Create a new correspondent.
 Parameters:
 - name: Correspondent name
 - match (optional): Text pattern to match
-- matching_algorithm (optional): One of "any", "all", "exact", "regular expression", "fuzzy"
+- matching_algorithm (optional): Number between 0 and 6:
+  0 - None
+  1 - Any word
+  2 - All words
+  3 - Exact match
+  4 - Regular expression
+  5 - Fuzzy word
+  6 - Automatic
 
 ```typescript
 create_correspondent({
   name: "ACME Corp",
   match: "ACME",
-  matching_algorithm: "fuzzy"
+  matching_algorithm: 5
 })
 ```
 
@@ -313,13 +327,20 @@ Create a new document type.
 Parameters:
 - name: Document type name
 - match (optional): Text pattern to match
-- matching_algorithm (optional): One of "any", "all", "exact", "regular expression", "fuzzy"
+- matching_algorithm (optional): Number between 0 and 6:
+  0 - None
+  1 - Any word
+  2 - All words
+  3 - Exact match
+  4 - Regular expression
+  5 - Fuzzy word
+  6 - Automatic
 
 ```typescript
 create_document_type({
   name: "Invoice",
   match: "invoice total amount due",
-  matching_algorithm: "any"
+  matching_algorithm: 1
 })
 ```
 

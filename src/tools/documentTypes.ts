@@ -1,8 +1,18 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
+import { PaperlessAPI } from "../api/PaperlessAPI";
+import { MATCHING_ALGORITHM_DESCRIPTION } from "../api/types";
+import {
+  enhanceMatchingAlgorithm,
+  enhanceMatchingAlgorithmArray,
+} from "../api/utils";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
-export function registerDocumentTypeTools(server, api) {
+export function registerDocumentTypeTools(
+  server: McpServer,
+  api: PaperlessAPI
+) {
   server.tool(
     "list_document_types",
     "List all document types. IMPORTANT: When a user query may refer to a document type or tag, you should fetch all document types and all tags up front (with a large enough page_size), cache them for the session, and search locally for matches by name or slug before making further API calls. This reduces redundant requests and handles ambiguity between tags and document types efficiently.",
@@ -15,17 +25,23 @@ export function registerDocumentTypeTools(server, api) {
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
-    withErrorHandling(async (args: any = {}, extra) => {
+    withErrorHandling(async (args = {}, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const response = await api.request(
         `/document_types/${queryString ? `?${queryString}` : ""}`
       );
+      const enhancedResults = enhanceMatchingAlgorithmArray(
+        response.results || []
+      );
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(response),
+            text: JSON.stringify({
+              ...response,
+              results: enhancedResults,
+            }),
           },
         ],
       };
@@ -38,8 +54,9 @@ export function registerDocumentTypeTools(server, api) {
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/document_types/${args.id}/`);
+      const enhancedDocumentType = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [{ type: "text", text: JSON.stringify(enhancedDocumentType) }],
       };
     })
   );
@@ -50,14 +67,19 @@ export function registerDocumentTypeTools(server, api) {
       name: z.string(),
       match: z.string().optional(),
       matching_algorithm: z
-        .enum(["any", "all", "exact", "regular expression", "fuzzy"])
-        .optional(),
+        .number()
+        .int()
+        .min(0)
+        .max(6)
+        .optional()
+        .describe(MATCHING_ALGORITHM_DESCRIPTION),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createDocumentType(args);
+      const enhancedDocumentType = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [{ type: "text", text: JSON.stringify(enhancedDocumentType) }],
       };
     })
   );
@@ -69,8 +91,12 @@ export function registerDocumentTypeTools(server, api) {
       name: z.string(),
       match: z.string().optional(),
       matching_algorithm: z
-        .enum(["any", "all", "exact", "regular expression", "fuzzy"])
-        .optional(),
+        .number()
+        .int()
+        .min(0)
+        .max(6)
+        .optional()
+        .describe(MATCHING_ALGORITHM_DESCRIPTION),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -78,8 +104,9 @@ export function registerDocumentTypeTools(server, api) {
         method: "PUT",
         body: JSON.stringify(args),
       });
+      const enhancedDocumentType = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [{ type: "text", text: JSON.stringify(enhancedDocumentType) }],
       };
     })
   );

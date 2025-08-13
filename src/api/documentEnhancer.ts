@@ -1,11 +1,7 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { PaperlessAPI } from "./PaperlessAPI";
 import { Document, DocumentsResponse } from "./types";
-
-interface NamedItem {
-  id: number;
-  name: string;
-}
+import { NamedItem } from "./utils";
 
 interface CustomField {
   field: number;

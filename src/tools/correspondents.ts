@@ -1,9 +1,18 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
+import { PaperlessAPI } from "../api/PaperlessAPI";
+import { MATCHING_ALGORITHM_DESCRIPTION } from "../api/types";
+import {
+  enhanceMatchingAlgorithm,
+  enhanceMatchingAlgorithmArray,
+} from "../api/utils";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
-export function registerCorrespondentTools(server: McpServer, api) {
+export function registerCorrespondentTools(
+  server: McpServer,
+  api: PaperlessAPI
+) {
   server.tool(
     "list_correspondents",
     {
@@ -21,11 +30,17 @@ export function registerCorrespondentTools(server: McpServer, api) {
       const response = await api.request(
         `/correspondents/${queryString ? `?${queryString}` : ""}`
       );
+      const enhancedResults = enhanceMatchingAlgorithmArray(
+        response.results || []
+      );
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(response),
+            text: JSON.stringify({
+              ...response,
+              results: enhancedResults,
+            }),
           },
         ],
       };
@@ -38,8 +53,11 @@ export function registerCorrespondentTools(server: McpServer, api) {
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/correspondents/${args.id}/`);
+      const enhancedCorrespondent = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [
+          { type: "text", text: JSON.stringify(enhancedCorrespondent) },
+        ],
       };
     })
   );
@@ -50,14 +68,21 @@ export function registerCorrespondentTools(server: McpServer, api) {
       name: z.string(),
       match: z.string().optional(),
       matching_algorithm: z
-        .enum(["any", "all", "exact", "regular expression", "fuzzy"])
-        .optional(),
+        .number()
+        .int()
+        .min(0)
+        .max(6)
+        .optional()
+        .describe(MATCHING_ALGORITHM_DESCRIPTION),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createCorrespondent(args);
+      const enhancedCorrespondent = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [
+          { type: "text", text: JSON.stringify(enhancedCorrespondent) },
+        ],
       };
     })
   );
@@ -69,8 +94,12 @@ export function registerCorrespondentTools(server: McpServer, api) {
       name: z.string(),
       match: z.string().optional(),
       matching_algorithm: z
-        .enum(["any", "all", "exact", "regular expression", "fuzzy"])
-        .optional(),
+        .number()
+        .int()
+        .min(0)
+        .max(6)
+        .optional()
+        .describe(MATCHING_ALGORITHM_DESCRIPTION),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -78,8 +107,11 @@ export function registerCorrespondentTools(server: McpServer, api) {
         method: "PUT",
         body: JSON.stringify(args),
       });
+      const enhancedCorrespondent = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [
+          { type: "text", text: JSON.stringify(enhancedCorrespondent) },
+        ],
       };
     })
   );

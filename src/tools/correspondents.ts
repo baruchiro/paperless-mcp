@@ -103,10 +103,8 @@ export function registerCorrespondentTools(
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.request(`/correspondents/${args.id}/`, {
-        method: "PUT",
-        body: JSON.stringify(args),
-      });
+      const { id, ...data } = args;
+      const response = await api.updateCorrespondent(id, data);
       const enhancedCorrespondent = enhanceMatchingAlgorithm(response);
       return {
         content: [

@@ -62,6 +62,20 @@ export interface GetTagsResponse extends PaginationResponse<Tag> {}
 export interface GetCustomFieldsResponse
   extends PaginationResponse<CustomField> {}
 
+export interface BasicUser {
+  id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+export interface Note {
+  id: number;
+  note: string;
+  created: string;
+  user: BasicUser;
+}
+
 export interface DocumentsResponse extends PaginationResponse<Document> {}
 
 export interface Document {
@@ -83,7 +97,7 @@ export interface Document {
   owner: number | null;
   user_can_change: boolean;
   is_shared_by_requester: boolean;
-  notes: Record<string, unknown>[];
+  notes: Note[];
   custom_fields: CustomFieldInstance[];
   page_count: number;
   mime_type: string;

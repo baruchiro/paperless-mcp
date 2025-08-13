@@ -202,8 +202,17 @@ export class PaperlessAPI {
   }
 
   // Correspondent operations
-  async getCorrespondents(): Promise<GetCorrespondentsResponse> {
-    return this.request<GetCorrespondentsResponse>("/correspondents/");
+  async getCorrespondents(
+    queryString?: string
+  ): Promise<GetCorrespondentsResponse> {
+    const url = queryString
+      ? `/correspondents/?${queryString}`
+      : "/correspondents/";
+    return this.request<GetCorrespondentsResponse>(url);
+  }
+
+  async getCorrespondent(id: number): Promise<Correspondent> {
+    return this.request<Correspondent>(`/correspondents/${id}/`);
   }
 
   async createCorrespondent(

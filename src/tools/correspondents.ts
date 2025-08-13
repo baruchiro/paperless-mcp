@@ -27,9 +27,7 @@ export function registerCorrespondentTools(
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
-      const response = await api.request(
-        `/correspondents/${queryString ? `?${queryString}` : ""}`
-      );
+      const response = await api.getCorrespondents(queryString);
       const enhancedResults = enhanceMatchingAlgorithmArray(
         response.results || []
       );
@@ -52,7 +50,7 @@ export function registerCorrespondentTools(
     { id: z.number() },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.request(`/correspondents/${args.id}/`);
+      const response = await api.getCorrespondent(args.id);
       const enhancedCorrespondent = enhanceMatchingAlgorithm(response);
       return {
         content: [
@@ -130,7 +128,7 @@ export function registerCorrespondentTools(
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
-      await api.request(`/correspondents/${args.id}/`, { method: "DELETE" });
+      await api.deleteCorrespondent(args.id);
       return {
         content: [
           { type: "text", text: JSON.stringify({ status: "deleted" }) },

@@ -1,8 +1,14 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
+import { PaperlessAPI } from "../api/PaperlessAPI";
+import { MATCHING_ALGORITHM_DESCRIPTION } from "../api/types";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
-export function registerDocumentTypeTools(server, api) {
+export function registerDocumentTypeTools(
+  server: McpServer,
+  api: PaperlessAPI
+) {
   server.tool(
     "list_document_types",
     "List all document types. IMPORTANT: When a user query may refer to a document type or tag, you should fetch all document types and all tags up front (with a large enough page_size), cache them for the session, and search locally for matches by name or slug before making further API calls. This reduces redundant requests and handles ambiguity between tags and document types efficiently.",
@@ -15,7 +21,7 @@ export function registerDocumentTypeTools(server, api) {
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
-    withErrorHandling(async (args: any = {}, extra) => {
+    withErrorHandling(async (args = {}, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const response = await api.request(
@@ -49,9 +55,13 @@ export function registerDocumentTypeTools(server, api) {
     {
       name: z.string(),
       match: z.string().optional(),
-      matching_algorithm: z.number().int().min(0).max(6).optional().describe(
-        "Matching algorithm: 0=None, 1=Any word, 2=All words, 3=Exact match, 4=Regular expression, 5=Fuzzy word, 6=Automatic"
-      )
+      matching_algorithm: z
+        .number()
+        .int()
+        .min(0)
+        .max(6)
+        .optional()
+        .describe(MATCHING_ALGORITHM_DESCRIPTION),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -68,9 +78,13 @@ export function registerDocumentTypeTools(server, api) {
       id: z.number(),
       name: z.string(),
       match: z.string().optional(),
-      matching_algorithm: z.number().int().min(0).max(6).optional().describe(
-        "Matching algorithm: 0=None, 1=Any word, 2=All words, 3=Exact match, 4=Regular expression, 5=Fuzzy word, 6=Automatic"
-      )
+      matching_algorithm: z
+        .number()
+        .int()
+        .min(0)
+        .max(6)
+        .optional()
+        .describe(MATCHING_ALGORITHM_DESCRIPTION),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");

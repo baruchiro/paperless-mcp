@@ -1,3 +1,21 @@
+export const MATCHING_ALGORITHM_OPTIONS = {
+  0: "None",
+  1: "Any word",
+  2: "All words",
+  3: "Exact match",
+  4: "Regular expression",
+  5: "Fuzzy word",
+  6: "Automatic",
+} as const;
+
+export type MatchingAlgorithm = keyof typeof MATCHING_ALGORITHM_OPTIONS;
+
+export const MATCHING_ALGORITHM_DESCRIPTION = `Matching algorithm: ${Object.entries(
+  MATCHING_ALGORITHM_OPTIONS
+)
+  .map(([id, name]) => `${id}=${name}`)
+  .join(", ")}`;
+
 export interface Tag {
   id: number;
   slug: string;
@@ -5,7 +23,7 @@ export interface Tag {
   color: string;
   text_color: string;
   match: string;
-  matching_algorithm: number;
+  matching_algorithm: MatchingAlgorithm;
   is_insensitive: boolean;
   is_inbox_tag: boolean;
   document_count: number;
@@ -65,7 +83,7 @@ export interface Document {
   owner: number | null;
   user_can_change: boolean;
   is_shared_by_requester: boolean;
-  notes: any[];
+  notes: Record<string, unknown>[];
   custom_fields: CustomFieldInstance[];
   page_count: number;
   mime_type: string;
@@ -84,12 +102,12 @@ export interface Correspondent {
   slug: string;
   name: string;
   match: string;
-  matching_algorithm: number;
+  matching_algorithm: MatchingAlgorithm;
   is_insensitive: boolean;
   document_count: number;
   last_correspondence: string;
   owner: number | null;
-  permissions: any;
+  permissions: Record<string, unknown>;
   user_can_change: boolean;
 }
 
@@ -101,12 +119,12 @@ export interface DocumentType {
   slug: string;
   name: string;
   match: string;
-  matching_algorithm: number;
+  matching_algorithm: MatchingAlgorithm;
   is_insensitive: boolean;
   document_count: number;
   last_correspondence: string;
   owner: number | null;
-  permissions: any;
+  permissions: Record<string, unknown>;
   user_can_change: boolean;
 }
 

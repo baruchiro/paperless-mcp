@@ -2,6 +2,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { MATCHING_ALGORITHM_DESCRIPTION } from "../api/types";
+import {
+  enhanceMatchingAlgorithm,
+  enhanceMatchingAlgorithmArray,
+} from "../api/utils";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -27,11 +31,17 @@ export function registerDocumentTypeTools(
       const response = await api.request(
         `/document_types/${queryString ? `?${queryString}` : ""}`
       );
+      const enhancedResults = enhanceMatchingAlgorithmArray(
+        response.results || []
+      );
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(response),
+            text: JSON.stringify({
+              ...response,
+              results: enhancedResults,
+            }),
           },
         ],
       };
@@ -44,8 +54,9 @@ export function registerDocumentTypeTools(
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/document_types/${args.id}/`);
+      const enhancedDocumentType = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [{ type: "text", text: JSON.stringify(enhancedDocumentType) }],
       };
     })
   );
@@ -66,8 +77,9 @@ export function registerDocumentTypeTools(
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createDocumentType(args);
+      const enhancedDocumentType = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [{ type: "text", text: JSON.stringify(enhancedDocumentType) }],
       };
     })
   );
@@ -92,8 +104,9 @@ export function registerDocumentTypeTools(
         method: "PUT",
         body: JSON.stringify(args),
       });
+      const enhancedDocumentType = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [{ type: "text", text: JSON.stringify(enhancedDocumentType) }],
       };
     })
   );

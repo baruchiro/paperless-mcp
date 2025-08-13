@@ -2,6 +2,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { MATCHING_ALGORITHM_DESCRIPTION } from "../api/types";
+import {
+  enhanceMatchingAlgorithm,
+  enhanceMatchingAlgorithmArray,
+} from "../api/utils";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -24,11 +28,17 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       const tagsResponse = await api.request(
         `/tags/${queryString ? `?${queryString}` : ""}`
       );
+      const enhancedResults = enhanceMatchingAlgorithmArray(
+        tagsResponse.results || []
+      );
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(tagsResponse),
+            text: JSON.stringify({
+              ...tagsResponse,
+              results: enhancedResults,
+            }),
           },
         ],
       };
@@ -55,11 +65,12 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const tag = await api.createTag(args);
+      const enhancedTag = enhanceMatchingAlgorithm(tag);
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(tag),
+            text: JSON.stringify(enhancedTag),
           },
         ],
       };
@@ -87,11 +98,12 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const tag = await api.updateTag(args.id, args);
+      const enhancedTag = enhanceMatchingAlgorithm(tag);
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(tag),
+            text: JSON.stringify(enhancedTag),
           },
         ],
       };
@@ -103,12 +115,16 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     "⚠️ DESTRUCTIVE: Permanently delete a tag from the entire system. This will remove the tag from ALL documents that use it. Use with extreme caution.",
     {
       id: z.number(),
-      confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
+      confirm: z
+        .boolean()
+        .describe("Must be true to confirm this destructive operation"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
-        throw new Error("Confirmation required for destructive operation. Set confirm: true to proceed.");
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
       }
       await api.deleteTag(args.id);
       return {
@@ -128,7 +144,12 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     {
       tag_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),
-      confirm: z.boolean().optional().describe("Must be true when operation is 'delete' to confirm destructive operation"),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe(
+          "Must be true when operation is 'delete' to confirm destructive operation"
+        ),
       owner: z.number().optional(),
       permissions: z
         .object({
@@ -147,7 +168,9 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.operation === "delete" && !args.confirm) {
-        throw new Error("Confirmation required for destructive operation. Set confirm: true to proceed.");
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
       }
       return api.bulkEditObjects(
         args.tag_ids,

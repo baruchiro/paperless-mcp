@@ -1,5 +1,15 @@
 # @baruchiro/paperless-mcp
 
+## 0.2.0
+
+### Minor Changes
+
+- 63b31c1: Use correct format and number range for matching_algoritm parameter
+
+### Patch Changes
+
+- 7c89701: improve types
+
 ## 0.1.0
 
 ### Minor Changes

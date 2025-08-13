@@ -100,10 +100,7 @@ export function registerDocumentTypeTools(
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.request(`/document_types/${args.id}/`, {
-        method: "PUT",
-        body: JSON.stringify(args),
-      });
+      const response = await api.updateDocumentType(args.id, args);
       const enhancedDocumentType = enhanceMatchingAlgorithm(response);
       return {
         content: [{ type: "text", text: JSON.stringify(enhancedDocumentType) }],
@@ -127,7 +124,7 @@ export function registerDocumentTypeTools(
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
-      await api.request(`/document_types/${args.id}/`, { method: "DELETE" });
+      await api.deleteDocumentType(args.id);
       return {
         content: [
           { type: "text", text: JSON.stringify({ status: "deleted" }) },

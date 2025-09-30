@@ -3,6 +3,7 @@
 # Paperless-NGX MCP Server
 
 [![smithery badge](https://smithery.ai/badge/@baruchiro/paperless-mcp)](https://smithery.ai/server/@baruchiro/paperless-mcp)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/baruchiro/paperless-mcp?utm_source=oss&utm_medium=github&utm_campaign=baruchiro%2Fpaperless-mcp&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 An MCP (Model Context Protocol) server for interacting with a Paperless-NGX API server. This server provides tools for managing documents, tags, correspondents, and document types in your Paperless-NGX instance.
 

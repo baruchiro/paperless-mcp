@@ -15,6 +15,7 @@ export function registerCorrespondentTools(
 ) {
   server.tool(
     "list_correspondents",
+    "List all correspondents with optional filtering and pagination. Correspondents represent entities that send or receive documents.",
     {
       page: z.number().optional(),
       page_size: z.number().optional(),
@@ -47,6 +48,7 @@ export function registerCorrespondentTools(
 
   server.tool(
     "get_correspondent",
+    "Get a specific correspondent by ID with full details including matching rules.",
     { id: z.number() },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -62,6 +64,7 @@ export function registerCorrespondentTools(
 
   server.tool(
     "create_correspondent",
+    "Create a new correspondent with optional matching pattern and algorithm for automatic document assignment.",
     {
       name: z.string(),
       match: z.string().optional(),
@@ -87,6 +90,7 @@ export function registerCorrespondentTools(
 
   server.tool(
     "update_correspondent",
+    "Update an existing correspondent's name, matching pattern, or matching algorithm.",
     {
       id: z.number(),
       name: z.string(),

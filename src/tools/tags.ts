@@ -47,6 +47,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "create_tag",
+    "Create a new tag with optional color, matching pattern, and matching algorithm for automatic document tagging.",
     {
       name: z.string(),
       color: z
@@ -79,6 +80,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "update_tag",
+    "Update an existing tag's name, color, matching pattern, or matching algorithm.",
     {
       id: z.number(),
       name: z.string(),

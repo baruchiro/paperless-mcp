@@ -36,6 +36,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "get_custom_field",
+    "Get a specific custom field by ID with full details including data type and extra configuration.",
     { id: z.number() },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -48,6 +49,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "create_custom_field",
+    "Create a new custom field with a specified data type (string, url, date, boolean, integer, float, monetary, documentlink, or select).",
     {
       name: z.string(),
       data_type: z.enum([
@@ -74,6 +76,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "update_custom_field",
+    "Update an existing custom field's name, data type, or extra configuration data.",
     {
       id: z.number(),
       name: z.string().optional(),

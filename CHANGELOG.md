@@ -1,5 +1,11 @@
 # @baruchiro/paperless-mcp
 
+## 0.2.2
+
+### Patch Changes
+
+- ff27606: add descriptions to tools
+
 ## 0.2.1
 
 ### Patch Changes

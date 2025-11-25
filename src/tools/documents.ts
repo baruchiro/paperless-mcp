@@ -112,6 +112,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "post_document",
+    "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields.",
     {
       file: z.string(),
       filename: z.string(),
@@ -189,6 +190,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "get_document",
+    "Get a specific document by ID with full details including correspondent, document type, tags, and custom fields.",
     {
       id: z.number(),
     },
@@ -272,6 +274,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "download_document",
+    "Download a document file by ID. Returns the document as a base64-encoded resource.",
     {
       id: z.number(),
       original: z.boolean().optional(),

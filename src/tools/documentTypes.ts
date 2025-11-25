@@ -50,6 +50,7 @@ export function registerDocumentTypeTools(
 
   server.tool(
     "get_document_type",
+    "Get a specific document type by ID with full details including matching rules.",
     { id: z.number() },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -63,6 +64,7 @@ export function registerDocumentTypeTools(
 
   server.tool(
     "create_document_type",
+    "Create a new document type with optional matching pattern and algorithm for automatic document classification.",
     {
       name: z.string(),
       match: z.string().optional(),
@@ -86,6 +88,7 @@ export function registerDocumentTypeTools(
 
   server.tool(
     "update_document_type",
+    "Update an existing document type's name, matching pattern, or matching algorithm.",
     {
       id: z.number(),
       name: z.string(),

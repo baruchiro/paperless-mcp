@@ -37,7 +37,14 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         .array(
           z.object({
             field: z.number(),
-            value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+            value: z.union([
+              z.string(),
+              z.number(),
+              z.boolean(),
+              z.array(z.number()),
+              z.record(z.unknown()),
+              z.null(),
+            ]),
           })
         )
         .optional()
@@ -355,8 +362,17 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           z.object({
             field: z.number().describe("The custom field ID"),
             value: z
-              .union([z.string(), z.number(), z.boolean(), z.null()])
-              .describe("The value for the custom field"),
+              .union([
+                z.string(),
+                z.number(),
+                z.boolean(),
+                z.array(z.number()),
+                z.record(z.unknown()),
+                z.null(),
+              ])
+              .describe(
+                "The value for the custom field. For documentlink fields, use an array of document IDs (e.g., [123, 456]) or a single document ID."
+              ),
           })
         )
         .optional()

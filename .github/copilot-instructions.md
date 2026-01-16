@@ -64,35 +64,33 @@ npm run start
 
 ### Code Patterns and Best Practices
 
-1. **Use Zod for validation** - All tool inputs must be validated with Zod schemas
-   ```typescript
-   server.tool("tool_name", "description", {
-     param: z.string(),
-     optional: z.number().optional()
-   }, async (args) => { ... });
-   ```
-
-2. **Error handling** - Wrap tool handlers with `withErrorHandling` middleware
+1. **Tool registration with Zod validation and error handling** - All tools should follow this pattern:
    ```typescript
    server.tool(
      "tool_name",
-     "description",
-     { param: z.string() },
+     "Tool description explaining what it does",
+     {
+       param: z.string(),
+       optional_param: z.number().optional()
+     },
      withErrorHandling(async (args, extra) => {
        // Implementation
+       return {
+         content: [{ type: "text", text: JSON.stringify(result) }]
+       };
      })
    );
    ```
 
-3. **API requests** - Use the PaperlessAPI class for all API interactions
+2. **API requests** - Use the PaperlessAPI class for all API interactions
    ```typescript
    const api = new PaperlessAPI(baseUrl, token);
    await api.request('/path', { method: 'POST', body: JSON.stringify(data) });
    ```
 
-4. **Document enhancement** - Use `convertDocsWithNames()` from `src/api/documentEnhancer.ts` to enrich document responses with human-readable names for tags, correspondents, document types, and custom fields
+3. **Document enhancement** - Use `convertDocsWithNames()` from `src/api/documentEnhancer.ts` to enrich document responses with human-readable names for tags, correspondents, document types, and custom fields
 
-5. **Empty value handling** - Use transformation utilities from `tools/utils/empty.ts`:
+4. **Empty value handling** - Use transformation utilities from `tools/utils/empty.ts`:
    - `arrayNotEmpty` - Converts empty arrays to undefined
    - `objectNotEmpty` - Converts empty objects to undefined
 
@@ -129,7 +127,7 @@ registerCustomFieldTools(server, api);
 The server supports three transport modes:
 1. **STDIO** (default) - Standard input/output, for CLI integrations
 2. **HTTP** - Streamable HTTP transport via Express (POST to `/mcp` endpoint)
-3. **SSE** - Server-Sent Events via Express (GET to `/sse` endpoint, POST messages to `/messages`)
+3. **SSE** - Server-Sent Events via Express (GET to `/sse` endpoint, POST messages to `/messages?sessionId=<id>`)
 
 ### Critical Behaviors to Document
 When creating or modifying tools, clearly distinguish:

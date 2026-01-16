@@ -74,9 +74,14 @@ npm run start
 
 2. **Error handling** - Wrap tool handlers with `withErrorHandling` middleware
    ```typescript
-   withErrorHandling(async (args, extra) => {
-     // Implementation
-   })
+   server.tool(
+     "tool_name",
+     "description",
+     { param: z.string() },
+     withErrorHandling(async (args, extra) => {
+       // Implementation
+     })
+   );
    ```
 
 3. **API requests** - Use the PaperlessAPI class for all API interactions
@@ -85,7 +90,7 @@ npm run start
    await api.request('/path', { method: 'POST', body: JSON.stringify(data) });
    ```
 
-4. **Document enhancement** - Use `convertDocsWithNames()` to enrich document responses with human-readable names for tags, correspondents, etc.
+4. **Document enhancement** - Use `convertDocsWithNames()` from `src/api/documentEnhancer.ts` to enrich document responses with human-readable names for tags, correspondents, document types, and custom fields
 
 5. **Empty value handling** - Use transformation utilities from `tools/utils/empty.ts`:
    - `arrayNotEmpty` - Converts empty arrays to undefined
@@ -123,8 +128,8 @@ registerCustomFieldTools(server, api);
 ### Transport Modes
 The server supports three transport modes:
 1. **STDIO** (default) - Standard input/output, for CLI integrations
-2. **HTTP** - Streamable HTTP transport via Express
-3. **SSE** - Server-Sent Events (implementation in progress)
+2. **HTTP** - Streamable HTTP transport via Express (POST to `/mcp` endpoint)
+3. **SSE** - Server-Sent Events via Express (GET to `/sse` endpoint, POST messages to `/messages`)
 
 ### Critical Behaviors to Document
 When creating or modifying tools, clearly distinguish:
@@ -155,7 +160,7 @@ When creating or modifying tools, clearly distinguish:
 ### Current State
 - No automated tests currently exist (`npm test` returns error)
 - Manual testing via `npm run inspect` with MCP inspector
-- Test against a real Paperless-NGX instance
+- Test against a real Paperless-NGX instance (use a test/development instance to avoid data corruption)
 
 ### When Adding Features
 - Test all CRUD operations for new tools

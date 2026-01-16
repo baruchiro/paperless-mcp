@@ -371,7 +371,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
                 z.null(),
               ])
               .describe(
-                "The value for the custom field. For documentlink fields, use an array of document IDs (e.g., [123, 456]) or a single document ID."
+                "The value for the custom field. For documentlink fields, use a single document ID (e.g., 123) or an array of document IDs (e.g., [123, 456])."
               ),
           })
         )

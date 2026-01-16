@@ -171,18 +171,19 @@ When creating or modifying tools, clearly distinguish:
 ## Dependencies
 
 ### Production Dependencies
-- `@modelcontextprotocol/sdk` - MCP server implementation
-- `axios` - HTTP client for API requests
-- `express` - HTTP server for HTTP transport mode
-- `form-data` - Multipart form data for file uploads
-- `typescript` - TypeScript compiler
-- `zod` - Schema validation
+- `@modelcontextprotocol/sdk` (^1.11.1) - MCP server implementation
+- `axios` (^1.9.0) - HTTP client for API requests
+- `express` (^5.1.0) - HTTP server for HTTP transport mode
+- `form-data` (^4.0.2) - Multipart form data for file uploads
+- `typescript` (^5.8.3) - TypeScript compiler (Note: Listed as production dependency in this project)
+- `zod` (^3.24.1) - Schema validation
 
 ### Development Dependencies
-- `@anthropic-ai/dxt` - Distribution packaging
-- `@changesets/cli` - Version management
-- `@types/express`, `@types/node` - TypeScript type definitions
-- `ts-node` - TypeScript execution for development
+- `@anthropic-ai/dxt` (^0.2.6) - Distribution packaging
+- `@changesets/cli` (^2.29.4) - Version management
+- `@types/express` (^5.0.2) - TypeScript type definitions for Express
+- `@types/node` (^22.15.17) - TypeScript type definitions for Node.js
+- `ts-node` (^10.9.2) - TypeScript execution for development
 
 ## Common Tasks
 

@@ -192,17 +192,50 @@ When creating or modifying tools, clearly distinguish:
 4. Add corresponding API method in `PaperlessAPI` class if needed
 5. Update types in `src/api/types.ts` if needed
 6. Test with MCP inspector
+7. **Create a changeset:** `npx changeset` (select `minor` for new features)
 
 ### Modifying API Client
 1. Update method in `src/api/PaperlessAPI.ts`
 2. Update type definitions in `src/api/types.ts`
 3. Ensure error handling includes useful context
 4. Maintain consistent request/response patterns
+5. **Create a changeset:** `npx changeset` (select appropriate version bump type)
+
+### Creating Changesets (Required for All Changes)
+
+**IMPORTANT:** Every code change must include a changeset file to enable proper version management and changelog generation.
+
+1. **Create a changeset** after making code changes:
+   ```bash
+   npx changeset
+   ```
+
+2. **Answer the prompts:**
+   - Select the type of change:
+     - `patch` - Bug fixes, small changes (0.0.X)
+     - `minor` - New features, backward compatible (0.X.0)
+     - `major` - Breaking changes (X.0.0)
+   - Write a clear summary of your changes
+
+3. **Commit the generated file:**
+   - Changesets creates a `.changeset/[random-name].md` file
+   - Commit this file along with your code changes
+   - The file contains version bump info and your change description
+
+4. **Changeset configuration:**
+   - Located in `.changeset/config.json`
+   - Base branch: `main`
+   - Automated via GitHub Actions (see `.github/workflows/release.yml`)
+   - On merge to main, changesets automatically:
+     - Creates/updates a "Version Packages" PR
+     - Updates package.json version
+     - Updates CHANGELOG.md
+     - Publishes to npm with provenance
 
 ### Publishing Updates
-1. Use changesets for version management: `npx changeset`
+1. **Always create a changeset** for your changes: `npx changeset`
 2. Build before publishing: `npm run build`
-3. Package is auto-published via GitHub Actions on release
+3. Package is auto-published via GitHub Actions when "Version Packages" PR is merged
 
 ## Related Documentation
 - [Paperless-NGX API Documentation](https://docs.paperless-ngx.com/api/)

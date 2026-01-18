@@ -206,5 +206,9 @@ When creating or modifying tools, clearly distinguish:
 
 ## Related Documentation
 - [Paperless-NGX API Documentation](https://docs.paperless-ngx.com/api/)
+- **`Paperless_ngx_REST_API.yaml`** - OpenAPI specification file in the root project folder
+  - This is the most detailed documentation of available Paperless-NGX APIs (10,000+ lines, 264KB)
+  - When reading this file, use chunking or parsing tools to query specific sections rather than reading the entire file
+  - Contains complete endpoint definitions, request/response schemas, and authentication details
 - [Model Context Protocol Documentation](https://modelcontextprotocol.io/)
 - [Repository README](../README.md)

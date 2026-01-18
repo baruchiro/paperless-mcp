@@ -24,6 +24,9 @@ export interface FieldFilterOptions {
   fields?: string[];
 }
 
+// Fields excluded by default to optimize performance and context window usage
+const DEFAULT_EXCLUDED_FIELDS = ['content'];
+
 export async function convertDocsWithNames(
   document: Document,
   api: PaperlessAPI,
@@ -156,9 +159,15 @@ async function enhanceDocumentsArray(
       }
       return filtered;
     } else {
-      // Default behavior: exclude 'content' field
-      const { content, ...withoutContent } = enhanced;
-      return withoutContent;
+      // Default behavior: exclude fields specified in DEFAULT_EXCLUDED_FIELDS
+      const result: Partial<EnhancedDocument> = {};
+      for (const key in enhanced) {
+        if (Object.prototype.hasOwnProperty.call(enhanced, key) && 
+            !DEFAULT_EXCLUDED_FIELDS.includes(key)) {
+          (result as Record<string, any>)[key] = enhanced[key as keyof EnhancedDocument];
+        }
+      }
+      return result;
     }
   });
 }

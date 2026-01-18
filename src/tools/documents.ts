@@ -157,7 +157,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "list_documents",
-    "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. Using the correct ID filter will yield much more accurate results. NOTE: By default, the 'content' field is excluded from results to optimize performance. To include it, add 'content' to the 'fields' parameter.",
+    "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. Using the correct ID filter will yield much more accurate results.",
     {
       page: z.number().optional(),
       page_size: z.number().optional(),
@@ -169,7 +169,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       created__date__gte: z.string().optional(),
       created__date__lte: z.string().optional(),
       ordering: z.string().optional(),
-      fields: z.array(z.string()).optional().describe("List of fields to include in the response. If not specified, all fields except 'content' are returned. To include content, add 'content' to this array. Examples: ['id', 'title', 'correspondent'], ['id', 'title', 'content']"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -191,35 +190,57 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const docsResponse = await api.getDocuments(
         query.toString() ? `?${query.toString()}` : ""
       );
-      return convertDocsWithNames(docsResponse, api, { fields: args.fields });
+      return convertDocsWithNames(docsResponse, api);
     })
   );
 
   server.tool(
     "get_document",
-    "Get a specific document by ID with full details including correspondent, document type, tags, and custom fields. NOTE: By default, the 'content' field is excluded from results to optimize performance. To include it, add 'content' to the 'fields' parameter.",
+    "Get a specific document by ID with full details including correspondent, document type, tags, and custom fields.",
     {
       id: z.number(),
-      fields: z.array(z.string()).optional().describe("List of fields to include in the response. If not specified, all fields except 'content' are returned. To include content, add 'content' to this array. Examples: ['id', 'title', 'correspondent'], ['id', 'title', 'content']"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
-      return convertDocsWithNames(doc, api, { fields: args.fields });
+      return convertDocsWithNames(doc, api);
+    })
+  );
+
+  server.tool(
+    "get_document_content",
+    "Get the text content of a specific document by ID. Use this when you need to read or analyze the actual document text.",
+    {
+      id: z.number(),
+    },
+    withErrorHandling(async (args, extra) => {
+      if (!api) throw new Error("Please configure API connection first");
+      const doc = await api.getDocument(args.id);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              id: doc.id,
+              title: doc.title,
+              content: doc.content,
+            }),
+          },
+        ],
+      };
     })
   );
 
   server.tool(
     "search_documents",
-    "Full text search for documents. This tool is for searching document content, title, and metadata using a full text query. For general document listing or filtering by fields, use 'list_documents' instead. NOTE: By default, the 'content' field is excluded from results to optimize performance. To include it, add 'content' to the 'fields' parameter.",
+    "Full text search for documents. This tool is for searching document content, title, and metadata using a full text query. For general document listing or filtering by fields, use 'list_documents' instead.",
     {
       query: z.string(),
-      fields: z.array(z.string()).optional().describe("List of fields to include in the response. If not specified, all fields except 'content' are returned. To include content, add 'content' to this array. Examples: ['id', 'title', 'correspondent'], ['id', 'title', 'content']"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const docsResponse = await api.searchDocuments(args.query);
-      return convertDocsWithNames(docsResponse, api, { fields: args.fields });
+      return convertDocsWithNames(docsResponse, api);
     })
   );
 
@@ -257,7 +278,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "update_document",
-    "Update a specific document with new values. This tool allows you to modify any document field including title, correspondent, document type, storage path, tags, custom fields, and more. Only the fields you specify will be updated. NOTE: By default, the 'content' field is excluded from the response to optimize performance. To include it, add 'content' to the 'fields' parameter.",
+    "Update a specific document with new values. This tool allows you to modify any document field including title, correspondent, document type, storage path, tags, custom fields, and more. Only the fields you specify will be updated.",
     {
       id: z.number().describe("The ID of the document to update"),
       title: z
@@ -320,14 +341,13 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         )
         .optional()
         .describe("Array of custom field values to assign"),
-      fields: z.array(z.string()).optional().describe("List of fields to include in the response. If not specified, all fields except 'content' are returned. To include content, add 'content' to this array."),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const { id, fields, ...updateData } = args;
+      const { id, ...updateData } = args;
       const response = await api.updateDocument(id, updateData);
 
-      return convertDocsWithNames(response, api, { fields });
+      return convertDocsWithNames(response, api);
     })
   );
 }

@@ -20,33 +20,22 @@ export interface EnhancedDocument
   custom_fields: CustomField[];
 }
 
-export interface FieldFilterOptions {
-  fields?: string[];
-}
-
-// Fields excluded by default to optimize performance and context window usage
-const DEFAULT_EXCLUDED_FIELDS = ['content'];
-
 export async function convertDocsWithNames(
   document: Document,
-  api: PaperlessAPI,
-  options?: FieldFilterOptions
+  api: PaperlessAPI
 ): Promise<CallToolResult>;
 export async function convertDocsWithNames(
   documentsResponse: DocumentsResponse,
-  api: PaperlessAPI,
-  options?: FieldFilterOptions
+  api: PaperlessAPI
 ): Promise<CallToolResult>;
 export async function convertDocsWithNames(
   input: Document | DocumentsResponse,
-  api: PaperlessAPI,
-  options?: FieldFilterOptions
+  api: PaperlessAPI
 ): Promise<CallToolResult> {
   if ("results" in input) {
     const enhancedResults = await enhanceDocumentsArray(
       input.results || [],
-      api,
-      options
+      api
     );
 
     return {
@@ -74,7 +63,7 @@ export async function convertDocsWithNames(
       ],
     };
   }
-  const [enhanced] = await enhanceDocumentsArray([input], api, options);
+  const [enhanced] = await enhanceDocumentsArray([input], api);
   return {
     content: [
       {
@@ -87,9 +76,8 @@ export async function convertDocsWithNames(
 
 async function enhanceDocumentsArray(
   documents: Document[],
-  api: PaperlessAPI,
-  options?: FieldFilterOptions
-): Promise<Partial<EnhancedDocument>[]> {
+  api: PaperlessAPI
+): Promise<Omit<EnhancedDocument, 'content'>[]> {
   if (!documents?.length) {
     return [];
   }
@@ -115,8 +103,9 @@ async function enhanceDocumentsArray(
   );
 
   return documents.map((doc) => {
-    const enhanced: EnhancedDocument = {
-      ...doc,
+    const { content, ...docWithoutContent } = doc;
+    return {
+      ...docWithoutContent,
       correspondent: doc.correspondent
         ? {
             id: doc.correspondent,
@@ -146,28 +135,5 @@ async function enhanceDocumentsArray(
           }))
         : doc.custom_fields,
     };
-
-    // Apply field filtering
-    if (options?.fields && options.fields.length > 0) {
-      // If fields are specified, only include those fields
-      const filtered: Partial<EnhancedDocument> = {};
-      for (const field of options.fields) {
-        if (Object.prototype.hasOwnProperty.call(enhanced, field)) {
-          const key = field as keyof EnhancedDocument;
-          (filtered as Record<string, any>)[key] = enhanced[key];
-        }
-      }
-      return filtered;
-    } else {
-      // Default behavior: exclude fields specified in DEFAULT_EXCLUDED_FIELDS
-      const result: Partial<EnhancedDocument> = {};
-      for (const key in enhanced) {
-        if (Object.prototype.hasOwnProperty.call(enhanced, key) && 
-            !DEFAULT_EXCLUDED_FIELDS.includes(key)) {
-          (result as Record<string, any>)[key] = enhanced[key as keyof EnhancedDocument];
-        }
-      }
-      return result;
-    }
   });
 }

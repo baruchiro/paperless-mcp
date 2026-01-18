@@ -42,7 +42,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
               z.number(),
               z.boolean(),
               z.array(z.number()),
-              z.record(z.unknown()),
               z.null(),
             ]),
           })
@@ -367,7 +366,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
                 z.number(),
                 z.boolean(),
                 z.array(z.number()),
-                z.record(z.unknown()),
                 z.null(),
               ])
               .describe(

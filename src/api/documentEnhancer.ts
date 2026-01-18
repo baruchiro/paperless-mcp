@@ -149,9 +149,9 @@ async function enhanceDocumentsArray(
       // If fields are specified, only include those fields
       const filtered: Partial<EnhancedDocument> = {};
       for (const field of options.fields) {
-        if (field in enhanced) {
+        if (Object.prototype.hasOwnProperty.call(enhanced, field)) {
           const key = field as keyof EnhancedDocument;
-          (filtered as any)[key] = enhanced[key];
+          (filtered as Record<string, any>)[key] = enhanced[key];
         }
       }
       return filtered;

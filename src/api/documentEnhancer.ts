@@ -20,22 +20,30 @@ export interface EnhancedDocument
   custom_fields: CustomField[];
 }
 
+export interface FieldFilterOptions {
+  fields?: string[];
+}
+
 export async function convertDocsWithNames(
   document: Document,
-  api: PaperlessAPI
+  api: PaperlessAPI,
+  options?: FieldFilterOptions
 ): Promise<CallToolResult>;
 export async function convertDocsWithNames(
   documentsResponse: DocumentsResponse,
-  api: PaperlessAPI
+  api: PaperlessAPI,
+  options?: FieldFilterOptions
 ): Promise<CallToolResult>;
 export async function convertDocsWithNames(
   input: Document | DocumentsResponse,
-  api: PaperlessAPI
+  api: PaperlessAPI,
+  options?: FieldFilterOptions
 ): Promise<CallToolResult> {
   if ("results" in input) {
     const enhancedResults = await enhanceDocumentsArray(
       input.results || [],
-      api
+      api,
+      options
     );
 
     return {
@@ -63,7 +71,7 @@ export async function convertDocsWithNames(
       ],
     };
   }
-  const [enhanced] = await enhanceDocumentsArray([input], api);
+  const [enhanced] = await enhanceDocumentsArray([input], api, options);
   return {
     content: [
       {
@@ -76,7 +84,8 @@ export async function convertDocsWithNames(
 
 async function enhanceDocumentsArray(
   documents: Document[],
-  api: PaperlessAPI
+  api: PaperlessAPI,
+  options?: FieldFilterOptions
 ): Promise<EnhancedDocument[]> {
   if (!documents?.length) {
     return [];
@@ -102,35 +111,53 @@ async function enhanceDocumentsArray(
     (customFields.results || []).map((cf) => [cf.id, cf.name])
   );
 
-  return documents.map((doc) => ({
-    ...doc,
-    correspondent: doc.correspondent
-      ? {
-          id: doc.correspondent,
-          name:
-            correspondentMap.get(doc.correspondent) ||
-            String(doc.correspondent),
+  return documents.map((doc) => {
+    const enhanced: EnhancedDocument = {
+      ...doc,
+      correspondent: doc.correspondent
+        ? {
+            id: doc.correspondent,
+            name:
+              correspondentMap.get(doc.correspondent) ||
+              String(doc.correspondent),
+          }
+        : null,
+      document_type: doc.document_type
+        ? {
+            id: doc.document_type,
+            name:
+              documentTypeMap.get(doc.document_type) || String(doc.document_type),
+          }
+        : null,
+      tags: Array.isArray(doc.tags)
+        ? doc.tags.map((tagId) => ({
+            id: tagId,
+            name: tagMap.get(tagId) || String(tagId),
+          }))
+        : doc.tags,
+      custom_fields: Array.isArray(doc.custom_fields)
+        ? doc.custom_fields.map((field) => ({
+            field: field.field,
+            name: customFieldMap.get(field.field) || String(field.field),
+            value: field.value,
+          }))
+        : doc.custom_fields,
+    };
+
+    // Apply field filtering
+    if (options?.fields && options.fields.length > 0) {
+      // If fields are specified, only include those fields
+      const filtered: any = {};
+      for (const field of options.fields) {
+        if (field in enhanced) {
+          filtered[field] = enhanced[field as keyof EnhancedDocument];
         }
-      : null,
-    document_type: doc.document_type
-      ? {
-          id: doc.document_type,
-          name:
-            documentTypeMap.get(doc.document_type) || String(doc.document_type),
-        }
-      : null,
-    tags: Array.isArray(doc.tags)
-      ? doc.tags.map((tagId) => ({
-          id: tagId,
-          name: tagMap.get(tagId) || String(tagId),
-        }))
-      : doc.tags,
-    custom_fields: Array.isArray(doc.custom_fields)
-      ? doc.custom_fields.map((field) => ({
-          field: field.field,
-          name: customFieldMap.get(field.field) || String(field.field),
-          value: field.value,
-        }))
-      : doc.custom_fields,
-  }));
+      }
+      return filtered as EnhancedDocument;
+    } else {
+      // Default behavior: exclude 'content' field
+      const { content, ...withoutContent } = enhanced;
+      return withoutContent as EnhancedDocument;
+    }
+  });
 }

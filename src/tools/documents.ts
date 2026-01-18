@@ -157,7 +157,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "list_documents",
-    "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. Using the correct ID filter will yield much more accurate results.",
+    "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. Using the correct ID filter will yield much more accurate results. NOTE: By default, the 'content' field is excluded from results to optimize performance. To include it, add 'content' to the 'fields' parameter.",
     {
       page: z.number().optional(),
       page_size: z.number().optional(),
@@ -169,6 +169,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       created__date__gte: z.string().optional(),
       created__date__lte: z.string().optional(),
       ordering: z.string().optional(),
+      fields: z.array(z.string()).optional().describe("List of fields to include in the response. If not specified, all fields except 'content' are returned. To include content, add 'content' to this array. Examples: ['id', 'title', 'correspondent'], ['id', 'title', 'content']"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -190,91 +191,35 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const docsResponse = await api.getDocuments(
         query.toString() ? `?${query.toString()}` : ""
       );
-      return convertDocsWithNames(docsResponse, api);
+      return convertDocsWithNames(docsResponse, api, { fields: args.fields });
     })
   );
 
   server.tool(
     "get_document",
-    "Get a specific document by ID with full details including correspondent, document type, tags, and custom fields.",
+    "Get a specific document by ID with full details including correspondent, document type, tags, and custom fields. NOTE: By default, the 'content' field is excluded from results to optimize performance. To include it, add 'content' to the 'fields' parameter.",
     {
       id: z.number(),
+      fields: z.array(z.string()).optional().describe("List of fields to include in the response. If not specified, all fields except 'content' are returned. To include content, add 'content' to this array. Examples: ['id', 'title', 'correspondent'], ['id', 'title', 'content']"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
-      const [correspondents, documentTypes, tags, customFields] =
-        await Promise.all([
-          api.getCorrespondents(),
-          api.getDocumentTypes(),
-          api.getTags(),
-          api.getCustomFields(),
-        ]);
-      const correspondentMap = new Map(
-        (correspondents.results || []).map((c) => [c.id, c.name])
-      );
-      const documentTypeMap = new Map(
-        (documentTypes.results || []).map((dt) => [dt.id, dt.name])
-      );
-      const tagMap = new Map(
-        (tags.results || []).map((tag) => [tag.id, tag.name])
-      );
-      const customFieldMap = new Map(
-        (customFields.results || []).map((cf) => [cf.id, cf.name])
-      );
-      const docWithNames = {
-        ...doc,
-        correspondent: doc.correspondent
-          ? {
-              id: doc.correspondent,
-              name:
-                correspondentMap.get(doc.correspondent) ||
-                String(doc.correspondent),
-            }
-          : null,
-        document_type: doc.document_type
-          ? {
-              id: doc.document_type,
-              name:
-                documentTypeMap.get(doc.document_type) ||
-                String(doc.document_type),
-            }
-          : null,
-        tags: Array.isArray(doc.tags)
-          ? doc.tags.map((tagId) => ({
-              id: tagId,
-              name: tagMap.get(tagId) || String(tagId),
-            }))
-          : doc.tags,
-        custom_fields: Array.isArray(doc.custom_fields)
-          ? doc.custom_fields.map((field) => ({
-              field: field.field,
-              name: customFieldMap.get(field.field) || String(field.field),
-              value: field.value,
-            }))
-          : doc.custom_fields,
-      };
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(docWithNames),
-          },
-        ],
-      };
+      return convertDocsWithNames(doc, api, { fields: args.fields });
     })
   );
 
   server.tool(
     "search_documents",
-    "Full text search for documents. This tool is for searching document content, title, and metadata using a full text query. For general document listing or filtering by fields, use 'list_documents' instead.",
+    "Full text search for documents. This tool is for searching document content, title, and metadata using a full text query. For general document listing or filtering by fields, use 'list_documents' instead. NOTE: By default, the 'content' field is excluded from results to optimize performance. To include it, add 'content' to the 'fields' parameter.",
     {
       query: z.string(),
+      fields: z.array(z.string()).optional().describe("List of fields to include in the response. If not specified, all fields except 'content' are returned. To include content, add 'content' to this array. Examples: ['id', 'title', 'correspondent'], ['id', 'title', 'content']"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const docsResponse = await api.searchDocuments(args.query);
-      return convertDocsWithNames(docsResponse, api);
+      return convertDocsWithNames(docsResponse, api, { fields: args.fields });
     })
   );
 
@@ -312,7 +257,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "update_document",
-    "Update a specific document with new values. This tool allows you to modify any document field including title, correspondent, document type, storage path, tags, custom fields, and more. Only the fields you specify will be updated.",
+    "Update a specific document with new values. This tool allows you to modify any document field including title, correspondent, document type, storage path, tags, custom fields, and more. Only the fields you specify will be updated. NOTE: By default, the 'content' field is excluded from the response to optimize performance. To include it, add 'content' to the 'fields' parameter.",
     {
       id: z.number().describe("The ID of the document to update"),
       title: z
@@ -375,13 +320,14 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         )
         .optional()
         .describe("Array of custom field values to assign"),
+      fields: z.array(z.string()).optional().describe("List of fields to include in the response. If not specified, all fields except 'content' are returned. To include content, add 'content' to this array."),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const { id, ...updateData } = args;
+      const { id, fields, ...updateData } = args;
       const response = await api.updateDocument(id, updateData);
 
-      return convertDocsWithNames(response, api);
+      return convertDocsWithNames(response, api, { fields });
     })
   );
 }

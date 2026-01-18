@@ -86,7 +86,7 @@ async function enhanceDocumentsArray(
   documents: Document[],
   api: PaperlessAPI,
   options?: FieldFilterOptions
-): Promise<EnhancedDocument[]> {
+): Promise<Partial<EnhancedDocument>[]> {
   if (!documents?.length) {
     return [];
   }
@@ -147,17 +147,18 @@ async function enhanceDocumentsArray(
     // Apply field filtering
     if (options?.fields && options.fields.length > 0) {
       // If fields are specified, only include those fields
-      const filtered: any = {};
+      const filtered: Partial<EnhancedDocument> = {};
       for (const field of options.fields) {
         if (field in enhanced) {
-          filtered[field] = enhanced[field as keyof EnhancedDocument];
+          const key = field as keyof EnhancedDocument;
+          (filtered as any)[key] = enhanced[key];
         }
       }
-      return filtered as EnhancedDocument;
+      return filtered;
     } else {
       // Default behavior: exclude 'content' field
       const { content, ...withoutContent } = enhanced;
-      return withoutContent as EnhancedDocument;
+      return withoutContent;
     }
   });
 }

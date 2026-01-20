@@ -1,5 +1,16 @@
 # @baruchiro/paperless-mcp
 
+## 0.3.0
+
+### Minor Changes
+
+- f9291df: Optimize document queries by excluding content field by default. The `content` field is now excluded from `list_documents`, `get_document`, `search_documents`, and `update_document` tool responses to improve performance and reduce context window usage. Added new `get_document_content` tool to retrieve document text content when needed.
+
+### Patch Changes
+
+- 61d5609: Fix documentlink custom field validation to accept arrays of document IDs. The Zod validation schema now properly supports arrays for documentlink type custom fields, allowing users to set single document IDs or arrays of document IDs.
+- f1f62e1: Update Node.js version requirement to 24 for improved performance and security. Updated Dockerfile, package.json engines field, and added .node-version file.
+
 ## 0.2.3
 
 ### Patch Changes

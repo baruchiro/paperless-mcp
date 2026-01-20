@@ -2,7 +2,6 @@
 
 # Paperless-NGX MCP Server
 
-[![smithery badge](https://smithery.ai/badge/@baruchiro/paperless-mcp)](https://smithery.ai/server/@baruchiro/paperless-mcp)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/baruchiro/paperless-mcp?utm_source=oss&utm_medium=github&utm_campaign=baruchiro%2Fpaperless-mcp&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 An MCP (Model Context Protocol) server for interacting with a Paperless-NGX API server. This server provides tools for managing documents, tags, correspondents, and document types in your Paperless-NGX instance.
@@ -11,15 +10,7 @@ An MCP (Model Context Protocol) server for interacting with a Paperless-NGX API 
 
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-light.svg)](https://cursor.com/install-mcp?name=paperless&config=eyJjb21tYW5kIjoibnB4IC15IEBiYXJ1Y2hpcm8vcGFwZXJsZXNzLW1jcEBsYXRlc3QiLCJlbnYiOnsiUEFQRVJMRVNTX1VSTCI6Imh0dHA6Ly95b3VyLXBhcGVybGVzcy1pbnN0YW5jZTo4MDAwIiwiUEFQRVJMRVNTX0FQSV9LRVkiOiJ5b3VyLWFwaS10b2tlbiJ9fQ%3D%3D)
 
-### Installing via Smithery
-
-To install Paperless NGX MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@baruchiro/paperless-mcp):
-
-```bash
-npx -y @smithery/cli install @baruchiro/paperless-mcp --client claude
-```
-
-### Manual Installation
+### Installation
 
 Add these to your MCP config file:
 

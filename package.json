@@ -25,6 +25,9 @@
   ],
   "author": "Baruch Odem",
   "license": "ISC",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/baruchiro/paperless-mcp.git"
@@ -51,7 +54,7 @@
     "@anthropic-ai/dxt": "^0.2.6",
     "@changesets/cli": "^2.29.4",
     "@types/express": "^5.0.2",
-    "@types/node": "^22.15.17",
+    "@types/node": "^24.0.0",
     "ts-node": "^10.9.2"
   }
 }

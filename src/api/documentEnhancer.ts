@@ -77,7 +77,7 @@ export async function convertDocsWithNames(
 async function enhanceDocumentsArray(
   documents: Document[],
   api: PaperlessAPI
-): Promise<EnhancedDocument[]> {
+): Promise<Omit<EnhancedDocument, 'content'>[]> {
   if (!documents?.length) {
     return [];
   }
@@ -102,35 +102,40 @@ async function enhanceDocumentsArray(
     (customFields.results || []).map((cf) => [cf.id, cf.name])
   );
 
-  return documents.map((doc) => ({
-    ...doc,
-    correspondent: doc.correspondent
-      ? {
-          id: doc.correspondent,
-          name:
-            correspondentMap.get(doc.correspondent) ||
-            String(doc.correspondent),
-        }
-      : null,
-    document_type: doc.document_type
-      ? {
-          id: doc.document_type,
-          name:
-            documentTypeMap.get(doc.document_type) || String(doc.document_type),
-        }
-      : null,
-    tags: Array.isArray(doc.tags)
-      ? doc.tags.map((tagId) => ({
-          id: tagId,
-          name: tagMap.get(tagId) || String(tagId),
-        }))
-      : doc.tags,
-    custom_fields: Array.isArray(doc.custom_fields)
-      ? doc.custom_fields.map((field) => ({
-          field: field.field,
-          name: customFieldMap.get(field.field) || String(field.field),
-          value: field.value,
-        }))
-      : doc.custom_fields,
-  }));
+  return documents
+    .map((doc) => {
+      const { content, ...docWithoutContent } = doc;
+      return docWithoutContent;
+    })
+    .map((doc) => ({
+      ...doc,
+      correspondent: doc.correspondent
+        ? {
+            id: doc.correspondent,
+            name:
+              correspondentMap.get(doc.correspondent) ||
+              String(doc.correspondent),
+          }
+        : null,
+      document_type: doc.document_type
+        ? {
+            id: doc.document_type,
+            name:
+              documentTypeMap.get(doc.document_type) || String(doc.document_type),
+          }
+        : null,
+      tags: Array.isArray(doc.tags)
+        ? doc.tags.map((tagId) => ({
+            id: tagId,
+            name: tagMap.get(tagId) || String(tagId),
+          }))
+        : doc.tags,
+      custom_fields: Array.isArray(doc.custom_fields)
+        ? doc.custom_fields.map((field) => ({
+            field: field.field,
+            name: customFieldMap.get(field.field) || String(field.field),
+            value: field.value,
+          }))
+        : doc.custom_fields,
+    }));
 }

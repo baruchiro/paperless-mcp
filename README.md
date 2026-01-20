@@ -494,7 +494,7 @@ services:
     # Use a descriptive name for the container
     container_name: paperless-mcp
     
-    # Specify the image from Docker Hub
+    # Specify the image from GitHub Container Registry
     image: ghcr.io/baruchiro/paperless-mcp:latest
         
     # Environment variables for Paperless-NGX connection
@@ -520,7 +520,7 @@ docker-compose up -d
 
 If you're using the [Continue VS Code extension](https://continue.dev/), you can configure it to use the Dockerized MCP server via SSE.
 
-Create or edit `.continue/mcpServers/paperless-mcp.yaml` in your workspace directory:
+Create or edit `.continue/mcpServers/paperless-mcp.yaml` at your workspace root:
 
 ```yaml
 name: Paperless

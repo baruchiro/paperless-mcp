@@ -31,6 +31,8 @@ jobs:
       - name: Create Release Pull Request
         id: changesets
         uses: changesets/action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           publish: npm publish --provenance --access public
       - name: Extract version from publishedPackages

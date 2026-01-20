@@ -520,7 +520,7 @@ docker-compose up -d
 
 If you're using the [Continue VS Code extension](https://continue.dev/), you can configure it to use the Dockerized MCP server via SSE.
 
-Create or edit `[workspace]/.continue/mcpServers/paperless-mcp.yaml`:
+Create or edit `.continue/mcpServers/paperless-mcp.yaml` in your workspace directory:
 
 ```yaml
 name: Paperless

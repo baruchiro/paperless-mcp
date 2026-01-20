@@ -102,10 +102,13 @@ async function enhanceDocumentsArray(
     (customFields.results || []).map((cf) => [cf.id, cf.name])
   );
 
-  return documents.map((doc) => {
-    const { content, ...docWithoutContent } = doc;
-    return {
-      ...docWithoutContent,
+  return documents
+    .map((doc) => {
+      const { content, ...docWithoutContent } = doc;
+      return docWithoutContent;
+    })
+    .map((doc) => ({
+      ...doc,
       correspondent: doc.correspondent
         ? {
             id: doc.correspondent,
@@ -134,6 +137,5 @@ async function enhanceDocumentsArray(
             value: field.value,
           }))
         : doc.custom_fields,
-    };
-  });
+    }));
 }

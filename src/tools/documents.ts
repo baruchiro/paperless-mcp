@@ -157,7 +157,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "list_documents",
-    "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. Using the correct ID filter will yield much more accurate results.",
+    "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. Using the correct ID filter will yield much more accurate results. Note: Document content is excluded from results by default. Use 'get_document_content' to retrieve content when needed.",
     {
       page: z.number().optional(),
       page_size: z.number().optional(),
@@ -196,69 +196,35 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "get_document",
-    "Get a specific document by ID with full details including correspondent, document type, tags, and custom fields.",
+    "Get a specific document by ID with full details including correspondent, document type, tags, and custom fields. Note: Document content is excluded from results by default. Use 'get_document_content' to retrieve content when needed.",
     {
       id: z.number(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
-      const [correspondents, documentTypes, tags, customFields] =
-        await Promise.all([
-          api.getCorrespondents(),
-          api.getDocumentTypes(),
-          api.getTags(),
-          api.getCustomFields(),
-        ]);
-      const correspondentMap = new Map(
-        (correspondents.results || []).map((c) => [c.id, c.name])
-      );
-      const documentTypeMap = new Map(
-        (documentTypes.results || []).map((dt) => [dt.id, dt.name])
-      );
-      const tagMap = new Map(
-        (tags.results || []).map((tag) => [tag.id, tag.name])
-      );
-      const customFieldMap = new Map(
-        (customFields.results || []).map((cf) => [cf.id, cf.name])
-      );
-      const docWithNames = {
-        ...doc,
-        correspondent: doc.correspondent
-          ? {
-              id: doc.correspondent,
-              name:
-                correspondentMap.get(doc.correspondent) ||
-                String(doc.correspondent),
-            }
-          : null,
-        document_type: doc.document_type
-          ? {
-              id: doc.document_type,
-              name:
-                documentTypeMap.get(doc.document_type) ||
-                String(doc.document_type),
-            }
-          : null,
-        tags: Array.isArray(doc.tags)
-          ? doc.tags.map((tagId) => ({
-              id: tagId,
-              name: tagMap.get(tagId) || String(tagId),
-            }))
-          : doc.tags,
-        custom_fields: Array.isArray(doc.custom_fields)
-          ? doc.custom_fields.map((field) => ({
-              field: field.field,
-              name: customFieldMap.get(field.field) || String(field.field),
-              value: field.value,
-            }))
-          : doc.custom_fields,
-      };
+      return convertDocsWithNames(doc, api);
+    })
+  );
+
+  server.tool(
+    "get_document_content",
+    "Get the text content of a specific document by ID. Use this when you need to read or analyze the actual document text.",
+    {
+      id: z.number(),
+    },
+    withErrorHandling(async (args, extra) => {
+      if (!api) throw new Error("Please configure API connection first");
+      const doc = await api.getDocument(args.id);
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(docWithNames),
+            text: JSON.stringify({
+              id: doc.id,
+              title: doc.title,
+              content: doc.content,
+            }),
           },
         ],
       };
@@ -267,7 +233,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "search_documents",
-    "Full text search for documents. This tool is for searching document content, title, and metadata using a full text query. For general document listing or filtering by fields, use 'list_documents' instead.",
+    "Full text search for documents. This tool is for searching document content, title, and metadata using a full text query. For general document listing or filtering by fields, use 'list_documents' instead. Note: Document content is excluded from results by default. Use 'get_document_content' to retrieve content when needed.",
     {
       query: z.string(),
     },

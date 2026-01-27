@@ -480,7 +480,8 @@ npm run start -- <baseUrl> <token> --http --port 3000
 - Each request is handled statelessly, following the [StreamableHTTPServerTransport](https://github.com/modelcontextprotocol/typescript-sdk) pattern.
 - GET and DELETE requests to `/mcp` will return 405 Method Not Allowed.
 
-## Docker Deployment
+<details>
+<summary>Docker Deployment</summary>
 
 The MCP server can be deployed using Docker and Docker Compose. The Docker image automatically runs in HTTP mode with SSE (Server-Sent Events) support on port 3000.
 
@@ -491,23 +492,14 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   paperless-mcp:
-    # Use a descriptive name for the container
     container_name: paperless-mcp
-    
-    # Specify the image from GitHub Container Registry
     image: ghcr.io/baruchiro/paperless-mcp:latest
-        
-    # Environment variables for Paperless-NGX connection
     environment:
       - PAPERLESS_URL=http://your-paperless-ngx-server:8000
       - PAPERLESS_API_KEY=your-paperless-api-key
       - PAPERLESS_PUBLIC_URL=https://paperless-ngx.yourpublicurl.com
-    
-    # Map internal port 3000 to external port 3000
     ports:
       - "3000:3000"
-    
-    # Restart policy (optional)
     restart: unless-stopped
 ```
 
@@ -528,21 +520,16 @@ version: 0.0.1
 schema: v1
 mcpServers:
   - name: Paperless
-    # Use the 'sse' type for remote HTTP connections
-    type: sse 
-    
-    # Specify the URL of the running Docker container's SSE endpoint
-    # This assumes you mapped container port 3000 to host port 3000
+    type: sse
     url: http://localhost:3000/sse
-    
-    # Credentials are NOT needed here, as they are already injected 
-    # as environment variables into the Docker container.
 ```
 
 **Notes:**
 - Replace `localhost` with your Docker host's IP address or hostname if running on a remote server
 - The Docker container handles authentication via environment variables, so no credentials are needed in the Continue config
 - The SSE endpoint is available at `/sse` on the configured port (default: 3000)
+
+</details>
 
 # Credits
 

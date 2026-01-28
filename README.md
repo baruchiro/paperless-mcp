@@ -471,6 +471,57 @@ npm run start -- <baseUrl> <token> --http --port 3000
 - Each request is handled statelessly, following the [StreamableHTTPServerTransport](https://github.com/modelcontextprotocol/typescript-sdk) pattern.
 - GET and DELETE requests to `/mcp` will return 405 Method Not Allowed.
 
+<details>
+<summary>Docker Deployment</summary>
+
+The MCP server can be deployed using Docker and Docker Compose. The Docker image automatically runs in HTTP mode with SSE (Server-Sent Events) support on port 3000.
+
+### Docker Compose Configuration
+
+Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  paperless-mcp:
+    container_name: paperless-mcp
+    image: ghcr.io/baruchiro/paperless-mcp:latest
+    environment:
+      - PAPERLESS_URL=http://your-paperless-ngx-server:8000
+      - PAPERLESS_API_KEY=your-paperless-api-key
+      - PAPERLESS_PUBLIC_URL=https://paperless-ngx.yourpublicurl.com
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+```
+
+Then run:
+```bash
+docker-compose up -d
+```
+
+### Using with Continue VS Code Extension
+
+If you're using the [Continue VS Code extension](https://continue.dev/), you can configure it to use the Dockerized MCP server via SSE.
+
+Create or edit `.continue/mcpServers/paperless-mcp.yaml` at your workspace root:
+
+```yaml
+name: Paperless
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: Paperless
+    type: sse
+    url: http://localhost:3000/sse
+```
+
+**Notes:**
+- Replace `localhost` with your Docker host's IP address or hostname if running on a remote server
+- The Docker container handles authentication via environment variables, so no credentials are needed in the Continue config
+- The SSE endpoint is available at `/sse` on the configured port (default: 3000)
+
+</details>
+
 # Credits
 
 This project is a fork of [nloui/paperless-mcp](https://github.com/nloui/paperless-mcp). Many thanks to the original author for their work. Contributions and improvements may be returned upstream.

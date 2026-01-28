@@ -1,5 +1,12 @@
 # @baruchiro/paperless-mcp
 
+## 0.3.1
+
+### Patch Changes
+
+- e2ac0f6: Add Docker Compose and Continue VS Code extension configuration documentation
+- 8953487: Remove Smithery documentation and badge as the service no longer supports this MCP server
+
 ## 0.3.0
 
 ### Minor Changes

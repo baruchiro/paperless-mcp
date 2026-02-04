@@ -176,6 +176,19 @@ export class PaperlessAPI {
     return response;
   }
 
+  async getThumbnail(id: number) {
+    const response = await axios.get(
+      `${this.baseUrl}/api/documents/${id}/thumb/`,
+      {
+        headers: {
+          Authorization: `Token ${this.token}`,
+        },
+        responseType: "arraybuffer",
+      }
+    );
+    return response;
+  }
+
   // Tag operations
   async getTags(): Promise<GetTagsResponse> {
     return this.request<GetTagsResponse>("/tags/");

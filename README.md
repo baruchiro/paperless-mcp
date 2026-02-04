@@ -128,6 +128,18 @@ download_document({
 })
 ```
 
+#### get_document_thumbnail
+Get a document thumbnail (image preview) by ID. Returns the thumbnail as a base64-encoded WebP image resource.
+
+Parameters:
+- id: Document ID
+
+```typescript
+get_document_thumbnail({
+  id: 123
+})
+```
+
 #### bulk_edit_documents
 Perform bulk operations on multiple documents.
 

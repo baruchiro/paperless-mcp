@@ -41,6 +41,10 @@
       "description": "Download a document file by ID."
     },
     {
+      "name": "get_document_thumbnail",
+      "description": "Get a document thumbnail (image preview) by ID."
+    },
+    {
       "name": "bulk_edit_documents",
       "description": "Perform bulk operations on multiple documents."
     },

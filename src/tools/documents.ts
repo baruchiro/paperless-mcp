@@ -277,6 +277,30 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   );
 
   server.tool(
+    "get_document_thumbnail",
+    "Get a document thumbnail (image preview) by ID. Returns the thumbnail as a base64-encoded WebP image resource.",
+    {
+      id: z.number(),
+    },
+    withErrorHandling(async (args, extra) => {
+      if (!api) throw new Error("Please configure API connection first");
+      const response = await api.getThumbnail(args.id);
+      return {
+        content: [
+          {
+            type: "resource",
+            resource: {
+              uri: `document-${args.id}-thumb.webp`,
+              blob: Buffer.from(response.data).toString("base64"),
+              mimeType: "image/webp",
+            },
+          },
+        ],
+      };
+    })
+  );
+
+  server.tool(
     "update_document",
     "Update a specific document with new values. This tool allows you to modify any document field including title, correspondent, document type, storage path, tags, custom fields, and more. Only the fields you specify will be updated.",
     {

@@ -1,5 +1,16 @@
 # @baruchiro/paperless-mcp
 
+## 0.4.0
+
+### Minor Changes
+
+- 9972ac7: Add get_document_thumbnail tool for retrieving document preview images
+
+### Patch Changes
+
+- e2ac0f6: Add Docker Compose and Continue VS Code extension configuration documentation
+- 8953487: Remove Smithery documentation and badge as the service no longer supports this MCP server
+
 ## 0.3.0
 
 ### Minor Changes

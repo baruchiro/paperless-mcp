@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosResponse } from "axios";
 import FormData from "form-data";
 import {
   BulkEditDocumentsResult,
@@ -162,9 +162,12 @@ export class PaperlessAPI {
     return response;
   }
 
-  async downloadDocument(id: number, asOriginal = false) {
+  async downloadDocument(
+    id: number,
+    asOriginal = false
+  ): Promise<AxiosResponse<ArrayBuffer>> {
     const query = asOriginal ? "?original=true" : "";
-    const response = await axios.get(
+    const response = await axios.get<ArrayBuffer>(
       `${this.baseUrl}/api/documents/${id}/download/${query}`,
       {
         headers: {
@@ -176,8 +179,8 @@ export class PaperlessAPI {
     return response;
   }
 
-  async getThumbnail(id: number) {
-    const response = await axios.get(
+  async getThumbnail(id: number): Promise<AxiosResponse<ArrayBuffer>> {
+    const response = await axios.get<ArrayBuffer>(
       `${this.baseUrl}/api/documents/${id}/thumb/`,
       {
         headers: {

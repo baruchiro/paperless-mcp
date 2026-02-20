@@ -128,13 +128,31 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       document_type: z.number().optional(),
       storage_path: z.number().optional(),
       tags: z.array(z.number()).optional(),
-      archive_serial_number: z.string().optional(),
+      archive_serial_number: z.number().optional(),
       custom_fields: z.array(z.number()).optional(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+
+      // Validate base64 input
+      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      if (!base64Regex.test(args.file)) {
+        throw new Error(
+          "Invalid base64-encoded file data. Please provide a valid base64 string."
+        );
+      }
       const document = Buffer.from(args.file, "base64");
-      const { file: _, filename, ...metadata } = args;
+
+      // Build metadata with only defined properties
+      const { file: _, filename, ...rest } = args;
+      const metadata: Record<string, string | string[] | number | number[]> =
+        {};
+      for (const [key, value] of Object.entries(rest)) {
+        if (value !== undefined) {
+          metadata[key] = value as string | string[] | number | number[];
+        }
+      }
+
       const response = await api.postDocument(document, filename, metadata);
       let result;
       if (typeof response === "string" && /^\d+$/.test(response)) {

@@ -133,11 +133,9 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const binaryData = Buffer.from(args.file, "base64");
-      const blob = new Blob([binaryData]);
-      const file = new File([blob], args.filename);
-      const { file: _, filename: __, ...metadata } = args;
-      const response = await api.postDocument(file, metadata);
+      const document = Buffer.from(args.file, "base64");
+      const { file: _, filename, ...metadata } = args;
+      const response = await api.postDocument(document, filename, metadata);
       let result;
       if (typeof response === "string" && /^\d+$/.test(response)) {
         result = { id: Number(response) };

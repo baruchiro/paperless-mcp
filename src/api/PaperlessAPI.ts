@@ -93,32 +93,36 @@ export class PaperlessAPI {
   }
 
   async postDocument(
-    file: File,
+    document: Buffer,
+    filename: string,
     metadata: Record<string, string | string[] | number | number[]> = {}
   ): Promise<string> {
     const formData = new FormData();
-    formData.append("document", file);
+    formData.append("document", document, { filename });
 
     // Add optional metadata fields
-    if (metadata.title) formData.append("title", metadata.title);
-    if (metadata.created) formData.append("created", metadata.created);
+    if (metadata.title) formData.append("title", String(metadata.title));
+    if (metadata.created) formData.append("created", String(metadata.created));
     if (metadata.correspondent)
-      formData.append("correspondent", metadata.correspondent);
+      formData.append("correspondent", String(metadata.correspondent));
     if (metadata.document_type)
-      formData.append("document_type", metadata.document_type);
+      formData.append("document_type", String(metadata.document_type));
     if (metadata.storage_path)
-      formData.append("storage_path", metadata.storage_path);
+      formData.append("storage_path", String(metadata.storage_path));
     if (metadata.tags) {
-      (metadata.tags as string[]).forEach((tag) =>
-        formData.append("tags", tag)
+      (metadata.tags as number[]).forEach((tag) =>
+        formData.append("tags", String(tag))
       );
     }
     if (metadata.archive_serial_number) {
-      formData.append("archive_serial_number", metadata.archive_serial_number);
+      formData.append(
+        "archive_serial_number",
+        String(metadata.archive_serial_number)
+      );
     }
     if (metadata.custom_fields) {
-      (metadata.custom_fields as string[]).forEach((field) =>
-        formData.append("custom_fields", field)
+      (metadata.custom_fields as number[]).forEach((field) =>
+        formData.append("custom_fields", String(field))
       );
     }
 

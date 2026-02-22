@@ -93,11 +93,12 @@ export class PaperlessAPI {
   }
 
   async postDocument(
-    file: File,
+    document: Buffer,
+    filename: string,
     metadata: Record<string, string | string[] | number | number[]> = {}
   ): Promise<string> {
     const formData = new FormData();
-    formData.append("document", file);
+    formData.append("document", document, { filename });
 
     // Add optional metadata fields
     if (metadata.title) formData.append("title", metadata.title);
@@ -114,11 +115,14 @@ export class PaperlessAPI {
       );
     }
     if (metadata.archive_serial_number) {
-      formData.append("archive_serial_number", metadata.archive_serial_number);
+      formData.append(
+        "archive_serial_number",
+        String(metadata.archive_serial_number)
+      );
     }
     if (metadata.custom_fields) {
-      (metadata.custom_fields as string[]).forEach((field) =>
-        formData.append("custom_fields", field)
+      (metadata.custom_fields as number[]).forEach((field) =>
+        formData.append("custom_fields", String(field))
       );
     }
 

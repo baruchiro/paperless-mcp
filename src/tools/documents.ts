@@ -145,16 +145,23 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       document_type: z.number().optional(),
       storage_path: z.number().optional(),
       tags: z.array(z.number()).optional(),
-      archive_serial_number: z.string().optional(),
+      archive_serial_number: z.number().optional(),
       custom_fields: z.array(z.number()).optional(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const binaryData = Buffer.from(args.file, "base64");
-      const blob = new Blob([binaryData]);
-      const file = new File([blob], args.filename);
-      const { file: _, filename: __, ...metadata } = args;
-      const response = await api.postDocument(file, metadata);
+
+      // Validate base64 input
+      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      if (!base64Regex.test(args.file)) {
+        throw new Error(
+          "Invalid base64-encoded file data. Please provide a valid base64 string."
+        );
+      }
+      const { file, filename, ...metadata } = args;
+      const document = Buffer.from(file, "base64");
+
+      const response = await api.postDocument(document, filename, metadata);
       let result;
       if (typeof response === "string" && /^\d+$/.test(response)) {
         result = { id: Number(response) };

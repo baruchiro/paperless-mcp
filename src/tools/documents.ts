@@ -141,17 +141,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           "Invalid base64-encoded file data. Please provide a valid base64 string."
         );
       }
-      const document = Buffer.from(args.file, "base64");
-
-      // Build metadata with only defined properties
-      const { file: _, filename, ...rest } = args;
-      const metadata: Record<string, string | string[] | number | number[]> =
-        {};
-      for (const [key, value] of Object.entries(rest)) {
-        if (value !== undefined) {
-          metadata[key] = value as string | string[] | number | number[];
-        }
-      }
+      const { file, filename, ...metadata } = args;
+      const document = Buffer.from(file, "base64");
 
       const response = await api.postDocument(document, filename, metadata);
       let result;

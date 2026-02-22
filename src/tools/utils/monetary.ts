@@ -4,6 +4,7 @@ const SYMBOL_TO_CODE: Record<string, string> = {
   "£": "GBP",
   "¥": "JPY",
   "₹": "INR",
+  "₪": "ILS",
 };
 
 const TRAILING_SYMBOL_REGEX = new RegExp(
@@ -26,4 +27,15 @@ export function getMonetaryValidationError(value: string): string | null {
   }
 
   return null;
+}
+
+export function validateCustomFields(
+  custom_fields: { field: number; value: unknown }[] | undefined
+) {
+  custom_fields
+    ?.filter((cf) => typeof cf.value === "string")
+    .forEach((cf) => {
+      const monetaryError = getMonetaryValidationError(cf.value as string);
+      if (monetaryError) throw new Error(monetaryError);
+    });
 }

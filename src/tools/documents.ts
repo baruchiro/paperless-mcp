@@ -4,21 +4,8 @@ import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
 import { withErrorHandling } from "./utils/middlewares";
-import { getMonetaryValidationError } from "./utils/monetary";
-
-const CUSTOM_FIELD_VALUE_DESCRIPTION =
-  "The value for the custom field. For monetary fields, use currency code prefix format (e.g., USD10.00, GBP123.45, EUR9.99) — NOT trailing symbol format (e.g., 10.00$). For documentlink fields, use a single document ID (e.g., 123) or an array of document IDs (e.g., [123, 456]).";
-
-function validateCustomFields(
-  custom_fields: { field: number; value: unknown }[] | undefined
-) {
-  custom_fields
-    ?.filter((cf) => typeof cf.value === "string")
-    .forEach((cf) => {
-      const monetaryError = getMonetaryValidationError(cf.value as string);
-      if (monetaryError) throw new Error(monetaryError);
-    });
-}
+import { validateCustomFields } from "./utils/monetary";
+import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
 
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(

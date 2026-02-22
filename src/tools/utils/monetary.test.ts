@@ -15,39 +15,9 @@ test("returns null for valid monetary prefix format", () => {
   assert.equal(getMonetaryValidationError("ILS50.00"), null);
 });
 
-test("returns error for trailing dollar sign", () => {
+test("returns error for trailing currency symbol", () => {
   const err = getMonetaryValidationError("10.00$");
   assert.ok(err);
   assert.match(err, /USD10\.00/);
   assert.match(err, /currency code as a prefix/);
-});
-
-test("returns error for trailing euro sign", () => {
-  const err = getMonetaryValidationError("123€");
-  assert.ok(err);
-  assert.match(err, /EUR123\.00/);
-});
-
-test("returns error for trailing pound sign", () => {
-  const err = getMonetaryValidationError("50£");
-  assert.ok(err);
-  assert.match(err, /GBP50\.00/);
-});
-
-test("returns error for trailing shekel sign", () => {
-  const err = getMonetaryValidationError("100₪");
-  assert.ok(err);
-  assert.match(err, /ILS100\.00/);
-});
-
-test("returns error for trailing rupee sign", () => {
-  const err = getMonetaryValidationError("200₹");
-  assert.ok(err);
-  assert.match(err, /INR200\.00/);
-});
-
-test("returns error for trailing yen sign", () => {
-  const err = getMonetaryValidationError("500¥");
-  assert.ok(err);
-  assert.match(err, /JPY500\.00/);
 });

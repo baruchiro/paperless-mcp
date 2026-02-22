@@ -4,6 +4,7 @@ import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
 import { withErrorHandling } from "./utils/middlewares";
+import { getMonetaryValidationError } from "./utils/monetary";
 
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
@@ -43,7 +44,9 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
               z.boolean(),
               z.array(z.number()),
               z.null(),
-            ]),
+            ]).describe(
+              "The value for the custom field. For monetary fields, use currency code prefix format (e.g., USD10.00, GBP123.45, EUR9.99) — NOT trailing symbol format (e.g., 10.00$). For documentlink fields, use a document ID or array of IDs."
+            ),
           })
         )
         .optional()
@@ -90,6 +93,16 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         );
       }
       const { documents, method, add_custom_fields, ...parameters } = args;
+
+      // Validate monetary field values before sending to API
+      if (add_custom_fields) {
+        for (const cf of add_custom_fields) {
+          if (typeof cf.value === "string") {
+            const monetaryError = getMonetaryValidationError(cf.value);
+            if (monetaryError) throw new Error(monetaryError);
+          }
+        }
+      }
 
       // Transform add_custom_fields into the two separate API parameters
       const apiParameters = { ...parameters };
@@ -359,7 +372,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
                 z.null(),
               ])
               .describe(
-                "The value for the custom field. For documentlink fields, use a single document ID (e.g., 123) or an array of document IDs (e.g., [123, 456])."
+                "The value for the custom field. For monetary fields, use currency code prefix format (e.g., USD10.00, GBP123.45, EUR9.99) — NOT trailing symbol format (e.g., 10.00$). For documentlink fields, use a single document ID (e.g., 123) or an array of document IDs (e.g., [123, 456])."
               ),
           })
         )
@@ -369,6 +382,17 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...updateData } = args;
+
+      // Validate monetary field values before sending to API
+      if (updateData.custom_fields) {
+        for (const cf of updateData.custom_fields) {
+          if (typeof cf.value === "string") {
+            const monetaryError = getMonetaryValidationError(cf.value);
+            if (monetaryError) throw new Error(monetaryError);
+          }
+        }
+      }
+
       const response = await api.updateDocument(id, updateData);
 
       return convertDocsWithNames(response, api);

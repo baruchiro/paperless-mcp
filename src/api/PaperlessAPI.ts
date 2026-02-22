@@ -101,17 +101,17 @@ export class PaperlessAPI {
     formData.append("document", document, { filename });
 
     // Add optional metadata fields
-    if (metadata.title) formData.append("title", String(metadata.title));
-    if (metadata.created) formData.append("created", String(metadata.created));
+    if (metadata.title) formData.append("title", metadata.title);
+    if (metadata.created) formData.append("created", metadata.created);
     if (metadata.correspondent)
-      formData.append("correspondent", String(metadata.correspondent));
+      formData.append("correspondent", metadata.correspondent);
     if (metadata.document_type)
-      formData.append("document_type", String(metadata.document_type));
+      formData.append("document_type", metadata.document_type);
     if (metadata.storage_path)
-      formData.append("storage_path", String(metadata.storage_path));
+      formData.append("storage_path", metadata.storage_path);
     if (metadata.tags) {
-      (metadata.tags as number[]).forEach((tag) =>
-        formData.append("tags", String(tag))
+      (metadata.tags as string[]).forEach((tag) =>
+        formData.append("tags", tag)
       );
     }
     if (metadata.archive_serial_number) {

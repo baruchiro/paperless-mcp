@@ -1,5 +1,12 @@
 # @baruchiro/paperless-mcp
 
+## 0.4.1
+
+### Patch Changes
+
+- 9783e4c: Fix post_document action: use Buffer instead of browser File API, correct archive_serial_number type to number per API spec, add base64 input validation, and explicitly build metadata to exclude undefined values
+- 77d77e9: Improve UX for monetary custom fields: clarify currency format in tool descriptions, and add client-side validation that catches common mistakes (e.g., trailing `# @baruchiro/paperless-mcp like `10.00# @baruchiro/paperless-mcp) with actionable error messages suggesting the correct format (e.g., `USD10.00`).
+
 ## 0.4.0
 
 ### Minor Changes

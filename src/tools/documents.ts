@@ -4,6 +4,8 @@ import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
 import { withErrorHandling } from "./utils/middlewares";
+import { validateCustomFields } from "./utils/monetary";
+import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
 
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
@@ -43,7 +45,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
               z.boolean(),
               z.array(z.number()),
               z.null(),
-            ]),
+            ]).describe(CUSTOM_FIELD_VALUE_DESCRIPTION),
           })
         )
         .optional()
@@ -90,6 +92,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         );
       }
       const { documents, method, add_custom_fields, ...parameters } = args;
+
+      validateCustomFields(add_custom_fields);
 
       // Transform add_custom_fields into the two separate API parameters
       const apiParameters = { ...parameters };
@@ -365,9 +369,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
                 z.array(z.number()),
                 z.null(),
               ])
-              .describe(
-                "The value for the custom field. For documentlink fields, use a single document ID (e.g., 123) or an array of document IDs (e.g., [123, 456])."
-              ),
+              .describe(CUSTOM_FIELD_VALUE_DESCRIPTION),
           })
         )
         .optional()
@@ -376,6 +378,9 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...updateData } = args;
+
+      validateCustomFields(updateData.custom_fields);
+
       const response = await api.updateDocument(id, updateData);
 
       return convertDocsWithNames(response, api);

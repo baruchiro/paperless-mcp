@@ -49,7 +49,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "create_custom_field",
-    "Create a new custom field with a specified data type (string, url, date, boolean, integer, float, monetary, documentlink, or select).",
+    "Create a new custom field with a specified data type (string, url, date, boolean, integer, float, monetary, documentlink, or select). For monetary fields, values must use currency code prefix format (e.g., USD10.00, GBP123.45) — NOT trailing symbol format (e.g., 10.00$).",
     {
       name: z.string(),
       data_type: z.enum([

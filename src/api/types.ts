@@ -160,6 +160,12 @@ export interface PostDocumentMetadata {
   custom_fields?: number[];
 }
 
+export interface CapturedRequest {
+  url?: string;
+  body?: { getBuffer: () => Buffer };
+  headers?: Record<string, unknown>;
+}
+
 export interface BulkEditParameters {
   assign_custom_fields?: number[];
   assign_custom_fields_values?: CustomFieldInstanceRequest[];

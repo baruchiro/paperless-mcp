@@ -2,12 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import axios, { AxiosResponse } from "axios";
 import { PaperlessAPI } from "./PaperlessAPI";
-
-interface CapturedRequest {
-  url?: string;
-  body?: { getBuffer: () => Buffer };
-  headers?: Record<string, unknown>;
-}
+import { type CapturedRequest } from "./types";
 
 test(
   "postDocument serializes numeric metadata as multipart strings",

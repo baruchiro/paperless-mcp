@@ -12,6 +12,7 @@ import {
   GetCustomFieldsResponse,
   GetDocumentTypesResponse,
   GetTagsResponse,
+  PostDocumentMetadata,
   Tag,
 } from "./types";
 import { headersToObject } from "./utils";
@@ -95,33 +96,33 @@ export class PaperlessAPI {
   async postDocument(
     document: Buffer,
     filename: string,
-    metadata: Record<string, string | string[] | number | number[]> = {}
+    metadata: PostDocumentMetadata = {}
   ): Promise<string> {
     const formData = new FormData();
     formData.append("document", document, { filename });
 
-    // Add optional metadata fields
-    if (metadata.title) formData.append("title", metadata.title);
-    if (metadata.created) formData.append("created", metadata.created);
-    if (metadata.correspondent)
-      formData.append("correspondent", metadata.correspondent);
-    if (metadata.document_type)
-      formData.append("document_type", metadata.document_type);
-    if (metadata.storage_path)
-      formData.append("storage_path", metadata.storage_path);
-    if (metadata.tags) {
-      (metadata.tags as string[]).forEach((tag) =>
-        formData.append("tags", tag)
-      );
+    if (metadata.title !== undefined) formData.append("title", metadata.title);
+    if (metadata.created !== undefined) formData.append("created", metadata.created);
+    if (metadata.correspondent !== undefined) {
+      formData.append("correspondent", String(metadata.correspondent));
     }
-    if (metadata.archive_serial_number) {
+    if (metadata.document_type !== undefined) {
+      formData.append("document_type", String(metadata.document_type));
+    }
+    if (metadata.storage_path !== undefined) {
+      formData.append("storage_path", String(metadata.storage_path));
+    }
+    if (metadata.tags !== undefined) {
+      metadata.tags.forEach((tag) => formData.append("tags", String(tag)));
+    }
+    if (metadata.archive_serial_number !== undefined) {
       formData.append(
         "archive_serial_number",
         String(metadata.archive_serial_number)
       );
     }
-    if (metadata.custom_fields) {
-      (metadata.custom_fields as number[]).forEach((field) =>
+    if (metadata.custom_fields !== undefined) {
+      metadata.custom_fields.forEach((field) =>
         formData.append("custom_fields", String(field))
       );
     }

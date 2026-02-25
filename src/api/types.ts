@@ -149,6 +149,17 @@ export interface BulkEditDocumentsResult {
   result: string;
 }
 
+export interface PostDocumentMetadata {
+  title?: string;
+  created?: string;
+  correspondent?: number;
+  document_type?: number;
+  storage_path?: number;
+  tags?: number[];
+  archive_serial_number?: number;
+  custom_fields?: number[];
+}
+
 export interface BulkEditParameters {
   assign_custom_fields?: number[];
   assign_custom_fields_values?: CustomFieldInstanceRequest[];

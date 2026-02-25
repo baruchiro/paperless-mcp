@@ -225,7 +225,7 @@ bulk_edit_documents({
 Upload a new document to Paperless-NGX.
 
 Parameters:
-- file: Base64 encoded file content
+- file: Base64 encoded file content (raw base64 or `data:*;base64,...`)
 - filename: Name of the file
 - title (optional): Title for the document
 - created (optional): DateTime when the document was created (e.g. "2024-01-19" or "2024-01-19 06:15:00+02:00")

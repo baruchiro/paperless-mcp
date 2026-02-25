@@ -7,6 +7,35 @@ import { withErrorHandling } from "./utils/middlewares";
 import { validateCustomFields } from "./utils/monetary";
 import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
 
+const BASE64_ERROR_MESSAGE =
+  "Invalid base64-encoded file data. Please provide a valid base64 string.";
+
+export function decodeBase64File(file: string): Buffer {
+  const withoutPrefix = file
+    .trim()
+    .replace(/^data:[^;]+;base64,/i, "")
+    .replace(/\s+/g, "");
+
+  if (withoutPrefix.length === 0) {
+    throw new Error(BASE64_ERROR_MESSAGE);
+  }
+
+  const normalizedBase64 = withoutPrefix.replace(/-/g, "+").replace(/_/g, "/");
+  if (normalizedBase64.length % 4 === 1) {
+    throw new Error(BASE64_ERROR_MESSAGE);
+  }
+
+  const paddingSize = (4 - (normalizedBase64.length % 4)) % 4;
+  const paddedBase64 = `${normalizedBase64}${"=".repeat(paddingSize)}`;
+
+  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+  if (!base64Regex.test(paddedBase64)) {
+    throw new Error(BASE64_ERROR_MESSAGE);
+  }
+
+  return Buffer.from(paddedBase64, "base64");
+}
+
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "bulk_edit_documents",
@@ -122,7 +151,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "post_document",
-    "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields.",
+    "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields. The file argument supports raw base64 strings and data URLs.",
     {
       file: z.string(),
       filename: z.string(),
@@ -137,16 +166,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-
-      // Validate base64 input
-      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-      if (!base64Regex.test(args.file)) {
-        throw new Error(
-          "Invalid base64-encoded file data. Please provide a valid base64 string."
-        );
-      }
       const { file, filename, ...metadata } = args;
-      const document = Buffer.from(file, "base64");
+      const document = decodeBase64File(file);
 
       const response = await api.postDocument(document, filename, metadata);
       let result;

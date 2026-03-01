@@ -31,7 +31,17 @@ const resolvedPublicUrl =
   publicUrl || process.env.PAPERLESS_PUBLIC_URL || resolvedBaseUrl;
 const resolvedPort = port ? parseInt(port, 10) : 3000;
 
-if (!resolvedBaseUrl || !resolvedToken) {
+if (!resolvedBaseUrl) {
+  console.error(
+    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>]"
+  );
+  console.error(
+    "Or set PAPERLESS_URL and PAPERLESS_API_KEY environment variables."
+  );
+  process.exit(1);
+}
+
+if (!useHttp && !resolvedToken) {
   console.error(
     "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>]"
   );
@@ -42,12 +52,12 @@ if (!resolvedBaseUrl || !resolvedToken) {
 }
 
 async function main() {
-  // Initialize API client and server once
-  const api = new PaperlessAPI(resolvedBaseUrl!, resolvedToken!);
-  const server = new McpServer(
-    { name: "paperless-ngx", version: "1.0.0" },
-    {
-      instructions: `
+  function createServer(requestToken: string) {
+    const api = new PaperlessAPI(resolvedBaseUrl!, requestToken);
+    const server = new McpServer(
+      { name: "paperless-ngx", version: "1.0.0" },
+      {
+        instructions: `
 Paperless-NGX MCP Server Instructions
 
 ⚠️ CRITICAL: Always differentiate between operations on specific documents vs operations on the entire system:
@@ -63,24 +73,43 @@ ${resolvedPublicUrl}/documents/{document_id}/
 Example: If your base URL is "http://localhost:8000", the web interface URL would be "http://localhost:8000/documents/123/" for document ID 123.
 
 The document tools return JSON data with document IDs that you can use to construct these URLs.
-      `,
-    }
-  );
-  registerDocumentTools(server, api);
-  registerTagTools(server, api);
-  registerCorrespondentTools(server, api);
-  registerDocumentTypeTools(server, api);
-  registerCustomFieldTools(server, api);
+        `,
+      }
+    );
+    registerDocumentTools(server, api);
+    registerTagTools(server, api);
+    registerCorrespondentTools(server, api);
+    registerDocumentTypeTools(server, api);
+    registerCustomFieldTools(server, api);
+    return server;
+  }
 
   if (useHttp) {
     const app = express();
     app.use(express.json());
 
+    function getRequestToken(req: express.Request): string | undefined {
+      const authHeader = req.headers["authorization"];
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        return authHeader.slice(7);
+      }
+      return resolvedToken || undefined;
+    }
+
     // Store transports for each session
     const sseTransports: Record<string, SSEServerTransport> = {};
 
     app.post("/mcp", async (req, res) => {
+      const requestToken = getRequestToken(req);
+      if (!requestToken) {
+        res
+          .status(401)
+          .set("WWW-Authenticate", 'Bearer realm="paperless-mcp"')
+          .end();
+        return;
+      }
       try {
+        const server = createServer(requestToken);
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
         });
@@ -132,7 +161,16 @@ The document tools return JSON data with document IDs that you can use to constr
 
     app.get("/sse", async (req, res) => {
       console.log("SSE request received");
+      const requestToken = getRequestToken(req);
+      if (!requestToken) {
+        res
+          .status(401)
+          .set("WWW-Authenticate", 'Bearer realm="paperless-mcp"')
+          .end();
+        return;
+      }
       try {
+        const server = createServer(requestToken);
         const transport = new SSEServerTransport("/messages", res);
         sseTransports[transport.sessionId] = transport;
         res.on("close", () => {
@@ -172,6 +210,7 @@ The document tools return JSON data with document IDs that you can use to constr
     });
     // await new Promise((resolve) => setTimeout(resolve, 1000000));
   } else {
+    const server = createServer(resolvedToken!);
     const transport = new StdioServerTransport();
     await server.connect(transport);
   }

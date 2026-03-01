@@ -11,6 +11,7 @@ import { registerCustomFieldTools } from "./tools/customFields";
 import { registerDocumentTools } from "./tools/documents";
 import { registerDocumentTypeTools } from "./tools/documentTypes";
 import { registerTagTools } from "./tools/tags";
+import { version } from "../package.json";
 
 const {
   values: { baseUrl, token, http: useHttp, port, publicUrl },
@@ -45,7 +46,7 @@ async function main() {
   // Initialize API client and server once
   const api = new PaperlessAPI(resolvedBaseUrl!, resolvedToken!);
   const server = new McpServer(
-    { name: "paperless-ngx", version: "1.0.0" },
+    { name: "paperless-ngx", version },
     {
       instructions: `
 Paperless-NGX MCP Server Instructions

@@ -1,5 +1,11 @@
 # @baruchiro/paperless-mcp
 
+## 0.4.2
+
+### Patch Changes
+
+- b950817: Read server version dynamically from package.json instead of hardcoding it
+
 ## 0.4.1
 
 ### Patch Changes

@@ -483,6 +483,22 @@ npm run start -- <baseUrl> <token> --http --port 3000
 - Each request is handled statelessly, following the [StreamableHTTPServerTransport](https://github.com/modelcontextprotocol/typescript-sdk) pattern.
 - GET and DELETE requests to `/mcp` will return 405 Method Not Allowed.
 
+#### Per-request API token (HTTP/Docker mode)
+
+In HTTP mode, clients can supply their own Paperless-NGX API token via the standard `Authorization` header instead of (or in addition to) the server-configured `PAPERLESS_API_KEY`. The client-supplied token takes precedence.
+
+```
+Authorization: Bearer <paperless-ngx-api-token>
+```
+
+| Scenario | Token used |
+|---|---|
+| Client sends `Authorization: Bearer <tok>` | `<tok>` (client-supplied, takes precedence) |
+| No header, `PAPERLESS_API_KEY` env var set | `PAPERLESS_API_KEY` from env |
+| No header, no env var | `401 Unauthorized` |
+
+This allows a single server instance to serve multiple users, each authenticating with their own Paperless-NGX token. The same behaviour applies to both `/mcp` and `/sse` endpoints.
+
 <details>
 <summary>Docker Deployment</summary>
 

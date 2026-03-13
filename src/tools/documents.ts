@@ -334,9 +334,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         content: [
           {
             type: "text",
-            text: JSON.stringify({
-              result: `Document ${args.id} has been permanently deleted.`,
-            }),
+            text: JSON.stringify({ status: "deleted" }),
           },
         ],
       };

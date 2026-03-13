@@ -91,7 +91,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
-      const { documents, method, add_custom_fields, ...parameters } = args;
+      const { documents, method, add_custom_fields, confirm, ...parameters } = args;
 
       validateCustomFields(add_custom_fields);
 
@@ -305,6 +305,36 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
               blob: Buffer.from(response.data).toString("base64"),
               mimeType: "image/webp",
             },
+          },
+        ],
+      };
+    })
+  );
+
+  server.tool(
+    "delete_document",
+    "Permanently delete a single document from Paperless-NGX. WARNING: This action is destructive and irreversible. The document and all associated files will be permanently removed.",
+    {
+      id: z.number().describe("The ID of the document to delete"),
+      confirm: z
+        .boolean()
+        .describe(
+          "Must be set to true to confirm this destructive operation"
+        ),
+    },
+    withErrorHandling(async (args, extra) => {
+      if (!api) throw new Error("Please configure API connection first");
+      if (!args.confirm) {
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
+      }
+      await api.deleteDocument(args.id);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ status: "deleted" }),
           },
         ],
       };

@@ -183,6 +183,12 @@ export class PaperlessAPI {
     return response;
   }
 
+  async deleteDocument(id: number): Promise<void> {
+    return this.request<void>(`/documents/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
   async getThumbnail(id: number): Promise<AxiosResponse<ArrayBuffer>> {
     const response = await axios.get<ArrayBuffer>(
       `${this.baseUrl}/api/documents/${id}/thumb/`,

@@ -75,6 +75,7 @@ export function registerCorrespondentTools(
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -90,10 +91,10 @@ export function registerCorrespondentTools(
 
   server.tool(
     "update_correspondent",
-    "Update an existing correspondent's name, matching pattern, or matching algorithm.",
+    "Update an existing correspondent's name, matching pattern, or matching algorithm. Only specified fields are updated (PATCH).",
     {
       id: z.number(),
-      name: z.string(),
+      name: z.string().optional(),
       match: z.string().optional(),
       matching_algorithm: z
         .number()
@@ -102,6 +103,7 @@ export function registerCorrespondentTools(
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");

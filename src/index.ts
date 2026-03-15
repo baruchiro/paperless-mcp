@@ -10,6 +10,9 @@ import { registerCorrespondentTools } from "./tools/correspondents";
 import { registerCustomFieldTools } from "./tools/customFields";
 import { registerDocumentTools } from "./tools/documents";
 import { registerDocumentTypeTools } from "./tools/documentTypes";
+import { registerSavedViewTools } from "./tools/savedViews";
+import { registerStoragePathTools } from "./tools/storagePaths";
+import { registerSystemTools } from "./tools/system";
 import { registerTagTools } from "./tools/tags";
 import { version } from "../package.json";
 
@@ -72,10 +75,13 @@ The document tools return JSON data with document IDs that you can use to constr
   registerCorrespondentTools(server, api);
   registerDocumentTypeTools(server, api);
   registerCustomFieldTools(server, api);
+  registerStoragePathTools(server, api);
+  registerSavedViewTools(server, api);
+  registerSystemTools(server, api);
 
   if (useHttp) {
     const app = express();
-    app.use(express.json());
+    app.use(express.json({ limit: "1mb" }));
 
     // Store transports for each session
     const sseTransports: Record<string, SSEServerTransport> = {};
@@ -132,7 +138,7 @@ The document tools return JSON data with document IDs that you can use to constr
     });
 
     app.get("/sse", async (req, res) => {
-      console.log("SSE request received");
+      // SSE connection established
       try {
         const transport = new SSEServerTransport("/messages", res);
         sseTransports[transport.sessionId] = transport;

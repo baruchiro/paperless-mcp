@@ -47,13 +47,6 @@ export class PaperlessAPI {
 
       const body = response.data;
       if (response.status < 200 || response.status >= 300) {
-        console.error({
-          error: "Error executing request",
-          url,
-          options,
-          status: response.status,
-          response: body,
-        });
         const errorMessage =
           (body as Record<string, unknown>)?.detail ||
           (body as Record<string, unknown>)?.error ||
@@ -64,15 +57,18 @@ export class PaperlessAPI {
 
       return body;
     } catch (error) {
-      console.error({
-        error: "Error executing request",
-        message: error instanceof Error ? error.message : String(error),
-        url,
-        options,
-        responseData: (error as any)?.response?.data,
-        status: (error as any)?.response?.status,
-      });
-      throw error;
+      const status = (error as any)?.response?.status;
+      const responseData = (error as any)?.response?.data;
+      const detail =
+        responseData?.detail || responseData?.error || responseData?.message;
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        detail
+          ? `${detail} (HTTP ${status})`
+          : status
+            ? `${message} (HTTP ${status})`
+            : message
+      );
     }
   }
 
@@ -208,9 +204,13 @@ export class PaperlessAPI {
     });
   }
 
+  async getTag(id: number): Promise<Tag> {
+    return this.request<Tag>(`/tags/${id}/`);
+  }
+
   async updateTag(id: number, data: Partial<Tag>): Promise<Tag> {
     return this.request<Tag>(`/tags/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -249,7 +249,7 @@ export class PaperlessAPI {
     data: Partial<Correspondent>
   ): Promise<Correspondent> {
     return this.request<Correspondent>(`/correspondents/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -277,7 +277,7 @@ export class PaperlessAPI {
     data: Partial<DocumentType>
   ): Promise<DocumentType> {
     return this.request<DocumentType>(`/document_types/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -309,7 +309,7 @@ export class PaperlessAPI {
     data: Partial<CustomField>
   ): Promise<CustomField> {
     return this.request<CustomField>(`/custom_fields/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -318,6 +318,26 @@ export class PaperlessAPI {
     return this.request<void>(`/custom_fields/${id}/`, {
       method: "DELETE",
     });
+  }
+
+  // Raw request for binary responses (e.g., bulk download)
+  async requestRaw(
+    path: string,
+    options: RequestInit & { responseType?: string } = {}
+  ): Promise<AxiosResponse<ArrayBuffer>> {
+    const url = `${this.baseUrl}/api${path}`;
+    const response = await axios({
+      url,
+      method: (options.method as string) || "GET",
+      headers: {
+        Authorization: `Token ${this.token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json; version=5",
+      },
+      data: options.body,
+      responseType: "arraybuffer",
+    });
+    return response as AxiosResponse<ArrayBuffer>;
   }
 
   // Bulk object operations

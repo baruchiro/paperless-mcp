@@ -28,9 +28,7 @@ export function registerStoragePathTools(
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
-      const response = await api.request(
-        `/storage_paths/${queryString ? `?${queryString}` : ""}`
-      );
+      const response = await api.getStoragePaths(queryString || undefined);
       const enhancedResults = enhanceMatchingAlgorithmArray(
         response.results || []
       );
@@ -54,7 +52,7 @@ export function registerStoragePathTools(
     { id: z.number() },
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.request(`/storage_paths/${args.id}/`);
+      const response = await api.getStoragePath(args.id);
       const enhanced = enhanceMatchingAlgorithm(response);
       return {
         content: [{ type: "text", text: JSON.stringify(enhanced) }],
@@ -80,10 +78,7 @@ export function registerStoragePathTools(
     },
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.request("/storage_paths/", {
-        method: "POST",
-        body: JSON.stringify(args),
-      });
+      const response = await api.createStoragePath(args);
       const enhanced = enhanceMatchingAlgorithm(response);
       return {
         content: [{ type: "text", text: JSON.stringify(enhanced) }],
@@ -111,10 +106,7 @@ export function registerStoragePathTools(
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
-      const response = await api.request(`/storage_paths/${id}/`, {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      });
+      const response = await api.updateStoragePath(id, data);
       const enhanced = enhanceMatchingAlgorithm(response);
       return {
         content: [{ type: "text", text: JSON.stringify(enhanced) }],
@@ -138,9 +130,7 @@ export function registerStoragePathTools(
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
-      await api.request(`/storage_paths/${args.id}/`, {
-        method: "DELETE",
-      });
+      await api.deleteStoragePath(args.id);
       return {
         content: [
           { type: "text", text: JSON.stringify({ status: "deleted" }) },

@@ -95,12 +95,43 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
-      await api.request(`/documents/${args.id}/notes/?id=${args.note_id}`, {
+      await api.request(`/documents/${args.id}/notes/${args.note_id}/`, {
         method: "DELETE",
       });
       return {
         content: [
           { type: "text", text: JSON.stringify({ status: "deleted" }) },
+        ],
+      };
+    })
+  );
+
+  // Delete document
+  server.tool(
+    "delete_document",
+    "Permanently delete a single document from Paperless-NGX. WARNING: This action is destructive and irreversible. The document and all associated files will be permanently removed.",
+    {
+      id: z.number().describe("The ID of the document to delete"),
+      confirm: z
+        .boolean()
+        .describe(
+          "Must be set to true to confirm this destructive operation"
+        ),
+    },
+    withErrorHandling(async (args) => {
+      if (!api) throw new Error("Please configure API connection first");
+      if (!args.confirm) {
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
+      }
+      await api.deleteDocument(args.id);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ status: "deleted" }),
+          },
         ],
       };
     })
@@ -149,9 +180,9 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "empty_trash",
-    "⚠️ DESTRUCTIVE: Permanently delete documents from the trash. This action is irreversible.",
+    "⚠️ DESTRUCTIVE: Permanently delete documents from the trash, or empty the entire trash. This action is irreversible.",
     {
-      documents: z.array(z.number()).describe("Array of document IDs to permanently delete"),
+      documents: z.array(z.number()).optional().describe("Array of document IDs to permanently delete. If omitted, empties the entire trash."),
       confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
     },
     withErrorHandling(async (args) => {
@@ -161,12 +192,13 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
+      const body: Record<string, unknown> = { action: "empty" };
+      if (args.documents) {
+        body.documents = args.documents;
+      }
       const response = await api.request("/trash/", {
         method: "POST",
-        body: JSON.stringify({
-          documents: args.documents,
-          action: "delete",
-        }),
+        body: JSON.stringify(body),
       });
       return {
         content: [{ type: "text", text: JSON.stringify(response) }],
@@ -214,12 +246,16 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "list_tasks",
     "List background tasks with their status, progress, and results. Useful for monitoring document consumption and other async operations.",
     {
-      task_id: z.string().optional().describe("Filter by specific task UUID"),
+      status: z.enum(["queued", "started", "complete", "failed"]).optional().describe("Filter by task status"),
+      task_name: z.string().optional().describe("Filter by task name"),
+      ordering: z.string().optional().describe("Field to order by, e.g. '-date_created'"),
     },
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const params = new URLSearchParams();
-      if (args.task_id) params.set("task_id", args.task_id);
+      if (args.status) params.set("status", args.status);
+      if (args.task_name) params.set("task_name", args.task_name);
+      if (args.ordering) params.set("ordering", args.ordering);
       const query = params.toString();
       const response = await api.request(
         `/tasks/${query ? `?${query}` : ""}`

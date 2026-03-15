@@ -15,9 +15,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
-      const response = await api.request(
-        `/saved_views/${queryString ? `?${queryString}` : ""}`
-      );
+      const response = await api.getSavedViews(queryString || undefined);
       return {
         content: [{ type: "text", text: JSON.stringify(response) }],
       };
@@ -30,7 +28,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
     { id: z.number() },
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.request(`/saved_views/${args.id}/`);
+      const response = await api.getSavedView(args.id);
       return {
         content: [{ type: "text", text: JSON.stringify(response) }],
       };
@@ -57,10 +55,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
     },
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.request("/saved_views/", {
-        method: "POST",
-        body: JSON.stringify(args),
-      });
+      const response = await api.createSavedView(args);
       return {
         content: [{ type: "text", text: JSON.stringify(response) }],
       };
@@ -89,10 +84,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
-      const response = await api.request(`/saved_views/${id}/`, {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      });
+      const response = await api.updateSavedView(id, data);
       return {
         content: [{ type: "text", text: JSON.stringify(response) }],
       };
@@ -113,9 +105,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
-      await api.request(`/saved_views/${args.id}/`, {
-        method: "DELETE",
-      });
+      await api.deleteSavedView(args.id);
       return {
         content: [
           { type: "text", text: JSON.stringify({ status: "deleted" }) },

@@ -1,4 +1,4 @@
-import axios, { AxiosResponse } from "axios";
+import axios, { AxiosResponse, ResponseType } from "axios";
 import FormData from "form-data";
 import {
   BulkEditDocumentsResult,
@@ -56,19 +56,24 @@ export class PaperlessAPI {
       }
 
       return body;
-    } catch (error) {
-      const status = (error as any)?.response?.status;
-      const responseData = (error as any)?.response?.data;
-      const detail =
-        responseData?.detail || responseData?.error || responseData?.message;
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(
-        detail
-          ? `${detail} (HTTP ${status})`
-          : status
-            ? `${message} (HTTP ${status})`
-            : message
-      );
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const responseData = error.response?.data as
+          | Record<string, unknown>
+          | undefined;
+        const detail =
+          responseData?.detail || responseData?.error || responseData?.message;
+        const message = error.message;
+        throw new Error(
+          detail
+            ? `${detail}${status ? ` (HTTP ${status})` : ""}`
+            : status
+              ? `${message} (HTTP ${status})`
+              : message
+        );
+      }
+      throw error;
     }
   }
 
@@ -152,6 +157,12 @@ export class PaperlessAPI {
     return this.request<Document>(`/documents/${id}/`, {
       method: "PATCH",
       body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    return this.request<void>(`/documents/${id}/`, {
+      method: "DELETE",
     });
   }
 
@@ -320,24 +331,105 @@ export class PaperlessAPI {
     });
   }
 
-  // Raw request for binary responses (e.g., bulk download)
-  async requestRaw(
-    path: string,
-    options: RequestInit & { responseType?: string } = {}
-  ): Promise<AxiosResponse<ArrayBuffer>> {
-    const url = `${this.baseUrl}/api${path}`;
-    const response = await axios({
-      url,
-      method: (options.method as string) || "GET",
-      headers: {
-        Authorization: `Token ${this.token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json; version=5",
-      },
-      data: options.body,
-      responseType: "arraybuffer",
+  // Storage path operations
+  async getStoragePaths(queryString?: string): Promise<any> {
+    const url = queryString
+      ? `/storage_paths/?${queryString}`
+      : "/storage_paths/";
+    return this.request(url);
+  }
+
+  async getStoragePath(id: number): Promise<any> {
+    return this.request(`/storage_paths/${id}/`);
+  }
+
+  async createStoragePath(data: Record<string, unknown>): Promise<any> {
+    return this.request("/storage_paths/", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
-    return response as AxiosResponse<ArrayBuffer>;
+  }
+
+  async updateStoragePath(
+    id: number,
+    data: Record<string, unknown>
+  ): Promise<any> {
+    return this.request(`/storage_paths/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteStoragePath(id: number): Promise<void> {
+    return this.request<void>(`/storage_paths/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
+  // Saved view operations
+  async getSavedViews(queryString?: string): Promise<any> {
+    const url = queryString
+      ? `/saved_views/?${queryString}`
+      : "/saved_views/";
+    return this.request(url);
+  }
+
+  async getSavedView(id: number): Promise<any> {
+    return this.request(`/saved_views/${id}/`);
+  }
+
+  async createSavedView(data: Record<string, unknown>): Promise<any> {
+    return this.request("/saved_views/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSavedView(
+    id: number,
+    data: Record<string, unknown>
+  ): Promise<any> {
+    return this.request(`/saved_views/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSavedView(id: number): Promise<void> {
+    return this.request<void>(`/saved_views/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
+  // Raw request for binary responses (e.g., bulk download)
+  async requestRaw<T = ArrayBuffer>(
+    path: string,
+    options: RequestInit & { responseType?: ResponseType } = {}
+  ): Promise<AxiosResponse<T>> {
+    const url = `${this.baseUrl}/api${path}`;
+    try {
+      const response = await axios({
+        url,
+        method: (options.method as string) || "GET",
+        headers: {
+          Authorization: `Token ${this.token}`,
+          "Content-Type": "application/json",
+          Accept: "*/*",
+          ...headersToObject(options.headers),
+        },
+        data: options.body,
+        responseType: options.responseType ?? "arraybuffer",
+      });
+      return response as AxiosResponse<T>;
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        throw new Error(
+          `${error.message}${status ? ` (HTTP ${status})` : ""}`
+        );
+      }
+      throw error;
+    }
   }
 
   // Bulk object operations

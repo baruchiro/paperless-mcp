@@ -180,6 +180,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       created__date__gte: z.string().optional(),
       created__date__lte: z.string().optional(),
       ordering: z.string().optional(),
+      more_like_id: z.number().optional().describe("Find documents similar to the document with this ID"),
+      custom_field_query: z.string().optional().describe("Filter by custom field values using query syntax, e.g. 'custom_field_123=value'"),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -197,6 +199,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       if (args.created__date__gte) query.set("created__date__gte", args.created__date__gte);
       if (args.created__date__lte) query.set("created__date__lte", args.created__date__lte);
       if (args.ordering) query.set("ordering", args.ordering);
+      if (args.more_like_id) query.set("more_like_id", args.more_like_id.toString());
+      if (args.custom_field_query) query.set("custom_field_query", args.custom_field_query);
 
       const docsResponse = await api.getDocuments(
         query.toString() ? `?${query.toString()}` : ""

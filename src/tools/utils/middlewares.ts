@@ -8,17 +8,10 @@ export const withErrorHandling = <Args extends ZodRawShape>(
     try {
       return await cb(args, extra);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      const responseData = (err as any)?.response?.data;
-      const status = (err as any)?.response?.status;
-
-      throw new Error(
-        JSON.stringify({
-          error: errorMessage,
-          responseData,
-          status,
-        })
-      );
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(String(err));
     }
   }) as ToolCallback<Args>;
 };

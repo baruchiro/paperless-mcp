@@ -312,36 +312,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   );
 
   server.tool(
-    "delete_document",
-    "Permanently delete a single document from Paperless-NGX. WARNING: This action is destructive and irreversible. The document and all associated files will be permanently removed.",
-    {
-      id: z.number().describe("The ID of the document to delete"),
-      confirm: z
-        .boolean()
-        .describe(
-          "Must be set to true to confirm this destructive operation"
-        ),
-    },
-    withErrorHandling(async (args, extra) => {
-      if (!api) throw new Error("Please configure API connection first");
-      if (!args.confirm) {
-        throw new Error(
-          "Confirmation required for destructive operation. Set confirm: true to proceed."
-        );
-      }
-      await api.deleteDocument(args.id);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ status: "deleted" }),
-          },
-        ],
-      };
-    })
-  );
-
-  server.tool(
     "update_document",
     "Update a specific document with new values. This tool allows you to modify any document field including title, correspondent, document type, storage path, tags, custom fields, and more. Only the fields you specify will be updated.",
     {

@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
+import { Annotations } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -10,6 +11,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "get_statistics",
     "Get system statistics including document counts, inbox status, file type breakdown, and storage information.",
     {},
+    Annotations.READ,
     withErrorHandling(async () => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request("/statistics/");
@@ -24,6 +26,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "get_document_suggestions",
     "Get AI-powered suggestions for a document's correspondent, tags, and document type based on its content.",
     { id: z.number().describe("The document ID to get suggestions for") },
+    Annotations.READ,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/documents/${args.id}/suggestions/`);
@@ -38,6 +41,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "get_document_metadata",
     "Get file metadata for a document including checksums, file sizes, and archival information.",
     { id: z.number().describe("The document ID") },
+    Annotations.READ,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/documents/${args.id}/metadata/`);
@@ -52,6 +56,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "list_document_notes",
     "List all notes for a specific document.",
     { id: z.number().describe("The document ID") },
+    Annotations.READ,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/documents/${args.id}/notes/`);
@@ -68,6 +73,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
       id: z.number().describe("The document ID"),
       note: z.string().describe("The note text to add"),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/documents/${args.id}/notes/`, {
@@ -88,6 +94,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
       note_id: z.number().describe("The note ID to delete"),
       confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -118,6 +125,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
           "Must be set to true to confirm this destructive operation"
         ),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -145,6 +153,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
       page: z.number().optional(),
       page_size: z.number().optional(),
     },
+    Annotations.READ,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
@@ -163,6 +172,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     {
       documents: z.array(z.number()).describe("Array of document IDs to restore"),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request("/trash/", {
@@ -185,6 +195,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
       documents: z.array(z.number()).optional().describe("Array of document IDs to permanently delete. If omitted, empties the entire trash."),
       confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -214,6 +225,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
       term: z.string().describe("The partial search term to autocomplete"),
       limit: z.number().optional().describe("Maximum number of suggestions (default 10)"),
     },
+    Annotations.READ,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const params = new URLSearchParams({ term: args.term });
@@ -232,6 +244,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "get_next_asn",
     "Get the next available Archive Serial Number (ASN) for document filing.",
     {},
+    Annotations.READ,
     withErrorHandling(async () => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request("/documents/next_asn/");
@@ -250,6 +263,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
       task_name: z.string().optional().describe("Filter by task name"),
       ordering: z.string().optional().describe("Field to order by, e.g. '-date_created'"),
     },
+    Annotations.READ,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const params = new URLSearchParams();
@@ -272,6 +286,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     {
       tasks: z.array(z.number()).describe("Array of task IDs to acknowledge"),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request("/tasks/acknowledge/", {
@@ -303,6 +318,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
         .optional()
         .describe("Use document storage path formatting for filenames"),
     },
+    Annotations.READ,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const { documents, ...options } = args;

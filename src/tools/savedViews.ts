@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
+import { Annotations } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -12,6 +13,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
       page: z.number().optional(),
       page_size: z.number().optional(),
     },
+    Annotations.READ,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
@@ -26,6 +28,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
     "get_saved_view",
     "Get a specific saved view by ID with full details including filter rules.",
     { id: z.number() },
+    Annotations.READ,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.getSavedView(args.id);
@@ -53,6 +56,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
         )
         .optional(),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createSavedView(args);
@@ -81,6 +85,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
         )
         .optional(),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
@@ -98,6 +103,7 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
       id: z.number(),
       confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {

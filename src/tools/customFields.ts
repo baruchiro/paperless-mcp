@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
+import { Annotations } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -17,6 +18,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
+    Annotations.READ,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
@@ -38,6 +40,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
     "get_custom_field",
     "Get a specific custom field by ID with full details including data type and extra configuration.",
     { id: z.number() },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.getCustomField(args.id);
@@ -65,6 +68,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
       ]),
       extra_data: z.record(z.unknown()).nullable().optional(),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createCustomField(args);
@@ -95,6 +99,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
         .optional(),
       extra_data: z.record(z.unknown()).nullable().optional(),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
@@ -112,6 +117,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
       id: z.number(),
       confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -134,6 +140,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
       operation: z.enum(["delete"]),
       confirm: z.boolean().optional().describe("Must be true when operation is 'delete' to confirm destructive operation"),
     },
+    Annotations.BULK_EDIT,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.operation === "delete" && !args.confirm) {

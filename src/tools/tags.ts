@@ -6,6 +6,7 @@ import {
   enhanceMatchingAlgorithm,
   enhanceMatchingAlgorithmArray,
 } from "../api/utils";
+import { Annotations } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -22,6 +23,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
+    Annotations.READ,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
@@ -49,6 +51,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     "get_tag",
     "Get a specific tag by ID with full details including matching rules.",
     { id: z.number() },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.getTag(args.id);
@@ -81,6 +84,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
       parent: z.number().nullable().optional().describe("Parent tag ID for hierarchical tags"),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const tag = await api.createTag(args);
@@ -117,6 +121,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
       parent: z.number().nullable().optional().describe("Parent tag ID for hierarchical tags"),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
@@ -142,6 +147,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .boolean()
         .describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -188,6 +194,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .optional(),
       merge: z.boolean().optional(),
     },
+    Annotations.BULK_EDIT,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.operation === "delete" && !args.confirm) {

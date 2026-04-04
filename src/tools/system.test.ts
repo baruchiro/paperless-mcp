@@ -281,6 +281,6 @@ describe("bulk_download tool", () => {
 
     const resource = result.content.find((c: any) => c.type === "resource");
     assert.ok(resource);
-    assert.equal(resource.resource.mimeType, "application/zip");
+    assert.equal((resource as any).resource.mimeType, "application/zip");
   });
 });

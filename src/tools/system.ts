@@ -171,7 +171,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "restore_from_trash",
     "Restore documents from the trash back to the system.",
     {
-      documents: z.array(z.number()).describe("Array of document IDs to restore"),
+      documents: z.array(z.number()).min(1).describe("Array of document IDs to restore"),
     },
     Annotations.UPDATE,
     withErrorHandling(async (args) => {
@@ -285,7 +285,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "acknowledge_tasks",
     "Acknowledge/dismiss completed tasks to clear them from the task list.",
     {
-      tasks: z.array(z.number()).describe("Array of task IDs to acknowledge"),
+      tasks: z.array(z.number()).min(1).describe("Array of task IDs to acknowledge"),
     },
     Annotations.UPDATE,
     withErrorHandling(async (args) => {

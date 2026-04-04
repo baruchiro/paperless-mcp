@@ -28,15 +28,65 @@ export type CustomFieldQuery =
       clauses: CustomFieldQuery[],
     ];
 
-export const customFieldQuerySchema: z.ZodType<CustomFieldQuery> = z.lazy(() =>
-  z.union([
-    z.tuple([z.string(), z.string(), customFieldQueryValueSchema]),
-    z.tuple([
-      z.enum(CUSTOM_FIELD_QUERY_GROUP_OPERATORS),
-      z.array(customFieldQuerySchema).min(1),
-    ]),
-  ])
-);
+function isCustomFieldQueryPrimitive(value: unknown) {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
+  );
+}
+
+function isCustomFieldQueryValue(value: unknown): value is CustomFieldQueryValue {
+  if (isCustomFieldQueryPrimitive(value)) {
+    return true;
+  }
+
+  return (
+    Array.isArray(value) && value.every((item) => isCustomFieldQueryPrimitive(item))
+  );
+}
+
+function isCustomFieldQuery(value: unknown): value is CustomFieldQuery {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  if (
+    value.length === 3 &&
+    typeof value[0] === "string" &&
+    typeof value[1] === "string" &&
+    isCustomFieldQueryValue(value[2])
+  ) {
+    return true;
+  }
+
+  if (
+    value.length === 2 &&
+    typeof value[0] === "string" &&
+    CUSTOM_FIELD_QUERY_GROUP_OPERATORS.includes(
+      value[0] as (typeof CUSTOM_FIELD_QUERY_GROUP_OPERATORS)[number]
+    ) &&
+    Array.isArray(value[1]) &&
+    value[1].length >= 1
+  ) {
+    return value[1].every((item) => isCustomFieldQuery(item));
+  }
+
+  return false;
+}
+
+export const customFieldQuerySchema = z
+  .array(z.unknown())
+  .superRefine((value, ctx) => {
+    if (!isCustomFieldQuery(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Invalid custom_field_query. Use [field_name, operator, value] or ['AND'|'OR', [clause1, clause2]].",
+      });
+    }
+  }) as unknown as z.ZodType<CustomFieldQuery>;
 
 const paperlessFilterScalarSchema = z.union([
   z.string(),

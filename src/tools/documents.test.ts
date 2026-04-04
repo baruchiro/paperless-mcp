@@ -4,6 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { registerDocumentTools } from "./documents";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import {
   buildDocumentQueryString,
   customFieldQuerySchema,
@@ -205,6 +206,15 @@ test("rejects invalid custom_field_query shapes", () => {
     customFieldQuerySchema.safeParse(["AND", [["field"]]]).success,
     false
   );
+});
+
+test("custom_field_query JSON schema avoids tuple-style items arrays", () => {
+  const jsonSchema = zodToJsonSchema(customFieldQuerySchema) as {
+    items?: unknown;
+    type?: string;
+  };
+  assert.equal(jsonSchema.type, "array");
+  assert.equal(Array.isArray(jsonSchema.items), false);
 });
 
 test("list_documents keeps existing simple query behavior", async () => {

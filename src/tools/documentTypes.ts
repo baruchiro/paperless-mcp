@@ -6,6 +6,7 @@ import {
   enhanceMatchingAlgorithm,
   enhanceMatchingAlgorithmArray,
 } from "../api/utils";
+import { Annotations } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -25,6 +26,7 @@ export function registerDocumentTypeTools(
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
+    Annotations.READ,
     withErrorHandling(async (args = {}, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
@@ -52,6 +54,7 @@ export function registerDocumentTypeTools(
     "get_document_type",
     "Get a specific document type by ID with full details including matching rules.",
     { id: z.number() },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/document_types/${args.id}/`);
@@ -75,7 +78,9 @@ export function registerDocumentTypeTools(
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createDocumentType(args);
@@ -88,10 +93,10 @@ export function registerDocumentTypeTools(
 
   server.tool(
     "update_document_type",
-    "Update an existing document type's name, matching pattern, or matching algorithm.",
+    "Update an existing document type's name, matching pattern, or matching algorithm. Only specified fields are updated (PATCH).",
     {
       id: z.number(),
-      name: z.string(),
+      name: z.string().optional(),
       match: z.string().optional(),
       matching_algorithm: z
         .number()
@@ -100,7 +105,9 @@ export function registerDocumentTypeTools(
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...payloadWithoutId } = args;
@@ -121,6 +128,7 @@ export function registerDocumentTypeTools(
         .boolean()
         .describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -164,6 +172,7 @@ export function registerDocumentTypeTools(
         .optional(),
       merge: z.boolean().optional(),
     },
+    Annotations.BULK_EDIT,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.operation === "delete" && !args.confirm) {

@@ -5,7 +5,9 @@ import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
 import { withErrorHandling } from "./utils/middlewares";
 import { validateCustomFields } from "./utils/monetary";
+import { Annotations } from "./utils/annotations";
 import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
+import { buildQueryString } from "./utils/queryString";
 
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
@@ -84,6 +86,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           "Must be true when method is 'delete' to confirm destructive operation"
         ),
     },
+    Annotations.BULK_EDIT,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.method === "delete" && !args.confirm) {
@@ -135,6 +138,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       archive_serial_number: z.number().optional(),
       custom_fields: z.array(z.number()).optional(),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
 
@@ -180,7 +184,10 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       created__date__gte: z.string().optional(),
       created__date__lte: z.string().optional(),
       ordering: z.string().optional(),
+      more_like_id: z.number().optional().describe("Find documents similar to the document with this ID"),
+      custom_field_query: z.string().optional().describe("Filter by custom field values using query syntax, e.g. 'custom_field_123=value'"),
     },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const query = new URLSearchParams();
@@ -197,6 +204,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       if (args.created__date__gte) query.set("created__date__gte", args.created__date__gte);
       if (args.created__date__lte) query.set("created__date__lte", args.created__date__lte);
       if (args.ordering) query.set("ordering", args.ordering);
+      if (args.more_like_id) query.set("more_like_id", args.more_like_id.toString());
+      if (args.custom_field_query) query.set("custom_field_query", args.custom_field_query);
 
       const docsResponse = await api.getDocuments(
         query.toString() ? `?${query.toString()}` : ""
@@ -211,6 +220,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       id: z.number(),
     },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
@@ -224,6 +234,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       id: z.number(),
     },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
@@ -248,6 +259,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       query: z.string(),
     },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const docsResponse = await api.searchDocuments(args.query);
@@ -262,6 +274,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       id: z.number(),
       original: z.boolean().optional(),
     },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.downloadDocument(args.id, args.original);
@@ -293,6 +306,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       id: z.number(),
     },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.getThumbnail(args.id);
@@ -375,6 +389,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         .optional()
         .describe("Array of custom field values to assign"),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...updateData } = args;
@@ -384,6 +399,82 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const response = await api.updateDocument(id, updateData);
 
       return convertDocsWithNames(response, api);
+    })
+  );
+
+  server.tool(
+    "email_document",
+    "Send a document via email to one or more recipients.",
+    {
+      id: z.number().describe("The document ID to send"),
+      addresses: z.string().describe("Comma-separated email addresses"),
+      subject: z.string().describe("Email subject line"),
+      message: z.string().describe("Email body message"),
+      use_archive_version: z
+        .boolean()
+        .optional()
+        .describe("Send the archive version (default: true)"),
+    },
+    Annotations.CREATE,
+    withErrorHandling(async (args) => {
+      if (!api) throw new Error("Please configure API connection first");
+      const { id, ...emailData } = args;
+      const response = await api.request(`/documents/${id}/email/`, {
+        method: "POST",
+        body: JSON.stringify(emailData),
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(response) }],
+      };
+    })
+  );
+
+  server.tool(
+    "get_document_history",
+    "Get the change history / audit log for a document, showing who changed what and when.",
+    {
+      id: z.number().describe("The document ID"),
+      page: z.number().optional(),
+      page_size: z.number().optional(),
+    },
+    Annotations.READ,
+    withErrorHandling(async (args) => {
+      if (!api) throw new Error("Please configure API connection first");
+      const { id, ...pagination } = args;
+      const queryString = buildQueryString(pagination);
+      const response = await api.request(
+        `/documents/${id}/history/${queryString ? `?${queryString}` : ""}`
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(response) }],
+      };
+    })
+  );
+
+  server.tool(
+    "get_document_preview",
+    "Get a full-page preview image of a document. Returns the preview as a base64-encoded image resource.",
+    {
+      id: z.number().describe("The document ID"),
+    },
+    Annotations.READ,
+    withErrorHandling(async (args) => {
+      if (!api) throw new Error("Please configure API connection first");
+      const response = await api.requestRaw(`/documents/${args.id}/preview/`, {
+        responseType: "arraybuffer",
+      });
+      return {
+        content: [
+          {
+            type: "resource",
+            resource: {
+              uri: `document-${args.id}-preview.webp`,
+              blob: Buffer.from(response.data).toString("base64"),
+              mimeType: "image/webp",
+            },
+          },
+        ],
+      };
     })
   );
 }

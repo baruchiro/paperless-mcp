@@ -1,4 +1,4 @@
-import axios, { AxiosResponse } from "axios";
+import axios, { AxiosResponse, ResponseType } from "axios";
 import FormData from "form-data";
 import {
   BulkEditDocumentsResult,
@@ -11,7 +11,11 @@ import {
   GetCorrespondentsResponse,
   GetCustomFieldsResponse,
   GetDocumentTypesResponse,
+  GetSavedViewsResponse,
+  GetStoragePathsResponse,
   GetTagsResponse,
+  SavedView,
+  StoragePath,
   Tag,
 } from "./types";
 import { headersToObject } from "./utils";
@@ -47,13 +51,6 @@ export class PaperlessAPI {
 
       const body = response.data;
       if (response.status < 200 || response.status >= 300) {
-        console.error({
-          error: "Error executing request",
-          url,
-          options,
-          status: response.status,
-          response: body,
-        });
         const errorMessage =
           (body as Record<string, unknown>)?.detail ||
           (body as Record<string, unknown>)?.error ||
@@ -63,15 +60,23 @@ export class PaperlessAPI {
       }
 
       return body;
-    } catch (error) {
-      console.error({
-        error: "Error executing request",
-        message: error instanceof Error ? error.message : String(error),
-        url,
-        options,
-        responseData: (error as any)?.response?.data,
-        status: (error as any)?.response?.status,
-      });
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const responseData = error.response?.data as
+          | Record<string, unknown>
+          | undefined;
+        const detail =
+          responseData?.detail || responseData?.error || responseData?.message;
+        const message = error.message;
+        throw new Error(
+          detail
+            ? `${detail}${status ? ` (HTTP ${status})` : ""}`
+            : status
+              ? `${message} (HTTP ${status})`
+              : message
+        );
+      }
       throw error;
     }
   }
@@ -159,6 +164,12 @@ export class PaperlessAPI {
     });
   }
 
+  async deleteDocument(id: number): Promise<void> {
+    return this.request<void>(`/documents/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
   async searchDocuments(query: string): Promise<DocumentsResponse> {
     const response = await this.request<DocumentsResponse>(
       `/documents/?query=${encodeURIComponent(query)}`
@@ -208,9 +219,13 @@ export class PaperlessAPI {
     });
   }
 
+  async getTag(id: number): Promise<Tag> {
+    return this.request<Tag>(`/tags/${id}/`);
+  }
+
   async updateTag(id: number, data: Partial<Tag>): Promise<Tag> {
     return this.request<Tag>(`/tags/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -249,7 +264,7 @@ export class PaperlessAPI {
     data: Partial<Correspondent>
   ): Promise<Correspondent> {
     return this.request<Correspondent>(`/correspondents/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -277,7 +292,7 @@ export class PaperlessAPI {
     data: Partial<DocumentType>
   ): Promise<DocumentType> {
     return this.request<DocumentType>(`/document_types/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -309,7 +324,7 @@ export class PaperlessAPI {
     data: Partial<CustomField>
   ): Promise<CustomField> {
     return this.request<CustomField>(`/custom_fields/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -318,6 +333,113 @@ export class PaperlessAPI {
     return this.request<void>(`/custom_fields/${id}/`, {
       method: "DELETE",
     });
+  }
+
+  // Storage path operations
+  async getStoragePaths(
+    queryString?: string
+  ): Promise<GetStoragePathsResponse> {
+    const url = queryString
+      ? `/storage_paths/?${queryString}`
+      : "/storage_paths/";
+    return this.request<GetStoragePathsResponse>(url);
+  }
+
+  async getStoragePath(id: number): Promise<StoragePath> {
+    return this.request<StoragePath>(`/storage_paths/${id}/`);
+  }
+
+  async createStoragePath(
+    data: Partial<StoragePath>
+  ): Promise<StoragePath> {
+    return this.request<StoragePath>("/storage_paths/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateStoragePath(
+    id: number,
+    data: Partial<StoragePath>
+  ): Promise<StoragePath> {
+    return this.request<StoragePath>(`/storage_paths/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteStoragePath(id: number): Promise<void> {
+    return this.request<void>(`/storage_paths/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
+  // Saved view operations
+  async getSavedViews(
+    queryString?: string
+  ): Promise<GetSavedViewsResponse> {
+    const url = queryString
+      ? `/saved_views/?${queryString}`
+      : "/saved_views/";
+    return this.request<GetSavedViewsResponse>(url);
+  }
+
+  async getSavedView(id: number): Promise<SavedView> {
+    return this.request<SavedView>(`/saved_views/${id}/`);
+  }
+
+  async createSavedView(data: Partial<SavedView>): Promise<SavedView> {
+    return this.request<SavedView>("/saved_views/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSavedView(
+    id: number,
+    data: Partial<SavedView>
+  ): Promise<SavedView> {
+    return this.request<SavedView>(`/saved_views/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSavedView(id: number): Promise<void> {
+    return this.request<void>(`/saved_views/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
+  // Raw request for binary responses (e.g., bulk download)
+  async requestRaw<T = ArrayBuffer>(
+    path: string,
+    options: RequestInit & { responseType?: ResponseType } = {}
+  ): Promise<AxiosResponse<T>> {
+    const url = `${this.baseUrl}/api${path}`;
+    try {
+      const response = await axios({
+        url,
+        method: (options.method as string) || "GET",
+        headers: {
+          Authorization: `Token ${this.token}`,
+          "Content-Type": "application/json",
+          Accept: "*/*",
+          ...headersToObject(options.headers),
+        },
+        data: options.body,
+        responseType: options.responseType ?? "arraybuffer",
+      });
+      return response as AxiosResponse<T>;
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        throw new Error(
+          `${error.message}${status ? ` (HTTP ${status})` : ""}`
+        );
+      }
+      throw error;
+    }
   }
 
   // Bulk object operations

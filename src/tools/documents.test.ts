@@ -209,7 +209,7 @@ test("rejects invalid custom_field_query shapes", () => {
 });
 
 test("custom_field_query JSON schema avoids tuple-style items arrays", () => {
-  const jsonSchema = zodToJsonSchema(customFieldQuerySchema) as {
+  const jsonSchema = (zodToJsonSchema as any)(customFieldQuerySchema as any) as {
     items?: unknown;
     type?: string;
   };

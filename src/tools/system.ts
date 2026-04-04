@@ -117,7 +117,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
   // Delete document
   server.tool(
     "delete_document",
-    "Permanently delete a single document from Paperless-NGX. WARNING: This action is destructive and irreversible. The document and all associated files will be permanently removed.",
+    "Move a document to trash (soft-delete). The document remains recoverable until the trash is emptied or the retention window expires (~30 days). Use empty_trash for permanent deletion.",
     {
       id: z.number().describe("The ID of the document to delete"),
       confirm: z

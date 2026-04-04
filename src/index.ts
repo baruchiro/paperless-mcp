@@ -11,9 +11,11 @@ import { registerCustomFieldTools } from "./tools/customFields";
 import { registerDocumentTools } from "./tools/documents";
 import { registerDocumentTypeTools } from "./tools/documentTypes";
 import { registerSavedViewTools } from "./tools/savedViews";
+import { registerShareLinkTools } from "./tools/shareLinks";
 import { registerStoragePathTools } from "./tools/storagePaths";
 import { registerSystemTools } from "./tools/system";
 import { registerTagTools } from "./tools/tags";
+import { registerWorkflowTools } from "./tools/workflows";
 import { version } from "../package.json";
 
 const {
@@ -77,6 +79,8 @@ The document tools return JSON data with document IDs that you can use to constr
   registerCustomFieldTools(server, api);
   registerStoragePathTools(server, api);
   registerSavedViewTools(server, api);
+  registerShareLinkTools(server, api);
+  registerWorkflowTools(server, api);
   registerSystemTools(server, api);
 
   if (useHttp) {

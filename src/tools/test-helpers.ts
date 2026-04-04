@@ -18,7 +18,14 @@ export function createMockServer(): {
   const tools = new Map<string, RegisteredTool>();
 
   const server = {
-    tool(name: string, description: string, schema: any, callback: any) {
+    tool(
+      name: string,
+      description: string,
+      schema: any,
+      annotationsOrCallback: any,
+      maybeCallback?: any
+    ) {
+      const callback = maybeCallback ?? annotationsOrCallback;
       tools.set(name, { name, description, schema, callback });
     },
   };

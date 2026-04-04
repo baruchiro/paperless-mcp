@@ -7,7 +7,7 @@ export const withErrorHandling = <Args extends ZodRawShape>(
   return (async (args, extra) => {
     try {
       return await cb(args, extra);
-    } catch (err) {
+    } catch (err: unknown) {
       if (err instanceof Error) {
         throw err;
       }

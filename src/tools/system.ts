@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { Annotations } from "./utils/annotations";
+import { arrayNotEmpty } from "./utils/empty";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -192,7 +193,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "empty_trash",
     "⚠️ DESTRUCTIVE: Permanently delete documents from the trash, or empty the entire trash. This action is irreversible.",
     {
-      documents: z.array(z.number()).optional().describe("Array of document IDs to permanently delete. If omitted, empties the entire trash."),
+      documents: z.array(z.number()).optional().transform(arrayNotEmpty).describe("Array of document IDs to permanently delete. If omitted, empties the entire trash."),
       confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
     },
     Annotations.DELETE,

@@ -11,7 +11,11 @@ import {
   GetCorrespondentsResponse,
   GetCustomFieldsResponse,
   GetDocumentTypesResponse,
+  GetSavedViewsResponse,
+  GetStoragePathsResponse,
   GetTagsResponse,
+  SavedView,
+  StoragePath,
   Tag,
 } from "./types";
 import { headersToObject } from "./utils";
@@ -332,19 +336,23 @@ export class PaperlessAPI {
   }
 
   // Storage path operations
-  async getStoragePaths(queryString?: string): Promise<any> {
+  async getStoragePaths(
+    queryString?: string
+  ): Promise<GetStoragePathsResponse> {
     const url = queryString
       ? `/storage_paths/?${queryString}`
       : "/storage_paths/";
-    return this.request(url);
+    return this.request<GetStoragePathsResponse>(url);
   }
 
-  async getStoragePath(id: number): Promise<any> {
-    return this.request(`/storage_paths/${id}/`);
+  async getStoragePath(id: number): Promise<StoragePath> {
+    return this.request<StoragePath>(`/storage_paths/${id}/`);
   }
 
-  async createStoragePath(data: Record<string, unknown>): Promise<any> {
-    return this.request("/storage_paths/", {
+  async createStoragePath(
+    data: Partial<StoragePath>
+  ): Promise<StoragePath> {
+    return this.request<StoragePath>("/storage_paths/", {
       method: "POST",
       body: JSON.stringify(data),
     });
@@ -352,9 +360,9 @@ export class PaperlessAPI {
 
   async updateStoragePath(
     id: number,
-    data: Record<string, unknown>
-  ): Promise<any> {
-    return this.request(`/storage_paths/${id}/`, {
+    data: Partial<StoragePath>
+  ): Promise<StoragePath> {
+    return this.request<StoragePath>(`/storage_paths/${id}/`, {
       method: "PATCH",
       body: JSON.stringify(data),
     });
@@ -367,19 +375,21 @@ export class PaperlessAPI {
   }
 
   // Saved view operations
-  async getSavedViews(queryString?: string): Promise<any> {
+  async getSavedViews(
+    queryString?: string
+  ): Promise<GetSavedViewsResponse> {
     const url = queryString
       ? `/saved_views/?${queryString}`
       : "/saved_views/";
-    return this.request(url);
+    return this.request<GetSavedViewsResponse>(url);
   }
 
-  async getSavedView(id: number): Promise<any> {
-    return this.request(`/saved_views/${id}/`);
+  async getSavedView(id: number): Promise<SavedView> {
+    return this.request<SavedView>(`/saved_views/${id}/`);
   }
 
-  async createSavedView(data: Record<string, unknown>): Promise<any> {
-    return this.request("/saved_views/", {
+  async createSavedView(data: Partial<SavedView>): Promise<SavedView> {
+    return this.request<SavedView>("/saved_views/", {
       method: "POST",
       body: JSON.stringify(data),
     });
@@ -387,9 +397,9 @@ export class PaperlessAPI {
 
   async updateSavedView(
     id: number,
-    data: Record<string, unknown>
-  ): Promise<any> {
-    return this.request(`/saved_views/${id}/`, {
+    data: Partial<SavedView>
+  ): Promise<SavedView> {
+    return this.request<SavedView>(`/saved_views/${id}/`, {
       method: "PATCH",
       body: JSON.stringify(data),
     });

@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { Annotations } from "./utils/annotations";
+import { arrayNotEmpty } from "./utils/empty";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -54,7 +55,8 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
             value: z.string().describe("The filter value"),
           })
         )
-        .optional(),
+        .optional()
+        .transform(arrayNotEmpty),
     },
     Annotations.CREATE,
     withErrorHandling(async (args) => {
@@ -83,7 +85,8 @@ export function registerSavedViewTools(server: McpServer, api: PaperlessAPI) {
             value: z.string(),
           })
         )
-        .optional(),
+        .optional()
+        .transform(arrayNotEmpty),
     },
     Annotations.UPDATE,
     withErrorHandling(async (args) => {

@@ -25,23 +25,30 @@ export function registerDocumentTypeTools(
       name__iexact: z.string().optional(),
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
+      is_empty: z.boolean().optional().describe("Client-side filter: true = only document types with 0 documents, false = only with documents"),
     },
     Annotations.READ,
     withErrorHandling(async (args = {}, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const queryString = buildQueryString(args);
+      const { is_empty, ...apiArgs } = args;
+      const queryString = buildQueryString(apiArgs);
       const response = await api.request(
         `/document_types/${queryString ? `?${queryString}` : ""}`
       );
-      const enhancedResults = enhanceMatchingAlgorithmArray(
-        response.results || []
-      );
+      let results = response.results || [];
+      if (is_empty !== undefined) {
+        results = results.filter((dt: any) =>
+          is_empty ? dt.document_count === 0 : dt.document_count > 0
+        );
+      }
+      const enhancedResults = enhanceMatchingAlgorithmArray(results);
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
               ...response,
+              count: enhancedResults.length,
               results: enhancedResults,
             }),
           },

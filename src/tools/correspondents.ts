@@ -25,21 +25,28 @@ export function registerCorrespondentTools(
       name__iexact: z.string().optional(),
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
+      is_empty: z.boolean().optional().describe("Client-side filter: true = only correspondents with 0 documents, false = only with documents"),
     },
     Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const queryString = buildQueryString(args);
+      const { is_empty, ...apiArgs } = args;
+      const queryString = buildQueryString(apiArgs);
       const response = await api.getCorrespondents(queryString);
-      const enhancedResults = enhanceMatchingAlgorithmArray(
-        response.results || []
-      );
+      let results = response.results || [];
+      if (is_empty !== undefined) {
+        results = results.filter((c) =>
+          is_empty ? c.document_count === 0 : c.document_count > 0
+        );
+      }
+      const enhancedResults = enhanceMatchingAlgorithmArray(results);
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
               ...response,
+              count: enhancedResults.length,
               results: enhancedResults,
             }),
           },

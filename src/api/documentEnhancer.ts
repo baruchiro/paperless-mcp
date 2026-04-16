@@ -12,7 +12,7 @@ interface CustomField {
 export interface EnhancedDocument
   extends Omit<
     Document,
-    "correspondent" | "document_type" | "tags" | "custom_fields"
+    "correspondent" | "document_type" | "tags" | "custom_fields" | "content" | "notes"
   > {
   correspondent: NamedItem | null;
   document_type: NamedItem | null;
@@ -104,8 +104,8 @@ async function enhanceDocumentsArray(
 
   return documents
     .map((doc) => {
-      const { content, ...docWithoutContent } = doc;
-      return docWithoutContent;
+      const { content, notes, ...slim } = doc;
+      return slim;
     })
     .map((doc) => ({
       ...doc,

@@ -22,23 +22,30 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       name__iexact: z.string().optional(),
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
+      is_empty: z.boolean().optional().describe("Client-side filter: true = only tags with 0 documents, false = only with documents"),
     },
     Annotations.READ,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
-      const queryString = buildQueryString(args);
+      const { is_empty, ...apiArgs } = args;
+      const queryString = buildQueryString(apiArgs);
       const tagsResponse = await api.request(
         `/tags/${queryString ? `?${queryString}` : ""}`
       );
-      const enhancedResults = enhanceMatchingAlgorithmArray(
-        tagsResponse.results || []
-      );
+      let results = tagsResponse.results || [];
+      if (is_empty !== undefined) {
+        results = results.filter((t: any) =>
+          is_empty ? t.document_count === 0 : t.document_count > 0
+        );
+      }
+      const enhancedResults = enhanceMatchingAlgorithmArray(results);
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
               ...tagsResponse,
+              count: enhancedResults.length,
               results: enhancedResults,
             }),
           },

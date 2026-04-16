@@ -24,10 +24,7 @@ export class PaperlessAPI {
   constructor(
     private readonly baseUrl: string,
     private readonly token: string
-  ) {
-    this.baseUrl = baseUrl;
-    this.token = token;
-  }
+  ) {}
 
   async request<T = any>(path: string, options: RequestInit = {}) {
     const url = `${this.baseUrl}/api${path}`;

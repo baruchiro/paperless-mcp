@@ -56,11 +56,17 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "list_document_notes",
     "List all notes for a specific document.",
-    { id: z.number().describe("The document ID") },
+    {
+      id: z.number().describe("The document ID"),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
+    },
     Annotations.READ,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.request(`/documents/${args.id}/notes/`);
+      const { id, ...pagination } = args;
+      const queryString = buildQueryString(pagination);
+      const response = await api.request(`/documents/${id}/notes/${queryString ? `?${queryString}` : ""}`);
       return {
         content: [{ type: "text", text: JSON.stringify(response) }],
       };
@@ -305,7 +311,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "bulk_download",
     "Download multiple documents as a ZIP archive. Returns base64-encoded ZIP file.",
     {
-      documents: z.array(z.number()).min(1).describe("Array of document IDs to download"),
+      documents: z.array(z.number()).min(1).max(500).describe("Array of document IDs to download (max 500)"),
       content: z
         .enum(["both", "originals", "archive"])
         .optional()

@@ -151,8 +151,8 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "list_trash",
     "List documents in the trash (soft-deleted documents).",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
     },
     Annotations.READ,
     withErrorHandling(async (args = {}) => {
@@ -334,7 +334,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
             type: "resource",
             resource: {
               uri: "bulk-download.zip",
-              blob: Buffer.from(response.data).toString("base64"),
+              blob: Buffer.from(response.data as ArrayBuffer).toString("base64"),
               mimeType: "application/zip",
             },
           },

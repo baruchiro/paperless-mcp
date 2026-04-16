@@ -89,8 +89,8 @@ export function registerWorkflowTools(server: McpServer, api: PaperlessAPI) {
     "list_workflow_actions",
     "List all workflow actions with optional pagination.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
     },
     Annotations.READ,
     withErrorHandling(async (args = {}) => {
@@ -195,8 +195,8 @@ export function registerWorkflowTools(server: McpServer, api: PaperlessAPI) {
     "list_workflow_triggers",
     "List all workflow triggers with optional pagination.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
     },
     Annotations.READ,
     withErrorHandling(async (args = {}) => {

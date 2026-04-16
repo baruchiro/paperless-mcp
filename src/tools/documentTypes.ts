@@ -18,8 +18,8 @@ export function registerDocumentTypeTools(
     "list_document_types",
     "List all document types. IMPORTANT: When a user query may refer to a document type or tag, you should fetch all document types and all tags up front (with a large enough page_size), cache them for the session, and search locally for matches by name or slug before making further API calls. This reduces redundant requests and handles ambiguity between tags and document types efficiently.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       name__icontains: z.string().optional(),
       name__iendswith: z.string().optional(),
       name__iexact: z.string().optional(),

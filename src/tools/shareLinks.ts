@@ -10,8 +10,8 @@ export function registerShareLinkTools(server: McpServer, api: PaperlessAPI) {
     "list_share_links",
     "List all share links with optional filtering by creation date, expiration date, and pagination.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       ordering: z.string().optional(),
     },
     Annotations.READ,

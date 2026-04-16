@@ -18,8 +18,8 @@ export function registerCorrespondentTools(
     "list_correspondents",
     "List all correspondents with optional filtering and pagination. Correspondents represent entities that send or receive documents.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       name__icontains: z.string().optional(),
       name__iendswith: z.string().optional(),
       name__iexact: z.string().optional(),

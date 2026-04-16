@@ -10,8 +10,8 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
     "list_custom_fields",
     "List all custom fields. IMPORTANT: When a user query may refer to a custom field, you should fetch all custom fields up front (with a large enough page_size), cache them for the session, and search locally for matches by name before making further API calls. This reduces redundant requests and handles ambiguity efficiently.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       name__icontains: z.string().optional(),
       name__iendswith: z.string().optional(),
       name__iexact: z.string().optional(),

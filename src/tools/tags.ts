@@ -15,8 +15,8 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     "list_tags",
     "List all tags. IMPORTANT: When a user query may refer to a tag or document type, you should fetch all tags and all document types up front (with a large enough page_size), cache them for the session, and search locally for matches by name or slug before making further API calls. This reduces redundant requests and handles ambiguity between tags and document types efficiently.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       name__icontains: z.string().optional(),
       name__iendswith: z.string().optional(),
       name__iexact: z.string().optional(),

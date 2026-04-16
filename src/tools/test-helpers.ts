@@ -39,15 +39,18 @@ export function createMockServer(): {
  * Creates a mock PaperlessAPI where every method can be overridden.
  * By default all methods throw "not mocked".
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiMethod = (...args: any[]) => Promise<any>;
+
 export function createMockApi(
-  overrides: Partial<Record<keyof PaperlessAPI, Function>> = {}
+  overrides: Partial<Record<keyof PaperlessAPI, ApiMethod>> = {}
 ): PaperlessAPI {
   const handler: ProxyHandler<PaperlessAPI> = {
     get(_target, prop: string) {
       if (prop in overrides) {
         return overrides[prop as keyof typeof overrides];
       }
-      return () => {
+      return async () => {
         throw new Error(`API method '${prop}' was not mocked`);
       };
     },

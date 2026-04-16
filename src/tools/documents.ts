@@ -174,8 +174,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     "list_documents",
     "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. Using the correct ID filter will yield much more accurate results. Note: Document content is excluded from results by default. Use 'get_document_content' to retrieve content when needed.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       search: z.string().optional(),
       correspondent: z.number().optional(),
       document_type: z.number().optional(),
@@ -434,8 +434,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     "Get the change history / audit log for a document, showing who changed what and when.",
     {
       id: z.number().describe("The document ID"),
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
     },
     Annotations.READ,
     withErrorHandling(async (args) => {

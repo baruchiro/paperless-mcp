@@ -194,6 +194,49 @@ describe("list_tasks tool", () => {
 
     assert.equal(calledPath, "/tasks/");
   });
+
+  test("limits results client-side with limit parameter", async () => {
+    const fakeTasks = Array.from({ length: 100 }, (_, i) => ({
+      id: i + 1,
+      task_id: `task-${i + 1}`,
+      task_name: "consume_file",
+      status: "SUCCESS",
+      date_created: `2026-01-${String(i + 1).padStart(2, "0")}`,
+    }));
+    const { server, tools } = createMockServer();
+    const api = createMockApi({
+      request: async (_path: string) => fakeTasks,
+    });
+    registerSystemTools(server, api);
+
+    const tool = tools.get("list_tasks")!;
+    const result = await tool.callback({ limit: 10 });
+    const parsed = getTextContent(result) as any[];
+
+    assert.equal(parsed.length, 10);
+    assert.equal(parsed[0].id, 1);
+    assert.equal(parsed[9].id, 10);
+  });
+
+  test("defaults to 25 results when no limit specified and array is large", async () => {
+    const fakeTasks = Array.from({ length: 100 }, (_, i) => ({
+      id: i + 1,
+      task_id: `task-${i + 1}`,
+      task_name: "consume_file",
+      status: "SUCCESS",
+    }));
+    const { server, tools } = createMockServer();
+    const api = createMockApi({
+      request: async (_path: string) => fakeTasks,
+    });
+    registerSystemTools(server, api);
+
+    const tool = tools.get("list_tasks")!;
+    const result = await tool.callback({});
+    const parsed = getTextContent(result) as any[];
+
+    assert.equal(parsed.length, 25);
+  });
 });
 
 describe("create_document_note tool", () => {

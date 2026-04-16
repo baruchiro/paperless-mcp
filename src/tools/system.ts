@@ -271,22 +271,25 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
       type: z.enum(["auto_task", "scheduled_task", "manual_task"]).optional().describe("Filter by task type"),
       acknowledged: z.boolean().optional().describe("Filter by acknowledged status (false = unacknowledged tasks only)"),
       ordering: z.string().optional().describe("Field to order by, e.g. '-date_created'"),
+      limit: z.number().int().min(1).optional().describe("Max number of tasks to return (default 25). The API returns all tasks at once, so this truncates client-side."),
     },
     Annotations.READ,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
+      const { limit, ...filterArgs } = args;
       const params = new URLSearchParams();
-      if (args.status) params.set("status", args.status);
-      if (args.task_name) params.set("task_name", args.task_name);
-      if (args.type) params.set("type", args.type);
-      if (args.acknowledged !== undefined) params.set("acknowledged", String(args.acknowledged));
-      if (args.ordering) params.set("ordering", args.ordering);
+      if (filterArgs.status) params.set("status", filterArgs.status);
+      if (filterArgs.task_name) params.set("task_name", filterArgs.task_name);
+      if (filterArgs.type) params.set("type", filterArgs.type);
+      if (filterArgs.acknowledged !== undefined) params.set("acknowledged", String(filterArgs.acknowledged));
+      if (filterArgs.ordering) params.set("ordering", filterArgs.ordering);
       const query = params.toString();
       const response = await api.request(
         `/tasks/${query ? `?${query}` : ""}`
       );
+      const tasks = Array.isArray(response) ? response.slice(0, limit ?? 25) : response;
       return {
-        content: [{ type: "text", text: JSON.stringify(response) }],
+        content: [{ type: "text", text: JSON.stringify(tasks) }],
       };
     })
   );

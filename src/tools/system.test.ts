@@ -170,10 +170,10 @@ describe("list_tasks tool", () => {
     registerSystemTools(server, api);
 
     const tool = tools.get("list_tasks")!;
-    await tool.callback({ status: "complete", task_name: "consume" });
+    await tool.callback({ status: "SUCCESS", task_name: "consume_file" });
 
-    assert.ok(calledPath!.includes("status=complete"));
-    assert.ok(calledPath!.includes("task_name=consume"));
+    assert.ok(calledPath!.includes("status=SUCCESS"));
+    assert.ok(calledPath!.includes("task_name=consume_file"));
     // Should NOT have task_id
     assert.ok(!calledPath!.includes("task_id"));
   });

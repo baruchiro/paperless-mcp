@@ -264,10 +264,12 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
   // Tasks
   server.tool(
     "list_tasks",
-    "List background tasks with their status, progress, and results. Useful for monitoring document consumption and other async operations.",
+    "List background tasks with their status, progress, and results. Useful for monitoring document consumption and other async operations. Note: the API returns a flat array (no pagination), so use filters to limit results.",
     {
-      status: z.enum(["queued", "started", "complete", "failed"]).optional().describe("Filter by task status"),
-      task_name: z.string().optional().describe("Filter by task name"),
+      status: z.enum(["PENDING", "STARTED", "SUCCESS", "FAILURE", "RETRY", "REVOKED", "RECEIVED"]).optional().describe("Filter by task state (uppercase)"),
+      task_name: z.enum(["consume_file", "train_classifier", "check_sanity", "index_optimize"]).optional().describe("Filter by task name"),
+      type: z.enum(["auto_task", "scheduled_task", "manual_task"]).optional().describe("Filter by task type"),
+      acknowledged: z.boolean().optional().describe("Filter by acknowledged status (false = unacknowledged tasks only)"),
       ordering: z.string().optional().describe("Field to order by, e.g. '-date_created'"),
     },
     Annotations.READ,
@@ -276,6 +278,8 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
       const params = new URLSearchParams();
       if (args.status) params.set("status", args.status);
       if (args.task_name) params.set("task_name", args.task_name);
+      if (args.type) params.set("type", args.type);
+      if (args.acknowledged !== undefined) params.set("acknowledged", String(args.acknowledged));
       if (args.ordering) params.set("ordering", args.ordering);
       const query = params.toString();
       const response = await api.request(

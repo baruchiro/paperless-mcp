@@ -147,7 +147,7 @@ export function registerDocumentTypeTools(
 
   server.tool(
     "bulk_edit_document_types",
-    "Bulk edit document types. ⚠️ WARNING: 'delete' operation permanently removes document types from the entire system.",
+    "Manage document type objects themselves (permissions, delete). ⚠️ This does NOT assign document types to documents — use bulk_edit_documents with method 'set_document_type' for that. WARNING: 'delete' permanently removes document types from the entire system.",
     {
       document_type_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),

@@ -134,7 +134,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "bulk_edit_custom_fields",
-    "Bulk edit custom fields. ⚠️ WARNING: 'delete' operation permanently removes custom fields from the entire system.",
+    "Manage custom field definitions themselves (permissions, delete). ⚠️ This does NOT modify custom field values on documents — use bulk_edit_documents with method 'modify_custom_fields' for that. WARNING: 'delete' permanently removes custom fields from the entire system.",
     {
       custom_fields: z.array(z.number()),
       operation: z.enum(["delete"]),

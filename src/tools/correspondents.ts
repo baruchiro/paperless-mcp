@@ -151,7 +151,7 @@ export function registerCorrespondentTools(
 
   server.tool(
     "bulk_edit_correspondents",
-    "Bulk edit correspondents. ⚠️ WARNING: 'delete' operation permanently removes correspondents from the entire system.",
+    "Manage correspondent objects themselves (permissions, delete). ⚠️ This does NOT assign correspondents to documents — use bulk_edit_documents with method 'set_correspondent' for that. WARNING: 'delete' permanently removes correspondents from the entire system.",
     {
       correspondent_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),

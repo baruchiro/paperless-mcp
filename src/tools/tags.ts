@@ -169,7 +169,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "bulk_edit_tags",
-    "Bulk edit tags. ⚠️ WARNING: 'delete' operation permanently removes tags from the entire system. Use with caution.",
+    "Manage tag objects themselves (permissions, delete). ⚠️ This does NOT add/remove tags on documents — use bulk_edit_documents with method 'add_tag'/'remove_tag'/'modify_tags' for that. WARNING: 'delete' permanently removes tags from the entire system.",
     {
       tag_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),

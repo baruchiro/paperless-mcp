@@ -84,10 +84,10 @@ async function enhanceDocumentsArray(
 
   const [correspondents, documentTypes, tags, customFields] = await Promise.all(
     [
-      api.getCorrespondents(),
-      api.getDocumentTypes(),
-      api.getTags(),
-      api.getCustomFields(),
+      api.getCorrespondents("page_size=10000"),
+      api.getDocumentTypes("page_size=10000"),
+      api.getTags("page_size=10000"),
+      api.getCustomFields("page_size=10000"),
     ]
   );
 

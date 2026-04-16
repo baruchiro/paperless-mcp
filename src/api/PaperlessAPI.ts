@@ -205,8 +205,9 @@ export class PaperlessAPI {
   }
 
   // Tag operations
-  async getTags(): Promise<GetTagsResponse> {
-    return this.request<GetTagsResponse>("/tags/");
+  async getTags(queryString?: string): Promise<GetTagsResponse> {
+    const url = queryString ? `/tags/?${queryString}` : "/tags/";
+    return this.request<GetTagsResponse>(url);
   }
 
   async createTag(data: Partial<Tag>): Promise<Tag> {
@@ -273,8 +274,9 @@ export class PaperlessAPI {
   }
 
   // Document type operations
-  async getDocumentTypes(): Promise<GetDocumentTypesResponse> {
-    return this.request<GetDocumentTypesResponse>("/document_types/");
+  async getDocumentTypes(queryString?: string): Promise<GetDocumentTypesResponse> {
+    const url = queryString ? `/document_types/?${queryString}` : "/document_types/";
+    return this.request<GetDocumentTypesResponse>(url);
   }
 
   async createDocumentType(data: Partial<DocumentType>): Promise<DocumentType> {
@@ -301,8 +303,9 @@ export class PaperlessAPI {
   }
 
   // Custom field operations
-  async getCustomFields(): Promise<GetCustomFieldsResponse> {
-    return this.request<GetCustomFieldsResponse>("/custom_fields/");
+  async getCustomFields(queryString?: string): Promise<GetCustomFieldsResponse> {
+    const url = queryString ? `/custom_fields/?${queryString}` : "/custom_fields/";
+    return this.request<GetCustomFieldsResponse>(url);
   }
 
   async getCustomField(id: number): Promise<CustomField> {

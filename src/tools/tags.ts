@@ -6,6 +6,7 @@ import {
   enhanceMatchingAlgorithm,
   enhanceMatchingAlgorithmArray,
 } from "../api/utils";
+import { Annotations } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -14,32 +15,57 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     "list_tags",
     "List all tags. IMPORTANT: When a user query may refer to a tag or document type, you should fetch all tags and all document types up front (with a large enough page_size), cache them for the session, and search locally for matches by name or slug before making further API calls. This reduces redundant requests and handles ambiguity between tags and document types efficiently.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       name__icontains: z.string().optional(),
       name__iendswith: z.string().optional(),
       name__iexact: z.string().optional(),
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
+      is_empty: z.boolean().optional().describe("Client-side filter: true = only tags with 0 documents, false = only with documents"),
     },
+    Annotations.READ,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
-      const queryString = buildQueryString(args);
+      const { is_empty, ...apiArgs } = args;
+      const queryString = buildQueryString(apiArgs);
       const tagsResponse = await api.request(
         `/tags/${queryString ? `?${queryString}` : ""}`
       );
-      const enhancedResults = enhanceMatchingAlgorithmArray(
-        tagsResponse.results || []
-      );
+      let results = tagsResponse.results || [];
+      if (is_empty !== undefined) {
+        results = results.filter((t: any) =>
+          is_empty ? t.document_count === 0 : t.document_count > 0
+        );
+      }
+      const enhancedResults = enhanceMatchingAlgorithmArray(results);
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
               ...tagsResponse,
+              count: enhancedResults.length,
               results: enhancedResults,
             }),
           },
+        ],
+      };
+    })
+  );
+
+  server.tool(
+    "get_tag",
+    "Get a specific tag by ID with full details including matching rules.",
+    { id: z.number() },
+    Annotations.READ,
+    withErrorHandling(async (args, extra) => {
+      if (!api) throw new Error("Please configure API connection first");
+      const response = await api.getTag(args.id);
+      const enhancedTag = enhanceMatchingAlgorithm(response);
+      return {
+        content: [
+          { type: "text", text: JSON.stringify(enhancedTag) },
         ],
       };
     })
@@ -62,7 +88,10 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
+      parent: z.number().nullable().optional().describe("Parent tag ID for hierarchical tags"),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const tag = await api.createTag(args);
@@ -80,10 +109,10 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "update_tag",
-    "Update an existing tag's name, color, matching pattern, or matching algorithm.",
+    "Update an existing tag's name, color, matching pattern, or matching algorithm. Only specified fields are updated (PATCH).",
     {
       id: z.number(),
-      name: z.string(),
+      name: z.string().optional(),
       color: z
         .string()
         .regex(/^#[0-9A-Fa-f]{6}$/)
@@ -96,10 +125,14 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
+      parent: z.number().nullable().optional().describe("Parent tag ID for hierarchical tags"),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const tag = await api.updateTag(args.id, args);
+      const { id, ...data } = args;
+      const tag = await api.updateTag(id, data);
       const enhancedTag = enhanceMatchingAlgorithm(tag);
       return {
         content: [
@@ -121,6 +154,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .boolean()
         .describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -142,7 +176,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "bulk_edit_tags",
-    "Bulk edit tags. ⚠️ WARNING: 'delete' operation permanently removes tags from the entire system. Use with caution.",
+    "Manage tag objects themselves (permissions, delete). ⚠️ This does NOT add/remove tags on documents — use bulk_edit_documents with method 'add_tag'/'remove_tag'/'modify_tags' for that. WARNING: 'delete' permanently removes tags from the entire system.",
     {
       tag_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),
@@ -167,6 +201,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .optional(),
       merge: z.boolean().optional(),
     },
+    Annotations.BULK_EDIT,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.operation === "delete" && !args.confirm) {

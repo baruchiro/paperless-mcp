@@ -6,6 +6,7 @@ import {
   enhanceMatchingAlgorithm,
   enhanceMatchingAlgorithmArray,
 } from "../api/utils";
+import { Annotations } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -17,27 +18,35 @@ export function registerCorrespondentTools(
     "list_correspondents",
     "List all correspondents with optional filtering and pagination. Correspondents represent entities that send or receive documents.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       name__icontains: z.string().optional(),
       name__iendswith: z.string().optional(),
       name__iexact: z.string().optional(),
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
+      is_empty: z.boolean().optional().describe("Client-side filter: true = only correspondents with 0 documents, false = only with documents"),
     },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const queryString = buildQueryString(args);
+      const { is_empty, ...apiArgs } = args;
+      const queryString = buildQueryString(apiArgs);
       const response = await api.getCorrespondents(queryString);
-      const enhancedResults = enhanceMatchingAlgorithmArray(
-        response.results || []
-      );
+      let results = response.results || [];
+      if (is_empty !== undefined) {
+        results = results.filter((c) =>
+          is_empty ? c.document_count === 0 : c.document_count > 0
+        );
+      }
+      const enhancedResults = enhanceMatchingAlgorithmArray(results);
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
               ...response,
+              count: enhancedResults.length,
               results: enhancedResults,
             }),
           },
@@ -50,6 +59,7 @@ export function registerCorrespondentTools(
     "get_correspondent",
     "Get a specific correspondent by ID with full details including matching rules.",
     { id: z.number() },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.getCorrespondent(args.id);
@@ -75,7 +85,9 @@ export function registerCorrespondentTools(
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createCorrespondent(args);
@@ -90,10 +102,10 @@ export function registerCorrespondentTools(
 
   server.tool(
     "update_correspondent",
-    "Update an existing correspondent's name, matching pattern, or matching algorithm.",
+    "Update an existing correspondent's name, matching pattern, or matching algorithm. Only specified fields are updated (PATCH).",
     {
       id: z.number(),
-      name: z.string(),
+      name: z.string().optional(),
       match: z.string().optional(),
       matching_algorithm: z
         .number()
@@ -102,7 +114,9 @@ export function registerCorrespondentTools(
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
@@ -125,6 +139,7 @@ export function registerCorrespondentTools(
         .boolean()
         .describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -143,7 +158,7 @@ export function registerCorrespondentTools(
 
   server.tool(
     "bulk_edit_correspondents",
-    "Bulk edit correspondents. ⚠️ WARNING: 'delete' operation permanently removes correspondents from the entire system.",
+    "Manage correspondent objects themselves (permissions, delete). ⚠️ This does NOT assign correspondents to documents — use bulk_edit_documents with method 'set_correspondent' for that. WARNING: 'delete' permanently removes correspondents from the entire system.",
     {
       correspondent_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),
@@ -168,6 +183,7 @@ export function registerCorrespondentTools(
         .optional(),
       merge: z.boolean().optional(),
     },
+    Annotations.BULK_EDIT,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.operation === "delete" && !args.confirm) {

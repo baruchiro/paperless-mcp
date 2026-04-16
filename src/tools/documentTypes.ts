@@ -6,6 +6,7 @@ import {
   enhanceMatchingAlgorithm,
   enhanceMatchingAlgorithmArray,
 } from "../api/utils";
+import { Annotations } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -17,29 +18,37 @@ export function registerDocumentTypeTools(
     "list_document_types",
     "List all document types. IMPORTANT: When a user query may refer to a document type or tag, you should fetch all document types and all tags up front (with a large enough page_size), cache them for the session, and search locally for matches by name or slug before making further API calls. This reduces redundant requests and handles ambiguity between tags and document types efficiently.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       name__icontains: z.string().optional(),
       name__iendswith: z.string().optional(),
       name__iexact: z.string().optional(),
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
+      is_empty: z.boolean().optional().describe("Client-side filter: true = only document types with 0 documents, false = only with documents"),
     },
+    Annotations.READ,
     withErrorHandling(async (args = {}, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const queryString = buildQueryString(args);
+      const { is_empty, ...apiArgs } = args;
+      const queryString = buildQueryString(apiArgs);
       const response = await api.request(
         `/document_types/${queryString ? `?${queryString}` : ""}`
       );
-      const enhancedResults = enhanceMatchingAlgorithmArray(
-        response.results || []
-      );
+      let results = response.results || [];
+      if (is_empty !== undefined) {
+        results = results.filter((dt: any) =>
+          is_empty ? dt.document_count === 0 : dt.document_count > 0
+        );
+      }
+      const enhancedResults = enhanceMatchingAlgorithmArray(results);
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
               ...response,
+              count: enhancedResults.length,
               results: enhancedResults,
             }),
           },
@@ -52,6 +61,7 @@ export function registerDocumentTypeTools(
     "get_document_type",
     "Get a specific document type by ID with full details including matching rules.",
     { id: z.number() },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.request(`/document_types/${args.id}/`);
@@ -75,7 +85,9 @@ export function registerDocumentTypeTools(
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createDocumentType(args);
@@ -88,10 +100,10 @@ export function registerDocumentTypeTools(
 
   server.tool(
     "update_document_type",
-    "Update an existing document type's name, matching pattern, or matching algorithm.",
+    "Update an existing document type's name, matching pattern, or matching algorithm. Only specified fields are updated (PATCH).",
     {
       id: z.number(),
-      name: z.string(),
+      name: z.string().optional(),
       match: z.string().optional(),
       matching_algorithm: z
         .number()
@@ -100,7 +112,9 @@ export function registerDocumentTypeTools(
         .max(6)
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      is_insensitive: z.boolean().optional().describe("Whether matching is case-insensitive"),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...payloadWithoutId } = args;
@@ -121,6 +135,7 @@ export function registerDocumentTypeTools(
         .boolean()
         .describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -139,7 +154,7 @@ export function registerDocumentTypeTools(
 
   server.tool(
     "bulk_edit_document_types",
-    "Bulk edit document types. ⚠️ WARNING: 'delete' operation permanently removes document types from the entire system.",
+    "Manage document type objects themselves (permissions, delete). ⚠️ This does NOT assign document types to documents — use bulk_edit_documents with method 'set_document_type' for that. WARNING: 'delete' permanently removes document types from the entire system.",
     {
       document_type_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),
@@ -164,6 +179,7 @@ export function registerDocumentTypeTools(
         .optional(),
       merge: z.boolean().optional(),
     },
+    Annotations.BULK_EDIT,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.operation === "delete" && !args.confirm) {

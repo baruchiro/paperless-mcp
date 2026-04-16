@@ -30,6 +30,23 @@ Add these to your MCP config file:
 }
 ```
 
+// Local development (run from a cloned repo)
+```json
+"paperless": {
+  "command": "node",
+  "args": [
+    "/path/to/paperless-mcp/build/src/index.js"
+  ],
+  "env": {
+    "PAPERLESS_URL": "http://your-paperless-instance:8000",
+    "PAPERLESS_API_KEY": "your-api-token",
+    "PAPERLESS_PUBLIC_URL": "https://your-public-domain.com"
+  }
+}
+```
+
+> **Note:** Run `npm install && npm run build` first to compile the TypeScript source.
+
 // HTTP mode (recommended for Docker or remote use)
 ```json
 "paperless": {

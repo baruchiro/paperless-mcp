@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
+import { Annotations } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -9,14 +10,15 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
     "list_custom_fields",
     "List all custom fields. IMPORTANT: When a user query may refer to a custom field, you should fetch all custom fields up front (with a large enough page_size), cache them for the session, and search locally for matches by name before making further API calls. This reduces redundant requests and handles ambiguity efficiently.",
     {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
+      page: z.number().int().min(1).optional().describe("Page number (1-based)"),
+      page_size: z.number().int().min(1).optional().describe("Number of items per page"),
       name__icontains: z.string().optional(),
       name__iendswith: z.string().optional(),
       name__iexact: z.string().optional(),
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
+    Annotations.READ,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
@@ -38,6 +40,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
     "get_custom_field",
     "Get a specific custom field by ID with full details including data type and extra configuration.",
     { id: z.number() },
+    Annotations.READ,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.getCustomField(args.id);
@@ -65,6 +68,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
       ]),
       extra_data: z.record(z.unknown()).nullable().optional(),
     },
+    Annotations.CREATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createCustomField(args);
@@ -95,6 +99,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
         .optional(),
       extra_data: z.record(z.unknown()).nullable().optional(),
     },
+    Annotations.UPDATE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
@@ -112,6 +117,7 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
       id: z.number(),
       confirm: z.boolean().describe("Must be true to confirm this destructive operation"),
     },
+    Annotations.DELETE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -128,12 +134,13 @@ export function registerCustomFieldTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "bulk_edit_custom_fields",
-    "Bulk edit custom fields. ⚠️ WARNING: 'delete' operation permanently removes custom fields from the entire system.",
+    "Manage custom field definitions themselves (permissions, delete). ⚠️ This does NOT modify custom field values on documents — use bulk_edit_documents with method 'modify_custom_fields' for that. WARNING: 'delete' permanently removes custom fields from the entire system.",
     {
       custom_fields: z.array(z.number()),
       operation: z.enum(["delete"]),
       confirm: z.boolean().optional().describe("Must be true when operation is 'delete' to confirm destructive operation"),
     },
+    Annotations.BULK_EDIT,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.operation === "delete" && !args.confirm) {

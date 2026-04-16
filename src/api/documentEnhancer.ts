@@ -12,7 +12,7 @@ interface CustomField {
 export interface EnhancedDocument
   extends Omit<
     Document,
-    "correspondent" | "document_type" | "tags" | "custom_fields"
+    "correspondent" | "document_type" | "tags" | "custom_fields" | "content" | "notes"
   > {
   correspondent: NamedItem | null;
   document_type: NamedItem | null;
@@ -84,10 +84,10 @@ async function enhanceDocumentsArray(
 
   const [correspondents, documentTypes, tags, customFields] = await Promise.all(
     [
-      api.getCorrespondents(),
-      api.getDocumentTypes(),
-      api.getTags(),
-      api.getCustomFields(),
+      api.getCorrespondents("page_size=10000"),
+      api.getDocumentTypes("page_size=10000"),
+      api.getTags("page_size=10000"),
+      api.getCustomFields("page_size=10000"),
     ]
   );
 
@@ -104,8 +104,8 @@ async function enhanceDocumentsArray(
 
   return documents
     .map((doc) => {
-      const { content, ...docWithoutContent } = doc;
-      return docWithoutContent;
+      const { content, notes, ...slim } = doc;
+      return slim;
     })
     .map((doc) => ({
       ...doc,

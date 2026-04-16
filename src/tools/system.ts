@@ -230,7 +230,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const params = new URLSearchParams({ term: args.term });
-      if (args.limit) params.set("limit", args.limit.toString());
+      if (args.limit !== undefined) params.set("limit", args.limit.toString());
       const response = await api.request(
         `/search/autocomplete/?${params.toString()}`
       );
@@ -305,7 +305,7 @@ export function registerSystemTools(server: McpServer, api: PaperlessAPI) {
     "bulk_download",
     "Download multiple documents as a ZIP archive. Returns base64-encoded ZIP file.",
     {
-      documents: z.array(z.number()).describe("Array of document IDs to download"),
+      documents: z.array(z.number()).min(1).describe("Array of document IDs to download"),
       content: z
         .enum(["both", "originals", "archive"])
         .optional()

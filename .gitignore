@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+bun.lock
 
 # Environment variables
 .env
@@ -32,3 +33,6 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Devfiles / Temp stuff
+temp/

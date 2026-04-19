@@ -10,7 +10,12 @@ import { registerCorrespondentTools } from "./tools/correspondents";
 import { registerCustomFieldTools } from "./tools/customFields";
 import { registerDocumentTools } from "./tools/documents";
 import { registerDocumentTypeTools } from "./tools/documentTypes";
+import { registerSavedViewTools } from "./tools/savedViews";
+import { registerShareLinkTools } from "./tools/shareLinks";
+import { registerStoragePathTools } from "./tools/storagePaths";
+import { registerSystemTools } from "./tools/system";
 import { registerTagTools } from "./tools/tags";
+import { registerWorkflowTools } from "./tools/workflows";
 const { version } = require("../package.json") as { version: string };
 
 const {
@@ -72,6 +77,11 @@ The document tools return JSON data with document IDs that you can use to constr
   registerCorrespondentTools(server, api);
   registerDocumentTypeTools(server, api);
   registerCustomFieldTools(server, api);
+  registerStoragePathTools(server, api);
+  registerSavedViewTools(server, api);
+  registerShareLinkTools(server, api);
+  registerWorkflowTools(server, api);
+  registerSystemTools(server, api);
 
   if (useHttp) {
     const app = express();

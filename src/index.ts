@@ -11,7 +11,7 @@ import { registerCustomFieldTools } from "./tools/customFields";
 import { registerDocumentTools } from "./tools/documents";
 import { registerDocumentTypeTools } from "./tools/documentTypes";
 import { registerTagTools } from "./tools/tags";
-import { version } from "../package.json";
+const { version } = require("../package.json") as { version: string };
 
 const {
   values: { baseUrl, token, http: useHttp, port, publicUrl },

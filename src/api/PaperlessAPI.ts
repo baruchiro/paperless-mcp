@@ -210,7 +210,7 @@ export class PaperlessAPI {
 
   async updateTag(id: number, data: Partial<Tag>): Promise<Tag> {
     return this.request<Tag>(`/tags/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -249,7 +249,7 @@ export class PaperlessAPI {
     data: Partial<Correspondent>
   ): Promise<Correspondent> {
     return this.request<Correspondent>(`/correspondents/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -277,7 +277,7 @@ export class PaperlessAPI {
     data: Partial<DocumentType>
   ): Promise<DocumentType> {
     return this.request<DocumentType>(`/document_types/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }
@@ -309,7 +309,7 @@ export class PaperlessAPI {
     data: Partial<CustomField>
   ): Promise<CustomField> {
     return this.request<CustomField>(`/custom_fields/${id}/`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   }

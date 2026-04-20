@@ -1,47 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PaperlessAPI } from "./PaperlessAPI";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { convertDocsWithNames } from "./documentEnhancer";
-import { Document, DocumentsResponse } from "./types";
+import { DocumentsResponse } from "./types";
+import { createDocument, createPaperlessApiMock } from "../test/mocks/paperlessApi";
 
-function createDocument(overrides: Partial<Document> = {}): Document {
-  return {
-    id: 1,
-    correspondent: null,
-    document_type: null,
-    storage_path: null,
-    title: "Document 1",
-    content: "OCR content",
-    tags: [],
-    created: "2026-01-01T00:00:00.000Z",
-    created_date: "2026-01-01",
-    modified: "2026-01-01T00:00:00.000Z",
-    added: "2026-01-01T00:00:00.000Z",
-    deleted_at: null,
-    archive_serial_number: null,
-    original_file_name: "doc1.pdf",
-    archived_file_name: "2026/doc1.pdf",
-    owner: null,
-    user_can_change: true,
-    is_shared_by_requester: false,
-    notes: [],
-    custom_fields: [],
-    page_count: 1,
-    mime_type: "application/pdf",
-    ...overrides,
-  };
+function getTextContent(result: CallToolResult): string {
+  const item = result.content?.[0];
+  if (!item || item.type !== "text") {
+    throw new Error("Expected text content");
+  }
+  return item.text;
 }
 
-function createMockApi(): PaperlessAPI {
-  return {
-    getCorrespondents: async () => ({ results: [] }),
-    getDocumentTypes: async () => ({ results: [] }),
-    getTags: async () => ({ results: [] }),
-    getCustomFields: async () => ({ results: [] }),
-  } as unknown as PaperlessAPI;
-}
-
-test("convertDocsWithNames omits all and content for multi-document responses", async () => {
+test("convertDocsWithNames omits `all` and keeps paginated JSON shape", async () => {
   const docsResponse: DocumentsResponse = {
     count: 2,
     next: null,
@@ -50,17 +22,54 @@ test("convertDocsWithNames omits all and content for multi-document responses", 
     results: [createDocument(), createDocument({ id: 2, title: "Document 2" })],
   };
 
-  const result = await convertDocsWithNames(docsResponse, createMockApi());
-  const text = result.content?.[0];
+  const result = await convertDocsWithNames(docsResponse, createPaperlessApiMock());
+  const parsed = JSON.parse(getTextContent(result));
 
-  assert.ok(text && text.type === "text");
-  const parsed = JSON.parse(text.text);
-
-  assert.equal(parsed.count, 2);
-  assert.equal(parsed.next, null);
-  assert.equal(parsed.previous, null);
   assert.ok(!("all" in parsed));
-  assert.equal(parsed.results.length, 2);
+  assert.deepEqual(parsed.results.map((doc: { id: number }) => doc.id), [1, 2]);
   assert.ok(!("content" in parsed.results[0]));
-  assert.ok(!("content" in parsed.results[1]));
+});
+
+test("convertDocsWithNames keeps responses small when source has large `all` arrays", async () => {
+  const docsResponse: DocumentsResponse = {
+    count: 709,
+    next: "http://localhost:8000/api/documents/?page=2",
+    previous: null,
+    all: Array.from({ length: 709 }, (_, index) => index + 1),
+    results: [
+      createDocument({
+        id: 123,
+        title: "Large all payload case",
+        content: "x".repeat(2700),
+      }),
+    ],
+  };
+
+  const result = await convertDocsWithNames(docsResponse, createPaperlessApiMock());
+  const responseText = getTextContent(result);
+
+  assert.ok(responseText.length < 2000);
+  const parsed = JSON.parse(responseText);
+  assert.ok(!("all" in parsed));
+  assert.ok(!("content" in parsed.results[0]));
+});
+
+test("convertDocsWithNames returns paginated JSON for empty multi-document results", async () => {
+  const docsResponse: DocumentsResponse = {
+    count: 0,
+    next: null,
+    previous: null,
+    all: [],
+    results: [],
+  };
+
+  const result = await convertDocsWithNames(docsResponse, createPaperlessApiMock());
+  const parsed = JSON.parse(getTextContent(result));
+
+  assert.deepEqual(parsed, {
+    count: 0,
+    next: null,
+    previous: null,
+    results: [],
+  });
 });

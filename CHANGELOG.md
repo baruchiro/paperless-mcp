@@ -1,5 +1,12 @@
 # @baruchiro/paperless-mcp
 
+## 0.4.4
+
+### Patch Changes
+
+- 76c7d8b: Preserve the `build/` directory in the production Docker image and run `node build/index.js` so the compiled entrypoint can resolve `../package.json` at runtime.
+- 7981f6b: Run Docker image smoke tests in the Docker publish workflow before push, reuse build cache between amd64 smoke and multi-arch publish, and remove the duplicate Docker build from CI. Add `workflow_dispatch` to the Docker publish workflow.
+
 ## 0.4.3
 
 ### Patch Changes

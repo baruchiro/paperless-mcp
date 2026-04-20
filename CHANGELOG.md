@@ -1,5 +1,11 @@
 # @baruchiro/paperless-mcp
 
+## 0.4.3
+
+### Patch Changes
+
+- 47fdf28: Fix CLI binary regression by restoring build/index.js as the executable entrypoint for the published package.
+
 ## 0.4.2
 
 ### Patch Changes

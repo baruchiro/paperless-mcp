@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
@@ -19,3 +20,33 @@ jobs:
         run: npm ci
       - name: Run tests
         run: npm test
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docker build
+        run: docker build -t paperless-mcp:ci .
+      - name: Start container
+        run: |
+          docker run -d --name paperless-mcp-smoke \
+            -e PAPERLESS_URL=http://example.test \
+            -e PAPERLESS_API_KEY=ci-smoke-token \
+            -p 3000:3000 \
+            paperless-mcp:ci
+      - name: Wait for HTTP server
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s --max-time 2 -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/mcp || true)
+            if [ "$code" = "405" ]; then
+              echo "Smoke OK: GET /mcp returned 405"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Timeout waiting for 405 from GET /mcp"
+          docker logs paperless-mcp-smoke || true
+          exit 1
+      - name: Cleanup
+        if: always()
+        run: docker rm -f paperless-mcp-smoke || true

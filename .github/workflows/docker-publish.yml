@@ -65,6 +65,38 @@ jobs:
             type=sha
             ${{ steps.tagmeta.outputs.SEMVER }}
             ${{ steps.tagmeta.outputs.LATEST }}
+      - name: Build (linux/amd64) for smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: paperless-mcp:smoke
+          cache-from: type=gha,scope=paperless-mcp-docker
+          cache-to: type=gha,scope=paperless-mcp-docker,mode=max
+      - name: Smoke test container
+        run: |
+          docker rm -f paperless-mcp-smoke 2>/dev/null || true
+          docker run -d --name paperless-mcp-smoke \
+            -e PAPERLESS_URL=http://example.test \
+            -e PAPERLESS_API_KEY=ci-smoke-token \
+            -p 3000:3000 \
+            paperless-mcp:smoke
+          for i in $(seq 1 30); do
+            code=$(curl -s --max-time 2 -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/mcp || true)
+            if [ "$code" = "405" ]; then
+              echo "Smoke OK: GET /mcp returned 405"
+              docker rm -f paperless-mcp-smoke
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Timeout waiting for 405 from GET /mcp"
+          docker logs paperless-mcp-smoke || true
+          docker rm -f paperless-mcp-smoke
+          exit 1
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -74,3 +106,5 @@ jobs:
           push: ${{ steps.check-fork.outputs.is_fork == 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=paperless-mcp-docker
+          cache-to: type=gha,scope=paperless-mcp-docker,mode=max

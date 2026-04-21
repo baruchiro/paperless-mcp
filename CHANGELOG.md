@@ -1,5 +1,11 @@
 # @baruchiro/paperless-mcp
 
+## 0.4.5
+
+### Patch Changes
+
+- 47de91d: Omit the `all` pagination ID array from multi-document responses returned by document enhancement, reducing payload size for `list_documents` and `search_documents`.
+
 ## 0.4.4
 
 ### Patch Changes

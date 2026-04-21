@@ -1,5 +1,25 @@
 # @baruchiro/paperless-mcp
 
+## 0.4.4
+
+### Patch Changes
+
+- 76c7d8b: Preserve the `build/` directory in the production Docker image and run `node build/index.js` so the compiled entrypoint can resolve `../package.json` at runtime.
+- 7981f6b: Run Docker image smoke tests in the Docker publish workflow before push, reuse build cache between amd64 smoke and multi-arch publish, and remove the duplicate Docker build from CI. Add `workflow_dispatch` to the Docker publish workflow.
+
+## 0.4.3
+
+### Patch Changes
+
+- 47fdf28: Fix CLI binary regression by restoring build/index.js as the executable entrypoint for the published package.
+
+## 0.4.2
+
+### Patch Changes
+
+- 606fc45: Fix bulk_edit_documents delete method failing with unexpected 'confirm' argument. The `confirm` parameter is now consumed client-side as a safety gate and stripped before sending the request to the Paperless-NGX API.
+- b950817: Read server version dynamically from package.json instead of hardcoding it
+
 ## 0.4.1
 
 ### Patch Changes

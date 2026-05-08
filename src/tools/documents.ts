@@ -277,7 +277,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           {
             type: "resource",
             resource: {
-              uri: filename,
+              uri: `paperless://document/${args.id}/${encodeURIComponent(filename)}`,
               blob: Buffer.from(response.data).toString("base64"),
               mimeType: "application/pdf",
             },
@@ -301,7 +301,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           {
             type: "resource",
             resource: {
-              uri: `document-${args.id}-thumb.webp`,
+              uri: `paperless://thumbnail/${args.id}.webp`,
               blob: Buffer.from(response.data).toString("base64"),
               mimeType: "image/webp",
             },

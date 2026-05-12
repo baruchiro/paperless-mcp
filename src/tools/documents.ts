@@ -91,7 +91,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
-      const { documents, method, add_custom_fields, ...parameters } = args;
+      const { documents, method, add_custom_fields, confirm, ...parameters } = args;
 
       validateCustomFields(add_custom_fields);
 

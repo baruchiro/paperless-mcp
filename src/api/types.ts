@@ -39,14 +39,22 @@ export interface CustomField {
   document_count: number;
 }
 
+export type CustomFieldValue =
+  | string
+  | number
+  | boolean
+  | number[]
+  | Record<string, unknown>
+  | null;
+
 export interface CustomFieldInstance {
   field: number;
-  value: string | number | boolean | object | null;
+  value: CustomFieldValue;
 }
 
 export interface CustomFieldInstanceRequest {
   field: number;
-  value: string | number | boolean | object | null;
+  value: CustomFieldValue;
 }
 
 export interface PaginationResponse<T> {

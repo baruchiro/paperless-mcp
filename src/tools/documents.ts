@@ -19,6 +19,14 @@ export type BulkCustomFieldParameters = {
   remove_custom_fields?: number[];
 };
 
+/**
+ * Builds Paperless-NGX bulk edit parameters.
+ *
+ * `modify_custom_fields` expects custom field updates as an `add_custom_fields`
+ * record keyed by field id. When `includeCustomFieldDefaults` is true, empty
+ * `add_custom_fields` and `remove_custom_fields` values are included because
+ * Paperless validates that both keys exist for custom-field bulk edits.
+ */
 export function buildBulkEditParameters<T extends Record<string, unknown>>(
   parameters: T,
   addCustomFields?: BulkCustomFieldUpdate[],

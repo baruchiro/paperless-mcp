@@ -150,8 +150,7 @@ export interface BulkEditDocumentsResult {
 }
 
 export interface BulkEditParameters {
-  assign_custom_fields?: number[];
-  assign_custom_fields_values?: CustomFieldInstanceRequest[];
+  add_custom_fields?: Record<string, CustomFieldInstanceRequest["value"]>;
   remove_custom_fields?: number[];
   add_tags?: number[];
   remove_tags?: number[];

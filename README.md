@@ -215,9 +215,20 @@ bulk_edit_documents({
 bulk_edit_documents({
   documents: [12, 13],
   method: "modify_custom_fields",
-  add_custom_fields: {
-    "2": "שנה"
-  }
+  add_custom_fields: [
+    { field: 2, value: "שנה" }
+  ],
+  remove_custom_fields: []
+})
+
+// Set an empty custom field value, e.g. a date field used as a pending marker
+bulk_edit_documents({
+  documents: [14],
+  method: "modify_custom_fields",
+  add_custom_fields: [
+    { field: 9, value: "" }
+  ],
+  remove_custom_fields: []
 })
 ```
 

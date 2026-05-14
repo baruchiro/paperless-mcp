@@ -7,6 +7,44 @@ import { withErrorHandling } from "./utils/middlewares";
 import { validateCustomFields } from "./utils/monetary";
 import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
 
+export type BulkCustomFieldValue = string | number | boolean | number[] | null;
+
+export type BulkCustomFieldUpdate = {
+  field: number;
+  value: BulkCustomFieldValue;
+};
+
+export type BulkCustomFieldParameters = {
+  add_custom_fields?: Record<string, BulkCustomFieldValue>;
+  remove_custom_fields?: number[];
+};
+
+export function buildBulkEditParameters<T extends Record<string, unknown>>(
+  parameters: T,
+  addCustomFields?: BulkCustomFieldUpdate[],
+  includeCustomFieldDefaults = false
+): T & BulkCustomFieldParameters {
+  const apiParameters: T & BulkCustomFieldParameters = {
+    ...parameters,
+  };
+
+  if (addCustomFields && addCustomFields.length > 0) {
+    apiParameters.add_custom_fields = Object.fromEntries(
+      addCustomFields.map((customField) => [
+        String(customField.field),
+        customField.value,
+      ])
+    );
+  }
+
+  if (includeCustomFieldDefaults) {
+    apiParameters.add_custom_fields ??= {};
+    apiParameters.remove_custom_fields ??= [];
+  }
+
+  return apiParameters;
+}
+
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "bulk_edit_documents",
@@ -95,19 +133,14 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
       validateCustomFields(add_custom_fields);
 
-      // Transform add_custom_fields into the two separate API parameters
-      const apiParameters = { ...parameters };
-      if (add_custom_fields && add_custom_fields.length > 0) {
-        apiParameters.assign_custom_fields = add_custom_fields.map(
-          (cf) => cf.field
-        );
-        apiParameters.assign_custom_fields_values = add_custom_fields;
-      }
-
       const response = await api.bulkEditDocuments(
         documents,
         method,
-        apiParameters
+        buildBulkEditParameters(
+          parameters,
+          add_custom_fields,
+          method === "modify_custom_fields"
+        )
       );
       return {
         content: [

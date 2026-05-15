@@ -42,6 +42,15 @@ test("buildBulkEditParameters includes Paperless-required empty custom field key
 });
 
 test("buildBulkEditParameters preserves an empty custom fields array", () => {
+  const parameters = buildBulkEditParameters({}, []);
+
+  assert.deepEqual(parameters, {
+    add_custom_fields: {},
+  });
+  assert.ok(!("remove_custom_fields" in parameters));
+});
+
+test("buildBulkEditParameters preserves an empty custom fields array with defaults", () => {
   const parameters = buildBulkEditParameters({}, [], true);
 
   assert.deepEqual(parameters, {

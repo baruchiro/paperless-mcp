@@ -39,13 +39,7 @@ export interface CustomField {
   document_count: number;
 }
 
-export type CustomFieldValue =
-  | string
-  | number
-  | boolean
-  | number[]
-  | Record<string, unknown>
-  | null;
+export type CustomFieldValue = string | number | boolean | number[] | null;
 
 export interface CustomFieldInstance {
   field: number;

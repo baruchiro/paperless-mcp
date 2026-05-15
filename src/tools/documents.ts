@@ -20,12 +20,27 @@ export type BulkCustomFieldParameters = {
 };
 
 /**
- * Builds Paperless-NGX bulk edit parameters.
+ * Builds Paperless-NGX bulk edit parameters from base parameters plus optional
+ * custom field updates.
  *
- * `modify_custom_fields` expects custom field updates as an `add_custom_fields`
- * record keyed by field id. When `includeCustomFieldDefaults` is true, empty
- * `add_custom_fields` and `remove_custom_fields` values are included because
- * Paperless validates that both keys exist for custom-field bulk edits.
+ * Paperless-NGX expects custom field bulk updates as an `add_custom_fields`
+ * record keyed by custom field id. `addCustomFields` is accepted as an array for
+ * the MCP tool schema and transformed into that id-to-value record while
+ * preserving supported value types, including `number[]` document links and
+ * `null` resets. Passing an empty `addCustomFields` array intentionally produces
+ * an empty `add_custom_fields` record.
+ *
+ * When `includeCustomFieldDefaults` is true, the function also initializes
+ * `add_custom_fields` and `remove_custom_fields` with empty defaults using
+ * nullish coalescing (`??=`). This keeps the `modify_custom_fields` method's
+ * payload shape acceptable to Paperless even when no field values are supplied.
+ *
+ * @param parameters - Base bulk edit parameters to include in the result.
+ * @param addCustomFields - Optional custom field updates to map by field id.
+ * @param includeCustomFieldDefaults - Whether to include empty custom field
+ * defaults required by `modify_custom_fields`.
+ * @returns The merged API parameters with custom field updates transformed into
+ * Paperless-NGX's `add_custom_fields` record shape.
  */
 export function buildBulkEditParameters<T extends Record<string, unknown>>(
   parameters: T,
@@ -36,7 +51,7 @@ export function buildBulkEditParameters<T extends Record<string, unknown>>(
     ...parameters,
   };
 
-  if (addCustomFields && addCustomFields.length > 0) {
+  if (addCustomFields) {
     apiParameters.add_custom_fields = Object.fromEntries(
       addCustomFields.map((customField) => [
         String(customField.field),

@@ -31,7 +31,7 @@ export class PaperlessAPI {
 
     const mergedHeaders = {
       Authorization: `Token ${this.token}`,
-      Accept: "application/json; version=5",
+      Accept: `application/json; version=${process.env.PAPERLESS_API_VERSION || "5"}`,
       "Accept-Language": "en-US,en;q=0.9",
       ...(isJson ? { "Content-Type": "application/json" } : {}),
       ...headersToObject(options.headers),

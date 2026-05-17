@@ -1,16 +1,14 @@
 #!/usr/bin/env node
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 import { parseArgs } from "node:util";
-import { PaperlessAPI } from "./api/PaperlessAPI";
-import { registerCorrespondentTools } from "./tools/correspondents";
-import { registerCustomFieldTools } from "./tools/customFields";
-import { registerDocumentTools } from "./tools/documents";
-import { registerDocumentTypeTools } from "./tools/documentTypes";
-import { registerTagTools } from "./tools/tags";
+import {
+  createMcpServer,
+  getBearerToken,
+  sendUnauthorized,
+} from "./server";
 const { version } = require("../package.json") as { version: string };
 
 const {
@@ -52,65 +50,31 @@ if (!useHttp && !resolvedToken) {
   process.exit(1);
 }
 
+function buildServer(requestToken: string) {
+  return createMcpServer({
+    baseUrl: resolvedBaseUrl!,
+    token: requestToken,
+    version,
+    publicUrl: resolvedPublicUrl!,
+  });
+}
+
 async function main() {
-  function createServer(requestToken: string) {
-    const api = new PaperlessAPI(resolvedBaseUrl!, requestToken);
-    const server = new McpServer(
-      { name: "paperless-ngx", version },
-      {
-        instructions: `
-Paperless-NGX MCP Server Instructions
-
-⚠️ CRITICAL: Always differentiate between operations on specific documents vs operations on the entire system:
-
-- REMOVE operations (e.g., remove_tag in bulk_edit_documents): Affect only the specified documents, items remain in the system
-- DELETE operations (e.g., delete_tag, delete_correspondent): Permanently delete items from the entire system, affecting ALL documents that use them
-
-When a user asks to "remove" something, prefer operations that affect specific documents. Only use DELETE operations when explicitly asked to delete from the system.
-
-To view documents in your Paperless-NGX web interface, construct URLs using this pattern:
-${resolvedPublicUrl}/documents/{document_id}/
-
-Example: If your base URL is "http://localhost:8000", the web interface URL would be "http://localhost:8000/documents/123/" for document ID 123.
-
-The document tools return JSON data with document IDs that you can use to construct these URLs.
-        `,
-      }
-    );
-    registerDocumentTools(server, api);
-    registerTagTools(server, api);
-    registerCorrespondentTools(server, api);
-    registerDocumentTypeTools(server, api);
-    registerCustomFieldTools(server, api);
-    return server;
-  }
-
   if (useHttp) {
     const app = express();
     app.use(express.json());
-
-    function getRequestToken(req: express.Request): string | undefined {
-      const authHeader = req.headers["authorization"];
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        return authHeader.slice(7);
-      }
-      return resolvedToken || undefined;
-    }
 
     // Store transports for each session
     const sseTransports: Record<string, SSEServerTransport> = {};
 
     app.post("/mcp", async (req, res) => {
-      const requestToken = getRequestToken(req);
+      const requestToken = getBearerToken(req, resolvedToken);
       if (!requestToken) {
-        res
-          .status(401)
-          .set("WWW-Authenticate", 'Bearer realm="paperless-mcp"')
-          .end();
+        sendUnauthorized(res);
         return;
       }
       try {
-        const server = createServer(requestToken);
+        const server = buildServer(requestToken);
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
         });
@@ -162,16 +126,13 @@ The document tools return JSON data with document IDs that you can use to constr
 
     app.get("/sse", async (req, res) => {
       console.log("SSE request received");
-      const requestToken = getRequestToken(req);
+      const requestToken = getBearerToken(req, resolvedToken);
       if (!requestToken) {
-        res
-          .status(401)
-          .set("WWW-Authenticate", 'Bearer realm="paperless-mcp"')
-          .end();
+        sendUnauthorized(res);
         return;
       }
       try {
-        const server = createServer(requestToken);
+        const server = buildServer(requestToken);
         const transport = new SSEServerTransport("/messages", res);
         sseTransports[transport.sessionId] = transport;
         res.on("close", () => {
@@ -211,7 +172,7 @@ The document tools return JSON data with document IDs that you can use to constr
     });
     // await new Promise((resolve) => setTimeout(resolve, 1000000));
   } else {
-    const server = createServer(resolvedToken!);
+    const server = buildServer(resolvedToken!);
     const transport = new StdioServerTransport();
     await server.connect(transport);
   }

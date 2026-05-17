@@ -17,21 +17,28 @@ import {
 import { headersToObject } from "./utils";
 
 export class PaperlessAPI {
+  private apiVersion: string;
+
   constructor(
     private readonly baseUrl: string,
     private readonly token: string
   ) {
     this.baseUrl = baseUrl;
     this.token = token;
+    this.apiVersion = process.env.PAPERLESS_API_VERSION || "5";
   }
 
-  async request<T = any>(path: string, options: RequestInit = {}) {
+  async request<T = any>(
+    path: string,
+    options: RequestInit = {},
+    isRetry = false
+  ) {
     const url = `${this.baseUrl}/api${path}`;
     const isJson = !options.body || typeof options.body === "string";
 
     const mergedHeaders = {
       Authorization: `Token ${this.token}`,
-      Accept: "application/json; version=5",
+      Accept: `application/json; version=${this.apiVersion}`,
       "Accept-Language": "en-US,en;q=0.9",
       ...(isJson ? { "Content-Type": "application/json" } : {}),
       ...headersToObject(options.headers),
@@ -64,6 +71,11 @@ export class PaperlessAPI {
 
       return body;
     } catch (error) {
+      if (!isRetry && (error as any)?.response?.status === 406) {
+        this.apiVersion = this.apiVersion === "5" ? "10" : "5";
+        return this.request<T>(path, options, true);
+      }
+
       console.error({
         error: "Error executing request",
         message: error instanceof Error ? error.message : String(error),
@@ -95,7 +107,8 @@ export class PaperlessAPI {
   async postDocument(
     document: Buffer,
     filename: string,
-    metadata: Record<string, string | string[] | number | number[]> = {}
+    metadata: Record<string, string | string[] | number | number[]> = {},
+    isRetry = false
   ): Promise<string> {
     const formData = new FormData();
     formData.append("document", document, { filename });
@@ -126,22 +139,31 @@ export class PaperlessAPI {
       );
     }
 
-    const response = await axios.post<string>(
-      `${this.baseUrl}/api/documents/post_document/`,
-      formData,
-      {
-        headers: {
-          Authorization: `Token ${this.token}`,
-          ...formData.getHeaders(),
-        },
+    try {
+      const response = await axios.post<string>(
+        `${this.baseUrl}/api/documents/post_document/`,
+        formData,
+        {
+          headers: {
+            Authorization: `Token ${this.token}`,
+            Accept: `application/json; version=${this.apiVersion}`,
+            ...formData.getHeaders(),
+          },
+        }
+      );
+
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    );
 
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      return response.data;
+    } catch (error) {
+      if (!isRetry && (error as any)?.response?.status === 406) {
+        this.apiVersion = this.apiVersion === "5" ? "10" : "5";
+        return this.postDocument(document, filename, metadata, true);
+      }
+      throw error;
     }
-
-    return response.data;
   }
 
   async getDocuments(query = ""): Promise<DocumentsResponse> {

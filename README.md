@@ -59,6 +59,15 @@ Add these to your MCP config file:
    - `your-api-token` with the token you just generated
    - `https://your-public-domain.com` with your public Paperless-NGX URL (optional, falls back to PAPERLESS_URL)
 
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `PAPERLESS_URL` | Yes | — | Base URL of your Paperless-NGX instance |
+| `PAPERLESS_API_KEY` | Yes | — | API token from your Paperless-NGX profile |
+| `PAPERLESS_PUBLIC_URL` | No | `PAPERLESS_URL` | Public-facing URL for document links |
+| `PAPERLESS_API_VERSION` | No | `5` | Paperless-ngx REST API version. Use `10` for Paperless-ngx v3+. If you see HTTP 406 errors, set this to `10`. |
+
 That's it! Now you can ask Claude to help you manage your Paperless-NGX documents.
 
 ### Example Usage

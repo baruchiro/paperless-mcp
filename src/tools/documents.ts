@@ -3,9 +3,24 @@ import { z } from "zod";
 import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
+import {
+  BuildDocumentQueryArgs,
+  buildDocumentQueryString,
+  LIST_DOCUMENTS_ARGS_SHAPE,
+  QUERY_DOCUMENTS_ARGS_SHAPE,
+  SEARCH_DOCUMENTS_ARGS_SHAPE,
+} from "./utils/documentQuery";
 import { withErrorHandling } from "./utils/middlewares";
 import { validateCustomFields } from "./utils/monetary";
 import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
+
+async function executeDocumentQuery(
+  api: PaperlessAPI,
+  args: BuildDocumentQueryArgs
+) {
+  const docsResponse = await api.getDocuments(buildDocumentQueryString(args));
+  return convertDocsWithNames(docsResponse, api);
+}
 
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
@@ -168,40 +183,21 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "list_documents",
-    "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. Using the correct ID filter will yield much more accurate results. Note: Document content is excluded from results by default. Use 'get_document_content' to retrieve content when needed.",
-    {
-      page: z.number().optional(),
-      page_size: z.number().optional(),
-      search: z.string().optional(),
-      correspondent: z.number().optional(),
-      document_type: z.number().optional(),
-      tag: z.number().optional(),
-      storage_path: z.number().optional(),
-      created__date__gte: z.string().optional(),
-      created__date__lte: z.string().optional(),
-      ordering: z.string().optional(),
-    },
+    "List documents with pagination and a small set of common filters. Use this for simple listing tasks. For full-text queries, custom field filtering, or advanced Paperless query parameters, use 'query_documents' instead. IMPORTANT: When filtering by tag, correspondent, document type, or storage path, first use the relevant lookup tool to find the correct ID. Note: Document content is excluded from results by default. Use 'get_document_content' when you need the document text.",
+    LIST_DOCUMENTS_ARGS_SHAPE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const query = new URLSearchParams();
-      if (args.page) query.set("page", args.page.toString());
-      if (args.page_size) query.set("page_size", args.page_size.toString());
-      if (args.search) query.set("search", args.search);
-      if (args.correspondent)
-        query.set("correspondent__id", args.correspondent.toString());
-      if (args.document_type)
-        query.set("document_type__id", args.document_type.toString());
-      if (args.tag) query.set("tags__id", args.tag.toString());
-      if (args.storage_path)
-        query.set("storage_path__id", args.storage_path.toString());
-      if (args.created__date__gte) query.set("created__date__gte", args.created__date__gte);
-      if (args.created__date__lte) query.set("created__date__lte", args.created__date__lte);
-      if (args.ordering) query.set("ordering", args.ordering);
+      return executeDocumentQuery(api, args);
+    })
+  );
 
-      const docsResponse = await api.getDocuments(
-        query.toString() ? `?${query.toString()}` : ""
-      );
-      return convertDocsWithNames(docsResponse, api);
+  server.tool(
+    "query_documents",
+    "Query documents using the full-text query engine plus structured Paperless filters. Use this for complex filtering, custom field conditions, or any documented /api/documents/ query parameters that are not exposed as first-class arguments. Prefer the dedicated top-level arguments where available. custom_field_query supports [field_name, operator, value] leaves or ['AND'|'OR', [clause1, clause2]] groups. Note: Document content is excluded from results by default. Use 'get_document_content' when you need the document text.",
+    QUERY_DOCUMENTS_ARGS_SHAPE,
+    withErrorHandling(async (args, extra) => {
+      if (!api) throw new Error("Please configure API connection first");
+      return executeDocumentQuery(api, args);
     })
   );
 
@@ -244,14 +240,11 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "search_documents",
-    "Full text search for documents. This tool is for searching document content, title, and metadata using a full text query. For general document listing or filtering by fields, use 'list_documents' instead. Note: Document content is excluded from results by default. Use 'get_document_content' to retrieve content when needed.",
-    {
-      query: z.string(),
-    },
+    "Deprecated compatibility wrapper for full-text document search. Use 'query_documents' with the 'query' argument for new integrations. Note: Document content is excluded from results by default. Use 'get_document_content' to retrieve content when needed.",
+    SEARCH_DOCUMENTS_ARGS_SHAPE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const docsResponse = await api.searchDocuments(args.query);
-      return convertDocsWithNames(docsResponse, api);
+      return executeDocumentQuery(api, args);
     })
   );
 

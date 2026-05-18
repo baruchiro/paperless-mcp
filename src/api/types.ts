@@ -39,14 +39,16 @@ export interface CustomField {
   document_count: number;
 }
 
+export type CustomFieldValue = string | number | boolean | number[] | null;
+
 export interface CustomFieldInstance {
   field: number;
-  value: string | number | boolean | object | null;
+  value: CustomFieldValue;
 }
 
 export interface CustomFieldInstanceRequest {
   field: number;
-  value: string | number | boolean | object | null;
+  value: CustomFieldValue;
 }
 
 export interface PaginationResponse<T> {
@@ -150,8 +152,7 @@ export interface BulkEditDocumentsResult {
 }
 
 export interface BulkEditParameters {
-  assign_custom_fields?: number[];
-  assign_custom_fields_values?: CustomFieldInstanceRequest[];
+  add_custom_fields?: Record<string, CustomFieldInstanceRequest["value"]>;
   remove_custom_fields?: number[];
   add_tags?: number[];
   remove_tags?: number[];

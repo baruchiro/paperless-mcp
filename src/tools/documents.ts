@@ -11,6 +11,67 @@ import {
   buildThumbnailResourceUri,
 } from "./utils/resourceUri";
 
+export type BulkCustomFieldValue = string | number | boolean | number[] | null;
+
+export type BulkCustomFieldUpdate = {
+  field: number;
+  value: BulkCustomFieldValue;
+};
+
+export type BulkCustomFieldParameters = {
+  add_custom_fields?: Record<string, BulkCustomFieldValue>;
+  remove_custom_fields?: number[];
+};
+
+/**
+ * Builds Paperless-NGX bulk edit parameters from base parameters plus optional
+ * custom field updates.
+ *
+ * Paperless-NGX expects custom field bulk updates as an `add_custom_fields`
+ * record keyed by custom field id. `addCustomFields` is accepted as an array for
+ * the MCP tool schema and transformed into that id-to-value record while
+ * preserving supported value types, including `number[]` document links and
+ * `null` resets. Passing an empty `addCustomFields` array intentionally produces
+ * an empty `add_custom_fields` record.
+ *
+ * When `includeCustomFieldDefaults` is true, the function also initializes
+ * `add_custom_fields` and `remove_custom_fields` with empty defaults using
+ * nullish coalescing (`??=`). This keeps the `modify_custom_fields` method's
+ * payload shape acceptable to Paperless even when no field values are supplied.
+ *
+ * @param parameters - Base bulk edit parameters to include in the result.
+ * @param addCustomFields - Optional custom field updates to map by field id.
+ * @param includeCustomFieldDefaults - Whether to include empty custom field
+ * defaults required by `modify_custom_fields`.
+ * @returns The merged API parameters with custom field updates transformed into
+ * Paperless-NGX's `add_custom_fields` record shape.
+ */
+export function buildBulkEditParameters<T extends Record<string, unknown>>(
+  parameters: T,
+  addCustomFields?: BulkCustomFieldUpdate[],
+  includeCustomFieldDefaults = false
+): T & BulkCustomFieldParameters {
+  const apiParameters: T & BulkCustomFieldParameters = {
+    ...parameters,
+  };
+
+  if (addCustomFields) {
+    apiParameters.add_custom_fields = Object.fromEntries(
+      addCustomFields.map((customField) => [
+        String(customField.field),
+        customField.value,
+      ])
+    );
+  }
+
+  if (includeCustomFieldDefaults) {
+    apiParameters.add_custom_fields ??= {};
+    apiParameters.remove_custom_fields ??= [];
+  }
+
+  return apiParameters;
+}
+
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "bulk_edit_documents",
@@ -99,19 +160,16 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
       validateCustomFields(add_custom_fields);
 
-      // Transform add_custom_fields into the two separate API parameters
-      const apiParameters = { ...parameters };
-      if (add_custom_fields && add_custom_fields.length > 0) {
-        apiParameters.assign_custom_fields = add_custom_fields.map(
-          (cf) => cf.field
-        );
-        apiParameters.assign_custom_fields_values = add_custom_fields;
-      }
-
       const response = await api.bulkEditDocuments(
         documents,
         method,
-        apiParameters
+        method === "delete"
+          ? {}
+          : buildBulkEditParameters(
+              parameters,
+              add_custom_fields,
+              method === "modify_custom_fields"
+            )
       );
       return {
         content: [

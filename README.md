@@ -59,6 +59,15 @@ Add these to your MCP config file:
    - `your-api-token` with the token you just generated
    - `https://your-public-domain.com` with your public Paperless-NGX URL (optional, falls back to PAPERLESS_URL)
 
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `PAPERLESS_URL` | Yes | — | Base URL of your Paperless-NGX instance |
+| `PAPERLESS_API_KEY` | Yes | — | API token from your Paperless-NGX profile |
+| `PAPERLESS_PUBLIC_URL` | No | `PAPERLESS_URL` | Public-facing URL for document links |
+| `PAPERLESS_API_VERSION` | No | `5` | Paperless-ngx REST API version. Use `10` for Paperless-ngx v3+. If you see HTTP 406 errors, set this to `10`. |
+
 That's it! Now you can ask Claude to help you manage your Paperless-NGX documents.
 
 ### Example Usage
@@ -215,9 +224,20 @@ bulk_edit_documents({
 bulk_edit_documents({
   documents: [12, 13],
   method: "modify_custom_fields",
-  add_custom_fields: {
-    "2": "שנה"
-  }
+  add_custom_fields: [
+    { field: 2, value: "year" }
+  ],
+  remove_custom_fields: []
+})
+
+// Set an empty custom field value, e.g. a date field used as a pending marker
+bulk_edit_documents({
+  documents: [14],
+  method: "modify_custom_fields",
+  add_custom_fields: [
+    { field: 9, value: "" }
+  ],
+  remove_custom_fields: []
 })
 ```
 
@@ -482,6 +502,22 @@ npm run start -- <baseUrl> <token> --http --port 3000
 - The MCP API will be available at `POST /mcp` on the specified port.
 - Each request is handled statelessly, following the [StreamableHTTPServerTransport](https://github.com/modelcontextprotocol/typescript-sdk) pattern.
 - GET and DELETE requests to `/mcp` will return 405 Method Not Allowed.
+
+#### Per-request API token (HTTP/Docker mode)
+
+In HTTP mode, clients can supply their own Paperless-NGX API token via the standard `Authorization` header instead of (or in addition to) the server-configured `PAPERLESS_API_KEY`. The client-supplied token takes precedence.
+
+```
+Authorization: Bearer <paperless-ngx-api-token>
+```
+
+| Scenario | Token used |
+|---|---|
+| Client sends `Authorization: Bearer <tok>` | `<tok>` (client-supplied, takes precedence) |
+| No header, `PAPERLESS_API_KEY` env var set | `PAPERLESS_API_KEY` from env |
+| No header, no env var | `401 Unauthorized` |
+
+This allows a single server instance to serve multiple users, each authenticating with their own Paperless-NGX token. The same behaviour applies to both `/mcp` and `/sse` endpoints.
 
 <details>
 <summary>Docker Deployment</summary>

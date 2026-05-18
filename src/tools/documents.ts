@@ -159,11 +159,13 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const response = await api.bulkEditDocuments(
         documents,
         method,
-        buildBulkEditParameters(
-          parameters,
-          add_custom_fields,
-          method === "modify_custom_fields"
-        )
+        method === "delete"
+          ? {}
+          : buildBulkEditParameters(
+              parameters,
+              add_custom_fields,
+              method === "modify_custom_fields"
+            )
       );
       return {
         content: [

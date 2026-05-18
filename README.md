@@ -225,7 +225,7 @@ bulk_edit_documents({
   documents: [12, 13],
   method: "modify_custom_fields",
   add_custom_fields: [
-    { field: 2, value: "שנה" }
+    { field: 2, value: "year" }
   ],
   remove_custom_fields: []
 })

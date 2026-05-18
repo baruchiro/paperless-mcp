@@ -17,12 +17,15 @@ import {
 import { headersToObject } from "./utils";
 
 export class PaperlessAPI {
+  private readonly apiVersion: string;
+
   constructor(
     private readonly baseUrl: string,
     private readonly token: string
   ) {
     this.baseUrl = baseUrl;
     this.token = token;
+    this.apiVersion = process.env.PAPERLESS_API_VERSION || "5";
   }
 
   async request<T = any>(path: string, options: RequestInit = {}) {
@@ -31,7 +34,7 @@ export class PaperlessAPI {
 
     const mergedHeaders = {
       Authorization: `Token ${this.token}`,
-      Accept: "application/json; version=5",
+      Accept: `application/json; version=${this.apiVersion}`,
       "Accept-Language": "en-US,en;q=0.9",
       ...(isJson ? { "Content-Type": "application/json" } : {}),
       ...headersToObject(options.headers),
@@ -64,13 +67,19 @@ export class PaperlessAPI {
 
       return body;
     } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 406) {
+        throw new Error(
+          `HTTP 406: Paperless-ngx rejected API version ${this.apiVersion}. ` +
+            `Set the PAPERLESS_API_VERSION environment variable to match your server's API version (e.g., "10" for Paperless-ngx v3+).`
+        );
+      }
       console.error({
         error: "Error executing request",
         message: error instanceof Error ? error.message : String(error),
         url,
         options,
-        responseData: (error as any)?.response?.data,
-        status: (error as any)?.response?.status,
+        responseData: axios.isAxiosError(error) ? error.response?.data : undefined,
+        status: axios.isAxiosError(error) ? error.response?.status : undefined,
       });
       throw error;
     }
@@ -126,22 +135,33 @@ export class PaperlessAPI {
       );
     }
 
-    const response = await axios.post<string>(
-      `${this.baseUrl}/api/documents/post_document/`,
-      formData,
-      {
-        headers: {
-          Authorization: `Token ${this.token}`,
-          ...formData.getHeaders(),
-        },
+    try {
+      const response = await axios.post<string>(
+        `${this.baseUrl}/api/documents/post_document/`,
+        formData,
+        {
+          headers: {
+            Authorization: `Token ${this.token}`,
+            Accept: `application/json; version=${this.apiVersion}`,
+            ...formData.getHeaders(),
+          },
+        }
+      );
+
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    );
 
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 406) {
+        throw new Error(
+          `HTTP 406: Paperless-ngx rejected API version ${this.apiVersion}. ` +
+            `Set the PAPERLESS_API_VERSION environment variable to match your server's API version (e.g., "10" for Paperless-ngx v3+).`
+        );
+      }
+      throw error;
     }
-
-    return response.data;
   }
 
   async getDocuments(query = ""): Promise<DocumentsResponse> {

@@ -6,6 +6,10 @@ import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
 import { withErrorHandling } from "./utils/middlewares";
 import { validateCustomFields } from "./utils/monetary";
 import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
+import {
+  buildDocumentResourceUri,
+  buildThumbnailResourceUri,
+} from "./utils/resourceUri";
 
 export type BulkCustomFieldValue = string | number | boolean | number[] | null;
 
@@ -335,7 +339,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           {
             type: "resource",
             resource: {
-              uri: filename,
+              uri: buildDocumentResourceUri(args.id, filename),
               blob: Buffer.from(response.data).toString("base64"),
               mimeType: "application/pdf",
             },
@@ -359,7 +363,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           {
             type: "resource",
             resource: {
-              uri: `document-${args.id}-thumb.webp`,
+              uri: buildThumbnailResourceUri(args.id),
               blob: Buffer.from(response.data).toString("base64"),
               mimeType: "image/webp",
             },

@@ -11,11 +11,13 @@ rejected these with `ValidationError: Input should be a valid URL,
 relative URL without a base`, making downloads and thumbnails
 unusable from any Python MCP client.
 
-Tools now return URIs under a custom `paperless://` scheme that is
-always well-formed regardless of filename content:
+Tools now return URIs under a custom `paperless://` scheme that mirrors
+the Paperless REST API paths, so the same identifiers can later back
+proper MCP resources (`resources/list` / `resources/read`):
 
-- `download_document` → `paperless://document/{id}/{encodeURIComponent(filename)}`
-- `get_document_thumbnail` → `paperless://thumbnail/{id}.webp`
+- `download_document` → `paperless://documents/{id}/download?filename=<encoded>`
+- `get_document_thumbnail` → `paperless://documents/{id}/thumb`
 
-The original filename is preserved (URL-encoded) inside the URI path,
-so clients that need the original name can still recover it.
+The original filename is preserved (URL-encoded) as a `filename` query
+parameter on the download URI, so clients that need the human-readable
+name can still recover it via standard URL parsing.

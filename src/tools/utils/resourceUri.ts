@@ -1,32 +1,33 @@
 /**
  * Resource URI builders for document/thumbnail downloads.
  *
- * MCP resource URIs are validated by Python MCP clients (pydantic) as
- * `AnyUrl` — they must be a valid URL or relative URL without a base.
- * Plain filenames or strings without a scheme fail this validation, so
- * we wrap them in a custom `paperless://` scheme that is always
- * well-formed regardless of filename content.
+ * URIs mirror the Paperless REST API paths under a custom `paperless://`
+ * scheme, so the same identifiers can later back proper MCP resources
+ * (`resources/list` / `resources/read`) without a second naming scheme.
+ *
+ * The scheme also keeps the URI well-formed regardless of filename
+ * content, which Python MCP clients (pydantic-validated) require.
  */
 
 /**
  * Builds a resource URI for a downloaded document.
  *
- * The original filename is preserved (URL-encoded) inside the URI path,
- * so clients that need the original name can still recover it.
+ * Mirrors `GET /api/documents/{id}/download/`. The original filename is
+ * preserved as a `filename` query parameter (URL-encoded) so clients
+ * that need the human-readable name can still recover it.
  */
 export function buildDocumentResourceUri(
   id: number,
   filename: string
 ): string {
-  return `paperless://document/${id}/${encodeURIComponent(filename)}`;
+  return `paperless://documents/${id}/download?filename=${encodeURIComponent(filename)}`;
 }
 
 /**
  * Builds a resource URI for a document thumbnail.
  *
- * Thumbnails have no meaningful filename, so we use a stable shape
- * derived from the document id alone.
+ * Mirrors `GET /api/documents/{id}/thumb/`.
  */
 export function buildThumbnailResourceUri(id: number): string {
-  return `paperless://thumbnail/${id}.webp`;
+  return `paperless://documents/${id}/thumb`;
 }

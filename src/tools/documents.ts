@@ -321,7 +321,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     "download_document",
     "Download a document file by ID. Returns a paperless:// resource URI; read the resource to fetch the file content.",
     {
-      id: z.number(),
+      id: z.number().int().positive(),
       original: z.boolean().optional(),
     },
     withErrorHandling(async (args, extra) => {
@@ -351,7 +351,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     "get_document_thumbnail",
     "Get a document thumbnail (image preview) by ID. Returns a paperless:// resource URI; read the resource to fetch the image content.",
     {
-      id: z.number(),
+      id: z.number().int().positive(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");

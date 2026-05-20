@@ -80,7 +80,11 @@ async function withResourceClient(
   }
 }
 
-test("resources/list exposes download and thumbnail resources for known documents", async () => {
+test("resources/list exposes download and thumbnail resources for the first page only", async () => {
+  // `all` lists IDs across every page (potentially tens of thousands of
+  // documents) — `resources/list` must not expand that or it will produce
+  // an unbounded payload. Only the documents on the fetched page should
+  // appear; the rest are still reachable via the resource template.
   const api = {
     getDocuments: async () =>
       emptyPaginationResponse(
@@ -110,13 +114,18 @@ test("resources/list exposes download and thumbnail resources for known document
         "paperless://documents/1/thumb",
         "paperless://documents/2/download",
         "paperless://documents/2/thumb",
-        "paperless://documents/3/download",
-        "paperless://documents/3/thumb",
       ]
     );
     assert.equal(result.resources[0].name, "Invoice download");
     assert.equal(result.resources[0].mimeType, "application/pdf");
-    assert.equal(result.resources[5].name, "Document 3 thumbnail");
+    assert.equal(result.resources[3].name, "Receipt thumbnail");
+    // Document 3 lives in `all` but not on this page — it must not leak in.
+    for (const resource of result.resources) {
+      assert.ok(
+        !resource.uri.includes("/3/"),
+        `unexpected page-3 resource in list: ${resource.uri}`
+      );
+    }
   });
 });
 

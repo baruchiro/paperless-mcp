@@ -46,19 +46,19 @@ export function registerDocumentResources(server: McpServer, api: PaperlessAPI) 
 export async function listDocumentResources(
   api: PaperlessAPI
 ): Promise<ListResourcesResult> {
+  // Return only the first page of documents. Paperless libraries can
+  // contain tens of thousands of documents; expanding the full `all`
+  // ID array would produce an unbounded `resources/list` payload.
+  // Clients that need to enumerate more documents can use the
+  // `list_documents` tool (which paginates) and read
+  // `paperless://documents/{id}/download` directly — the resource
+  // template handles `resources/read` for any document ID.
   const documentsResponse = await api.getDocuments();
   const documents = documentsResponse.results || [];
-  const documentsById = new Map<number, Document>(
-    documents.map((document) => [document.id, document])
-  );
-  const documentIds = (documentsResponse.all?.length
-    ? documentsResponse.all
-    : documents.map((document) => document.id)
-  ).filter((id): id is number => typeof id === "number");
 
   return {
-    resources: documentIds.flatMap((id) =>
-      buildResourcesForDocument(id, documentsById.get(id))
+    resources: documents.flatMap((document) =>
+      buildResourcesForDocument(document.id, document)
     ),
   };
 }

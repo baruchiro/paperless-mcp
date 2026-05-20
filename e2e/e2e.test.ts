@@ -93,9 +93,10 @@ before(async () => {
       console.log(`  document id (from task): ${seedDocumentId}`);
     }
 
-    console.log("Waiting for document to appear in search index...");
-    await paperless.waitUntilSearchable(seedDocumentId, "E2E Fixture", 60000);
-    console.log("  document is searchable");
+    console.log("Waiting for document to be accessible...");
+    await paperless.waitForDocumentReady(seedDocumentId, 30000);
+    console.log("  document accessible; pausing 3s for search index...");
+    await new Promise((r) => setTimeout(r, 3000));
 
     // Start MCP server if not already running externally
     if (!process.env.MCP_URL) {
@@ -241,18 +242,21 @@ describe("get_document", () => {
 
 describe("search_documents", () => {
   it("finds the seeded document with a matching query", async () => {
-    const result = (await client.callTool({
-      name: "search_documents",
-      arguments: { query: "E2E Fixture" },
-    })) as ToolResult;
-    const data = parseToolText(result) as {
-      count: number;
-      results: { id: number }[];
-    };
-    assert.ok(Array.isArray(data.results));
+    // Retry a few times to allow the Whoosh search index to propagate
+    let data: { count: number; results: { id: number }[] } | undefined;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const result = (await client.callTool({
+        name: "search_documents",
+        arguments: { query: "E2E Fixture" },
+      })) as ToolResult;
+      data = parseToolText(result) as { count: number; results: { id: number }[] };
+      if (data.results.some((d) => d.id === seedDocumentId)) break;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    assert.ok(Array.isArray(data!.results));
     assert.ok(
-      data.results.some((d) => d.id === seedDocumentId),
-      `seeded document id=${seedDocumentId} not found in search results`
+      data!.results.some((d) => d.id === seedDocumentId),
+      `seeded document id=${seedDocumentId} not found in search results after retries`
     );
   });
 });

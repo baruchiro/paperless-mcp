@@ -110,25 +110,25 @@ export class PaperlessClient {
     throw new Error(`Timed out waiting for document task ${taskId}`);
   }
 
-  async waitUntilSearchable(
+  async waitForDocumentReady(
     documentId: number,
-    query: string,
     timeoutMs = 30000
   ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      const res = await http.get<{ results?: { id: number }[] }>(
-        `${this.baseUrl}/api/documents/?query=${encodeURIComponent(query)}`,
-        { headers: this.headers }
-      );
-      const results = res.data?.results ?? [];
-      if (results.some((d) => d.id === documentId)) return;
-      console.log(`  document ${documentId} not yet in search index, waiting...`);
+      try {
+        const res = await http.get<{ id: number }>(
+          `${this.baseUrl}/api/documents/${documentId}/`,
+          { headers: this.headers }
+        );
+        if (res.data?.id === documentId) return;
+      } catch {
+        // not ready yet
+      }
+      console.log(`  document ${documentId} not yet accessible, waiting...`);
       await new Promise((r) => setTimeout(r, 2000));
     }
-    throw new Error(
-      `Document ${documentId} not found in search results for "${query}" after ${timeoutMs}ms`
-    );
+    throw new Error(`Document ${documentId} not accessible after ${timeoutMs}ms`);
   }
 }
 

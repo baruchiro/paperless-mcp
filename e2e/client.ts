@@ -21,6 +21,10 @@ export async function connectMcpClient(
 }
 
 export function parseToolText(result: ToolResult): unknown {
+  if (result.isError) {
+    const errContent = result.content.find((c) => c.type === "text");
+    throw new Error(`Tool call returned isError=true: ${errContent?.text ?? "(no message)"}`);
+  }
   const textContent = result.content.find((c) => c.type === "text");
   if (!textContent || !textContent.text) {
     throw new Error("No text content in tool result");

@@ -1,6 +1,18 @@
 import FormData from "form-data";
 import axios from "axios";
 
+const http = axios.create({ timeout: 15000 });
+
+interface TaskResult {
+  status: string;
+  related_document?: string;
+  result?: string;
+}
+
+interface TaskListResponse {
+  results?: TaskResult[];
+}
+
 export interface PaperlessTag {
   id: number;
   name: string;
@@ -14,11 +26,6 @@ export interface PaperlessCorrespondent {
 export interface PaperlessDocumentType {
   id: number;
   name: string;
-}
-
-export interface PaperlessDocument {
-  id: number;
-  title: string;
 }
 
 export class PaperlessClient {
@@ -35,16 +42,8 @@ export class PaperlessClient {
     };
   }
 
-  async getToken(username: string, password: string): Promise<string> {
-    const res = await axios.post<{ token: string }>(
-      `${this.baseUrl}/api/token/`,
-      { username, password }
-    );
-    return res.data.token;
-  }
-
   async createTag(name: string): Promise<PaperlessTag> {
-    const res = await axios.post<PaperlessTag>(
+    const res = await http.post<PaperlessTag>(
       `${this.baseUrl}/api/tags/`,
       { name },
       { headers: this.headers }
@@ -53,7 +52,7 @@ export class PaperlessClient {
   }
 
   async createCorrespondent(name: string): Promise<PaperlessCorrespondent> {
-    const res = await axios.post<PaperlessCorrespondent>(
+    const res = await http.post<PaperlessCorrespondent>(
       `${this.baseUrl}/api/correspondents/`,
       { name },
       { headers: this.headers }
@@ -62,7 +61,7 @@ export class PaperlessClient {
   }
 
   async createDocumentType(name: string): Promise<PaperlessDocumentType> {
-    const res = await axios.post<PaperlessDocumentType>(
+    const res = await http.post<PaperlessDocumentType>(
       `${this.baseUrl}/api/document_types/`,
       { name },
       { headers: this.headers }
@@ -78,7 +77,7 @@ export class PaperlessClient {
     const form = new FormData();
     form.append("document", content, { filename });
     form.append("title", title);
-    const res = await axios.post<string>(
+    const res = await http.post<string>(
       `${this.baseUrl}/api/documents/post_document/`,
       form,
       { headers: { ...form.getHeaders(), Authorization: `Token ${this.token}` } }
@@ -86,17 +85,15 @@ export class PaperlessClient {
     return String(res.data);
   }
 
-  async waitForDocument(
-    taskId: string,
-    timeoutMs = 60000
-  ): Promise<number> {
+  async waitForDocument(taskId: string, timeoutMs = 60000): Promise<number> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      const res = await axios.get<{ status: string; related_document?: string }>(
+      const res = await http.get<TaskListResponse | TaskResult>(
         `${this.baseUrl}/api/tasks/?task_id=${taskId}`,
         { headers: this.headers }
       );
-      const tasks = (res.data as any).results ?? res.data;
+      const tasks =
+        "results" in res.data ? res.data.results : [res.data as TaskResult];
       const task = Array.isArray(tasks) ? tasks[0] : tasks;
       if (task?.status === "SUCCESS" && task.related_document) {
         return Number(task.related_document);
@@ -115,7 +112,7 @@ export async function getApiToken(
   username: string,
   password: string
 ): Promise<string> {
-  const res = await axios.post<{ token: string }>(`${baseUrl}/api/token/`, {
+  const res = await http.post<{ token: string }>(`${baseUrl}/api/token/`, {
     username,
     password,
   });

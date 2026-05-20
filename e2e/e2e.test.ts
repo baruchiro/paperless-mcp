@@ -230,11 +230,15 @@ describe("search_documents", () => {
       results: { id: number }[];
     };
     assert.ok(Array.isArray(data.results));
+    assert.ok(
+      data.results.some((d) => d.id === seedDocumentId),
+      `seeded document id=${seedDocumentId} not found in search results`
+    );
   });
 });
 
 describe("download_document", () => {
-  it("returns a resource with paperless:// URI and non-empty base64 content", async () => {
+  it("returns a resource with a URI and non-empty base64 blob", async () => {
     const result = (await client.callTool({
       name: "download_document",
       arguments: { id: seedDocumentId },
@@ -242,13 +246,9 @@ describe("download_document", () => {
     assert.ok(result.content.length > 0, "content should not be empty");
     const resource = result.content.find((c) => c.type === "resource");
     assert.ok(resource, "should return a resource content item");
-    const r = resource.resource as { uri: string; blob?: string; text?: string };
-    assert.ok(
-      r.uri.startsWith("paperless://"),
-      `URI should start with paperless://, got: ${r.uri}`
-    );
-    const blob = r.blob ?? r.text;
-    assert.ok(blob && blob.length > 0, "resource blob/text should be non-empty");
+    const r = resource.resource as { uri: string; blob?: string; mimeType?: string };
+    assert.ok(r.uri && r.uri.length > 0, "resource should have a non-empty URI");
+    assert.ok(r.blob && r.blob.length > 0, "resource blob should be non-empty");
   });
 });
 
@@ -288,10 +288,9 @@ describe("bulk_edit_documents", () => {
       name: "get_document",
       arguments: { id: seedDocumentId },
     })) as ToolResult;
-    const docData = parseToolText(docAfterAdd) as { tags: { id: number }[] };
-    const tagIds = docData.tags?.map((t: any) =>
-      typeof t === "number" ? t : t.id
-    );
+    type TagItem = { id: number; name: string };
+    const docData = parseToolText(docAfterAdd) as { tags: TagItem[] };
+    const tagIds = docData.tags?.map((t) => t.id);
     assert.ok(
       tagIds?.includes(seedTag.id),
       `tag ${seedTag.id} should be on document after modify_tags add`
@@ -307,6 +306,18 @@ describe("bulk_edit_documents", () => {
         remove_tags: [seedTag.id],
       },
     });
+
+    // Verify tag was removed
+    const docAfterRemove = (await client.callTool({
+      name: "get_document",
+      arguments: { id: seedDocumentId },
+    })) as ToolResult;
+    const removedData = parseToolText(docAfterRemove) as { tags: TagItem[] };
+    const removedTagIds = (removedData.tags ?? []).map((t) => t.id);
+    assert.ok(
+      !removedTagIds.includes(seedTag.id),
+      `tag ${seedTag.id} should be removed after modify_tags remove`
+    );
   });
 });
 

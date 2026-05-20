@@ -119,7 +119,7 @@ jobs:
         env:
           PAPERLESS_URL: http://localhost:8000
           PAPERLESS_TOKEN: ${{ env.PAPERLESS_TOKEN }}
-          MCP_URL: ${{ matrix.mode == 'cli' && 'http://localhost:3001/mcp' || format('http://localhost:{0}/mcp', env.MCP_PORT || '3000') }}
+          MCP_URL: ${{ matrix.mode == 'cli' && 'http://localhost:3001/mcp' || 'http://localhost:3000/mcp' }}
 
       - name: Print logs on failure
         if: failure()

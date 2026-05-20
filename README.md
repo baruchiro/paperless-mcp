@@ -469,7 +469,7 @@ npm test
 
 The E2E suite boots a real Paperless-ngx instance, runs the compiled MCP server, and drives it with deterministic JSON-RPC `tools/call` requests — no LLM in the loop.
 
-**Prerequisites:** Docker and Docker Compose.
+**Prerequisites:** Docker, Docker Compose, and `jq`.
 
 ```bash
 # 1. Build the MCP server
@@ -486,6 +486,7 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/token/ \
 # 4. Start the MCP server
 node build/index.js --http --port 3001 \
   --baseUrl http://localhost:8000 --token "$TOKEN" &
+MCP_PID=$!
 
 # 5. Run the E2E tests
 MCP_URL=http://localhost:3001/mcp \
@@ -494,7 +495,7 @@ PAPERLESS_TOKEN="$TOKEN" \
 npm run test:e2e
 
 # 6. Cleanup
-kill %1
+kill "$MCP_PID"
 docker compose -f docker-compose.e2e.yml down -v
 ```
 

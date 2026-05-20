@@ -4,7 +4,7 @@ services:
     restart: on-failure
 
   paperless:
-    image: ghcr.io/paperless-ngx/paperless-ngx:2.14
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
     restart: on-failure
     depends_on:
       - redis

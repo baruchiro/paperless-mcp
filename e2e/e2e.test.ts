@@ -85,6 +85,9 @@ before(async () => {
     seedDocumentId = await paperless.waitForDocument(taskId, 90000);
   }
 
+  // Brief pause for Paperless to finish all post-processing (e.g. search index)
+  await new Promise((r) => setTimeout(r, 3000));
+
   // Start MCP server if not already running externally
   if (!process.env.MCP_URL) {
     mcpProcess = await startMcpServer();

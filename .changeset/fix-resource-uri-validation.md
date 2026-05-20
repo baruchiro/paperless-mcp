@@ -15,9 +15,9 @@ Tools now return URIs under a custom `paperless://` scheme that mirrors
 the Paperless REST API paths, so the same identifiers can later back
 proper MCP resources (`resources/list` / `resources/read`):
 
-- `download_document` → `paperless://documents/{id}/download?filename=<encoded>`
+- `download_document` → `paperless://documents/{id}/download`
 - `get_document_thumbnail` → `paperless://documents/{id}/thumb`
 
-The original filename is preserved (URL-encoded) as a `filename` query
-parameter on the download URI, so clients that need the human-readable
-name can still recover it via standard URL parsing.
+URIs are intentionally canonical and filename-free; the human-readable
+filename is surfaced via resource metadata (the `name` field on each
+`Resource`) rather than embedded in the URI.

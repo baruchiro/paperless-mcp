@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type express from "express";
 import { PaperlessAPI } from "./api/PaperlessAPI";
+import { registerDocumentResources } from "./resources/documents";
 import { registerCorrespondentTools } from "./tools/correspondents";
 import { registerCustomFieldTools } from "./tools/customFields";
 import { registerDocumentTools } from "./tools/documents";
@@ -26,6 +27,7 @@ export function createMcpServer({
     { instructions: buildInstructions(publicUrl) }
   );
   registerDocumentTools(server, api);
+  registerDocumentResources(server, api);
   registerTagTools(server, api);
   registerCorrespondentTools(server, api);
   registerDocumentTypeTools(server, api);

@@ -1,26 +1,39 @@
 /**
  * Resource URI builders for document/thumbnail downloads.
  *
- * URIs mirror the Paperless REST API paths under a custom `paperless://`
- * scheme, so the same identifiers can later back proper MCP resources
- * (`resources/list` / `resources/read`) without a second naming scheme.
+ * URIs mirror document resources under a custom `paperless://` scheme, so the
+ * same identifiers can back MCP resources (`resources/list` / `resources/read`)
+ * without a second naming scheme.
  *
  * The scheme also keeps the URI well-formed regardless of filename
  * content, which Python MCP clients (pydantic-validated) require.
  */
 
 /**
+ * Optional flags for document download resource URIs.
+ */
+export interface DocumentResourceUriOptions {
+  original?: boolean;
+}
+
+/**
  * Builds a resource URI for a downloaded document.
  *
- * Mirrors `GET /api/documents/{id}/download/`. The original filename is
- * preserved as a `filename` query parameter (URL-encoded) so clients
- * that need the human-readable name can still recover it.
+ * The MCP resource URI is intentionally canonical and filename-free; filenames
+ * belong in resource metadata, while the URI identifies the fetchable content.
  */
 export function buildDocumentResourceUri(
   id: number,
-  filename: string
+  optionsOrFilename?: DocumentResourceUriOptions | string
 ): string {
-  return `paperless://documents/${id}/download?filename=${encodeURIComponent(filename)}`;
+  const options =
+    typeof optionsOrFilename === "string" ? {} : optionsOrFilename || {};
+  const params = new URLSearchParams();
+  if (options.original) {
+    params.set("original", "true");
+  }
+  const query = params.toString();
+  return `paperless://documents/${id}/download${query ? `?${query}` : ""}`;
 }
 
 /**

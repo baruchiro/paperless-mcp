@@ -297,7 +297,8 @@ describe("bulk_edit_documents", () => {
         remove_tags: [],
       },
     })) as ToolResult;
-    assert.ok(!addResult.isError, "bulk_edit add_tags should not error");
+    const addErrText = addResult.content.find((c) => c.type === "text")?.text ?? "";
+    assert.ok(!addResult.isError, `bulk_edit add_tags failed: ${addErrText}`);
 
     // Verify tag was added
     const docAfterAdd = (await client.callTool({

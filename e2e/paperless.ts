@@ -9,10 +9,6 @@ interface TaskResult {
   result?: string;
 }
 
-interface TaskListResponse {
-  results?: TaskResult[];
-}
-
 export interface PaperlessTag {
   id: number;
   name: string;
@@ -88,13 +84,12 @@ export class PaperlessClient {
   async waitForDocument(taskId: string, timeoutMs = 60000): Promise<number> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      const res = await http.get<TaskListResponse | TaskResult>(
+      const res = await http.get<TaskResult[]>(
         `${this.baseUrl}/api/tasks/?task_id=${taskId}`,
         { headers: this.headers }
       );
-      const tasks =
-        "results" in res.data ? res.data.results : [res.data as TaskResult];
-      const task = Array.isArray(tasks) ? tasks[0] : tasks;
+      const tasks = Array.isArray(res.data) ? res.data : [res.data as TaskResult];
+      const task = tasks[0];
       if (task?.status === "SUCCESS" && task.related_document) {
         return Number(task.related_document);
       }

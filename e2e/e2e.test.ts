@@ -247,7 +247,7 @@ describe("download_document", () => {
     const resource = result.content.find((c) => c.type === "resource");
     assert.ok(resource, "should return a resource content item");
     const r = resource.resource as { uri: string; blob?: string; mimeType?: string };
-    assert.ok(r.uri && r.uri.length > 0, "resource should have a non-empty URI");
+    assert.ok(r.uri?.startsWith("paperless://documents/"), "resource URI should use paperless:// scheme");
     assert.ok(r.blob && r.blob.length > 0, "resource blob should be non-empty");
   });
 });
@@ -263,8 +263,8 @@ describe("get_document_thumbnail", () => {
     assert.ok(resource, "should return a resource content item");
     const r = resource.resource as { mimeType?: string; uri?: string };
     assert.ok(
-      r.mimeType?.startsWith("image/") || r.uri?.startsWith("paperless://"),
-      "thumbnail should have image mime type or paperless URI"
+      r.uri?.startsWith("paperless://documents/"),
+      "thumbnail URI should use paperless:// scheme"
     );
   });
 });

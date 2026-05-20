@@ -241,7 +241,7 @@ describe("download_document", () => {
   it("returns a resource with a URI and non-empty base64 blob", async () => {
     const result = (await client.callTool({
       name: "download_document",
-      arguments: { id: seedDocumentId },
+      arguments: { id: seedDocumentId, original: true },
     })) as ToolResult;
     assert.ok(result.content.length > 0, "content should not be empty");
     const resource = result.content.find((c) => c.type === "resource");
@@ -265,6 +265,10 @@ describe("get_document_thumbnail", () => {
     assert.ok(
       r.uri?.startsWith("paperless://documents/"),
       "thumbnail URI should use paperless:// scheme"
+    );
+    assert.ok(
+      r.mimeType?.startsWith("image/"),
+      "thumbnail MIME type should be image/*"
     );
   });
 });

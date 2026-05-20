@@ -130,8 +130,8 @@ export const MINIMAL_PDF = Buffer.from(
     "xref\n0 4\n" +
     "0000000000 65535 f \n" +
     "0000000009 00000 n \n" +
-    "0000000058 00000 n \n" +
-    "0000000115 00000 n \n" +
+    "0000000056 00000 n \n" +
+    "0000000111 00000 n \n" +
     "trailer\n<</Size 4 /Root 1 0 R>>\n" +
-    "startxref\n190\n%%EOF"
+    "startxref\n180\n%%EOF"
 );

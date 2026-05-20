@@ -255,9 +255,12 @@ describe("download_document", () => {
       name: "download_document",
       arguments: { id: seedDocumentId, original: true },
     })) as ToolResult;
-    assert.ok(result.content.length > 0, "content should not be empty");
+    const errText = result.content.find((c) => c.type === "text")?.text ?? "";
     const resource = result.content.find((c) => c.type === "resource");
-    assert.ok(resource, "should return a resource content item");
+    assert.ok(
+      resource,
+      `should return a resource content item (isError=${result.isError}: ${errText})`
+    );
     const r = resource.resource as { uri: string; blob?: string; mimeType?: string };
     assert.ok(r.uri?.startsWith("paperless://documents/"), "resource URI should use paperless:// scheme");
     assert.ok(r.blob && r.blob.length > 0, "resource blob should be non-empty");
@@ -270,9 +273,12 @@ describe("get_document_thumbnail", () => {
       name: "get_document_thumbnail",
       arguments: { id: seedDocumentId },
     })) as ToolResult;
-    assert.ok(result.content.length > 0);
+    const errText = result.content.find((c) => c.type === "text")?.text ?? "";
     const resource = result.content.find((c) => c.type === "resource");
-    assert.ok(resource, "should return a resource content item");
+    assert.ok(
+      resource,
+      `should return a resource content item (isError=${result.isError}: ${errText})`
+    );
     const r = resource.resource as { mimeType?: string; uri?: string };
     assert.ok(
       r.uri?.startsWith("paperless://documents/"),

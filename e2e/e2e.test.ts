@@ -65,45 +65,53 @@ function startMcpServer(): Promise<ChildProcess> {
 }
 
 before(async () => {
-  assert.ok(PAPERLESS_TOKEN, "PAPERLESS_TOKEN env var is required");
+  try {
+    assert.ok(PAPERLESS_TOKEN, "PAPERLESS_TOKEN env var is required");
 
-  paperless = new PaperlessClient(PAPERLESS_URL, PAPERLESS_TOKEN);
+    paperless = new PaperlessClient(PAPERLESS_URL, PAPERLESS_TOKEN);
 
-  console.log("Seeding test data in Paperless...");
-  seedTag = await paperless.createTag("e2e-test-tag");
-  console.log(`  created tag id=${seedTag.id}`);
-  seedCorrespondent = await paperless.createCorrespondent("E2E Test Corp");
-  console.log(`  created correspondent id=${seedCorrespondent.id}`);
-  seedDocumentType = await paperless.createDocumentType("E2E Invoice");
-  console.log(`  created document type id=${seedDocumentType.id}`);
+    console.log("Seeding test data in Paperless...");
+    seedTag = await paperless.createTag("e2e-test-tag");
+    console.log(`  created tag id=${seedTag.id}`);
+    seedCorrespondent = await paperless.createCorrespondent("E2E Test Corp");
+    console.log(`  created correspondent id=${seedCorrespondent.id}`);
+    seedDocumentType = await paperless.createDocumentType("E2E Invoice");
+    console.log(`  created document type id=${seedDocumentType.id}`);
 
-  console.log("Uploading seed document...");
-  const taskId = await paperless.uploadDocument(
-    MINIMAL_PDF,
-    "e2e-fixture.pdf",
-    "E2E Fixture Document"
-  );
-  console.log(`  upload task id: ${taskId}`);
-  if (/^\d+$/.test(taskId)) {
-    seedDocumentId = Number(taskId);
-    console.log(`  document id (direct): ${seedDocumentId}`);
-  } else {
-    seedDocumentId = await paperless.waitForDocument(taskId, 90000);
-    console.log(`  document id (from task): ${seedDocumentId}`);
+    console.log("Uploading seed document...");
+    const taskId = await paperless.uploadDocument(
+      MINIMAL_PDF,
+      "e2e-fixture.pdf",
+      "E2E Fixture Document"
+    );
+    console.log(`  upload task id: ${taskId}`);
+    if (/^\d+$/.test(taskId)) {
+      seedDocumentId = Number(taskId);
+      console.log(`  document id (direct): ${seedDocumentId}`);
+    } else {
+      seedDocumentId = await paperless.waitForDocument(taskId, 90000);
+      console.log(`  document id (from task): ${seedDocumentId}`);
+    }
+
+    console.log("Waiting for document to appear in search index...");
+    await paperless.waitUntilSearchable(seedDocumentId, "E2E Fixture", 60000);
+    console.log("  document is searchable");
+
+    // Start MCP server if not already running externally
+    if (!process.env.MCP_URL) {
+      mcpProcess = await startMcpServer();
+      await waitForMcp(MCP_URL);
+    }
+
+    client = await connectMcpClient(MCP_URL, PAPERLESS_TOKEN);
+    console.log("MCP client connected, running tests...");
+  } catch (err) {
+    console.error(
+      "BEFORE HOOK FAILED:",
+      err instanceof Error ? err.stack : String(err)
+    );
+    throw err;
   }
-
-  console.log("Waiting for document to appear in search index...");
-  await paperless.waitUntilSearchable(seedDocumentId, "E2E Fixture", 60000);
-  console.log("  document is searchable");
-
-  // Start MCP server if not already running externally
-  if (!process.env.MCP_URL) {
-    mcpProcess = await startMcpServer();
-    await waitForMcp(MCP_URL);
-  }
-
-  client = await connectMcpClient(MCP_URL, PAPERLESS_TOKEN);
-  console.log("MCP client connected, running tests...");
 });
 
 after(async () => {

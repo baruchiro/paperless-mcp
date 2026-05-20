@@ -1,5 +1,18 @@
 # @baruchiro/paperless-mcp
 
+## 0.5.0
+
+### Minor Changes
+
+- fef4c62: In HTTP mode, clients can now supply their own Paperless-NGX API token per-request via `Authorization: Bearer <token>`. The client-supplied token takes precedence over the server-configured `PAPERLESS_API_KEY`. If neither is available, the server responds with `401 Unauthorized`. This applies to both `/mcp` and `/sse` endpoints. stdio mode is unchanged.
+
+### Patch Changes
+
+- de661ae: Add `PAPERLESS_API_VERSION` environment variable to configure the Paperless-ngx REST API version (default: `5`). Set to `10` for Paperless-ngx v3+. On HTTP 406, a clear error message is shown directing users to set this variable.
+- 5927777: Fix bulk document custom field edits to send Paperless-NGX compatible `add_custom_fields` parameters and preserve intentionally empty custom field values.
+- 1c1ec60: Fix `bulk_edit_documents` with `method: "delete"` failing with HTTP 400 — MCP-only parameters (`confirm`, `delete_originals`) are no longer forwarded to the Paperless bulk-edit endpoint, which doesn't accept extra kwargs for the `delete` action.
+- 7b483a4: Switch update endpoints for tags, correspondents, document types, and custom fields from PUT to PATCH to support partial updates.
+
 ## 0.4.5
 
 ### Patch Changes

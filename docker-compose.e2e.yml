@@ -1,0 +1,34 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: on-failure
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:2.14
+    restart: on-failure
+    depends_on:
+      - redis
+    ports:
+      - "8000:8000"
+    volumes:
+      - paperless-data:/usr/src/paperless/data
+      - paperless-media:/usr/src/paperless/media
+    environment:
+      PAPERLESS_REDIS: redis://redis:6379
+      PAPERLESS_ADMIN_USER: admin
+      PAPERLESS_ADMIN_PASSWORD: admin123
+      PAPERLESS_ADMIN_MAIL: admin@test.local
+      PAPERLESS_SECRET_KEY: e2e-test-secret-not-for-production
+      PAPERLESS_OCR_LANGUAGE: eng
+      PAPERLESS_OCR_MODE: skip
+      PAPERLESS_TIME_ZONE: UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+volumes:
+  paperless-data:
+  paperless-media:

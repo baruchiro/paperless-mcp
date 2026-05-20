@@ -1,0 +1,139 @@
+name: E2E Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [cli, docker]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".node-version"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build MCP server
+        run: npm run build
+
+      - name: Set up Docker Buildx
+        if: matrix.mode == 'docker'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for E2E
+        if: matrix.mode == 'docker'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: paperless-mcp:e2e
+          cache-from: type=gha,scope=paperless-mcp-docker
+          cache-to: type=gha,scope=paperless-mcp-docker,mode=max
+
+      - name: Start Paperless-ngx
+        run: docker compose -f docker-compose.e2e.yml up -d
+
+      - name: Wait for Paperless-ngx to be ready
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/api/ > /dev/null 2>&1; then
+              echo "Paperless ready after $i attempts"
+              exit 0
+            fi
+            echo "Waiting... $i/60"
+            sleep 5
+          done
+          echo "Paperless-ngx failed to start"
+          docker compose -f docker-compose.e2e.yml logs
+          exit 1
+
+      - name: Get Paperless API token
+        run: |
+          TOKEN=$(curl -s -X POST http://localhost:8000/api/token/ \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Failed to get API token"
+            exit 1
+          fi
+          echo "PAPERLESS_TOKEN=$TOKEN" >> $GITHUB_ENV
+          echo "Got token: ${TOKEN:0:8}..."
+
+      - name: Start MCP server (CLI mode)
+        if: matrix.mode == 'cli'
+        run: |
+          node build/index.js \
+            --http --port 3001 \
+            --baseUrl http://localhost:8000 \
+            --token "$PAPERLESS_TOKEN" &
+          echo "MCP_PID=$!" >> $GITHUB_ENV
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/mcp || true)
+            if [ "$code" = "405" ]; then
+              echo "MCP server (CLI) ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MCP server (CLI) failed to start"
+          exit 1
+
+      - name: Start MCP server (Docker mode)
+        if: matrix.mode == 'docker'
+        run: |
+          docker run -d --name paperless-mcp-e2e \
+            --network host \
+            -e PAPERLESS_URL=http://localhost:8000 \
+            -e PAPERLESS_API_KEY="$PAPERLESS_TOKEN" \
+            paperless-mcp:e2e
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/mcp || true)
+            if [ "$code" = "405" ]; then
+              echo "MCP server (Docker) ready"
+              echo "MCP_PORT=3000" >> $GITHUB_ENV
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MCP server (Docker) failed to start"
+          docker logs paperless-mcp-e2e
+          exit 1
+
+      - name: Run E2E tests
+        run: node --require ts-node/register --test e2e/e2e.test.ts
+        env:
+          PAPERLESS_URL: http://localhost:8000
+          PAPERLESS_TOKEN: ${{ env.PAPERLESS_TOKEN }}
+          MCP_URL: ${{ matrix.mode == 'cli' && 'http://localhost:3001/mcp' || format('http://localhost:{0}/mcp', env.MCP_PORT || '3000') }}
+
+      - name: Print logs on failure
+        if: failure()
+        run: |
+          echo "=== Paperless-ngx logs ==="
+          docker compose -f docker-compose.e2e.yml logs --tail=100
+          if [ "${{ matrix.mode }}" = "docker" ]; then
+            echo "=== MCP Docker logs ==="
+            docker logs paperless-mcp-e2e --tail=50 || true
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          kill "$MCP_PID" 2>/dev/null || true
+          docker rm -f paperless-mcp-e2e 2>/dev/null || true
+          docker compose -f docker-compose.e2e.yml down -v

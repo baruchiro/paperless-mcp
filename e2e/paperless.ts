@@ -84,11 +84,19 @@ export class PaperlessClient {
   async waitForDocument(taskId: string, timeoutMs = 60000): Promise<number> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      const res = await http.get<TaskResult[]>(
+      const res = await http.get<unknown>(
         `${this.baseUrl}/api/tasks/?task_id=${taskId}`,
         { headers: this.headers }
       );
-      const tasks = Array.isArray(res.data) ? res.data : [res.data as TaskResult];
+      const data = res.data;
+      let tasks: TaskResult[];
+      if (Array.isArray(data)) {
+        tasks = data as TaskResult[];
+      } else if (data && typeof data === "object" && Array.isArray((data as any).results)) {
+        tasks = (data as any).results as TaskResult[];
+      } else {
+        tasks = [];
+      }
       const task = tasks[0];
       if (task?.status === "SUCCESS" && task.related_document) {
         return Number(task.related_document);

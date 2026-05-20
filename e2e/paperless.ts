@@ -104,9 +104,31 @@ export class PaperlessClient {
       if (task?.status === "FAILURE") {
         throw new Error(`Document processing failed: ${task.result}`);
       }
+      console.log(`  task status: ${task?.status ?? "unknown"}, waiting...`);
       await new Promise((r) => setTimeout(r, 2000));
     }
     throw new Error(`Timed out waiting for document task ${taskId}`);
+  }
+
+  async waitUntilSearchable(
+    documentId: number,
+    query: string,
+    timeoutMs = 30000
+  ): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const res = await http.get<{ results?: { id: number }[] }>(
+        `${this.baseUrl}/api/documents/?query=${encodeURIComponent(query)}`,
+        { headers: this.headers }
+      );
+      const results = res.data?.results ?? [];
+      if (results.some((d) => d.id === documentId)) return;
+      console.log(`  document ${documentId} not yet in search index, waiting...`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    throw new Error(
+      `Document ${documentId} not found in search results for "${query}" after ${timeoutMs}ms`
+    );
   }
 }
 

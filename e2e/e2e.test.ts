@@ -2,26 +2,41 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, ChildProcess } from "node:child_process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import {
-  connectMcpClient,
-  parseToolText,
-  ToolResult,
-} from "./client";
-import { PaperlessClient, MINIMAL_PDF } from "./paperless";
+import { connectMcpClient, parseToolText, ToolResult } from "./client";
 
 const PAPERLESS_URL = process.env.PAPERLESS_URL ?? "http://localhost:8000";
 const PAPERLESS_TOKEN = process.env.PAPERLESS_TOKEN ?? "";
 const MCP_PORT = process.env.MCP_PORT ?? "3001";
 const MCP_URL = process.env.MCP_URL ?? `http://localhost:${MCP_PORT}/mcp`;
 
+const RUN_TAG = `e2e-tag-${Date.now()}`;
+const RUN_CORRESPONDENT = `E2E Corp ${Date.now()}`;
+const RUN_DOCUMENT_TYPE = `E2E Type ${Date.now()}`;
+const RUN_DOCUMENT_TITLE = `E2E Document ${Date.now()}`;
+
+const MINIMAL_PDF = Buffer.from(
+  "%PDF-1.4\n" +
+    "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n" +
+    "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n" +
+    "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]>>\nendobj\n" +
+    "xref\n0 4\n" +
+    "0000000000 65535 f \n" +
+    "0000000009 00000 n \n" +
+    "0000000056 00000 n \n" +
+    "0000000111 00000 n \n" +
+    "trailer\n<</Size 4 /Root 1 0 R>>\n" +
+    "startxref\n180\n%%EOF"
+);
+
 let mcpProcess: ChildProcess | undefined;
 let client: Client;
-let paperless: PaperlessClient;
 
-let seedTag: { id: number; name: string };
-let seedCorrespondent: { id: number; name: string };
-let seedDocumentType: { id: number; name: string };
-let seedDocumentId: number;
+const state: {
+  tagId?: number;
+  correspondentId?: number;
+  documentTypeId?: number;
+  documentId?: number;
+} = {};
 
 async function waitForMcp(url: string, maxAttempts = 30): Promise<void> {
   const base = url.replace(/\/mcp$/, "");
@@ -37,75 +52,47 @@ async function waitForMcp(url: string, maxAttempts = 30): Promise<void> {
   throw new Error("MCP server did not start in time");
 }
 
-function startMcpServer(): Promise<ChildProcess> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(
-      "node",
-      [
-        "build/index.js",
-        "--http",
-        "--port",
-        MCP_PORT,
-        "--baseUrl",
-        PAPERLESS_URL,
-        "--token",
-        PAPERLESS_TOKEN,
-      ],
-      { stdio: ["ignore", "pipe", "pipe"] }
-    );
-    proc.stderr?.on("data", (d) => process.stderr.write(d));
-    proc.on("error", reject);
-    proc.on("exit", (code) => {
-      if (code !== null && code !== 0) {
-        reject(new Error(`MCP process exited with code ${code}`));
-      }
-    });
-    resolve(proc);
-  });
+function startMcpServer(): ChildProcess {
+  const proc = spawn(
+    "node",
+    [
+      "build/index.js",
+      "--http",
+      "--port",
+      MCP_PORT,
+      "--baseUrl",
+      PAPERLESS_URL,
+      "--token",
+      PAPERLESS_TOKEN,
+    ],
+    { stdio: ["ignore", "pipe", "pipe"] }
+  );
+  proc.stderr?.on("data", (d) => process.stderr.write(d));
+  return proc;
+}
+
+function errorText(result: ToolResult): string {
+  return result.content.find((c) => c.type === "text")?.text ?? "(no text content)";
+}
+
+function assertOk(result: ToolResult, label: string): void {
+  assert.ok(
+    !result.isError,
+    `${label} returned isError=true: ${errorText(result)}`
+  );
 }
 
 before(async () => {
   try {
     assert.ok(PAPERLESS_TOKEN, "PAPERLESS_TOKEN env var is required");
 
-    paperless = new PaperlessClient(PAPERLESS_URL, PAPERLESS_TOKEN);
-
-    console.log("Seeding test data in Paperless...");
-    seedTag = await paperless.createTag("e2e-test-tag");
-    console.log(`  created tag id=${seedTag.id}`);
-    seedCorrespondent = await paperless.createCorrespondent("E2E Test Corp");
-    console.log(`  created correspondent id=${seedCorrespondent.id}`);
-    seedDocumentType = await paperless.createDocumentType("E2E Invoice");
-    console.log(`  created document type id=${seedDocumentType.id}`);
-
-    console.log("Uploading seed document...");
-    const taskId = await paperless.uploadDocument(
-      MINIMAL_PDF,
-      "e2e-fixture.pdf",
-      "E2E Fixture Document"
-    );
-    console.log(`  upload task id: ${taskId}`);
-    if (/^\d+$/.test(taskId)) {
-      seedDocumentId = Number(taskId);
-      console.log(`  document id (direct): ${seedDocumentId}`);
-    } else {
-      seedDocumentId = await paperless.waitForDocument(taskId, 90000);
-      console.log(`  document id (from task): ${seedDocumentId}`);
-    }
-
-    console.log("Waiting for document to be accessible...");
-    await paperless.waitForDocumentReady(seedDocumentId, 30000);
-    console.log("  document accessible; pausing 3s for search index...");
-    await new Promise((r) => setTimeout(r, 3000));
-
-    // Start MCP server if not already running externally
     if (!process.env.MCP_URL) {
-      mcpProcess = await startMcpServer();
+      mcpProcess = startMcpServer();
       await waitForMcp(MCP_URL);
     }
 
     client = await connectMcpClient(MCP_URL, PAPERLESS_TOKEN);
-    console.log("MCP client connected, running tests...");
+    console.log("MCP client connected; running scenario...");
   } catch (err) {
     console.error(
       "BEFORE HOOK FAILED:",
@@ -120,97 +107,142 @@ after(async () => {
   mcpProcess?.kill("SIGTERM");
 });
 
-describe("list_tags", () => {
-  it("returns results array containing seeded tag", async () => {
+describe("Paperless MCP E2E scenario", () => {
+  it("create_tag creates a tag and returns it with an id", async () => {
+    const result = (await client.callTool({
+      name: "create_tag",
+      arguments: { name: RUN_TAG },
+    })) as ToolResult;
+    assertOk(result, "create_tag");
+    const tag = parseToolText(result) as { id: number; name: string };
+    assert.ok(typeof tag.id === "number", `tag.id should be a number, got ${JSON.stringify(tag)}`);
+    assert.strictEqual(tag.name, RUN_TAG);
+    state.tagId = tag.id;
+  });
+
+  it("create_correspondent creates a correspondent and returns it with an id", async () => {
+    const result = (await client.callTool({
+      name: "create_correspondent",
+      arguments: { name: RUN_CORRESPONDENT },
+    })) as ToolResult;
+    assertOk(result, "create_correspondent");
+    const correspondent = parseToolText(result) as { id: number; name: string };
+    assert.ok(typeof correspondent.id === "number");
+    assert.strictEqual(correspondent.name, RUN_CORRESPONDENT);
+    state.correspondentId = correspondent.id;
+  });
+
+  it("create_document_type creates a document type and returns it with an id", async () => {
+    const result = (await client.callTool({
+      name: "create_document_type",
+      arguments: { name: RUN_DOCUMENT_TYPE },
+    })) as ToolResult;
+    assertOk(result, "create_document_type");
+    const docType = parseToolText(result) as { id: number; name: string };
+    assert.ok(typeof docType.id === "number");
+    assert.strictEqual(docType.name, RUN_DOCUMENT_TYPE);
+    state.documentTypeId = docType.id;
+  });
+
+  it("list_tags returns the tag created earlier in this run", async () => {
+    assert.ok(state.tagId, "tag must be created before list_tags");
     const result = (await client.callTool({
       name: "list_tags",
       arguments: {},
     })) as ToolResult;
-    const data = parseToolText(result) as { results: { id: number; name: string }[] };
+    assertOk(result, "list_tags");
+    const data = parseToolText(result) as {
+      results: { id: number; name: string }[];
+    };
     assert.ok(Array.isArray(data.results), "results should be an array");
-    const found = data.results.find((t) => t.id === seedTag.id);
-    assert.ok(found, `seeded tag id=${seedTag.id} not found in list_tags`);
-    assert.strictEqual(found.name, seedTag.name);
+    const found = data.results.find((t) => t.id === state.tagId);
+    assert.ok(found, `tag id=${state.tagId} not found in list_tags`);
+    assert.strictEqual(found.name, RUN_TAG);
   });
-});
 
-describe("create_tag", () => {
-  it("creates a tag and returns it with an id", async () => {
-    const name = `e2e-created-${Date.now()}`;
-    const result = (await client.callTool({
-      name: "create_tag",
-      arguments: { name },
-    })) as ToolResult;
-    const tag = parseToolText(result) as { id: number; name: string };
-    assert.ok(typeof tag.id === "number", "id should be a number");
-    assert.strictEqual(tag.name, name);
-  });
-});
-
-describe("list_correspondents", () => {
-  it("returns results array containing seeded correspondent", async () => {
+  it("list_correspondents returns the correspondent created earlier in this run", async () => {
+    assert.ok(state.correspondentId, "correspondent must be created first");
     const result = (await client.callTool({
       name: "list_correspondents",
       arguments: {},
     })) as ToolResult;
+    assertOk(result, "list_correspondents");
     const data = parseToolText(result) as {
       results: { id: number; name: string }[];
     };
-    assert.ok(Array.isArray(data.results));
-    const found = data.results.find((c) => c.id === seedCorrespondent.id);
-    assert.ok(found, `seeded correspondent not found`);
-    assert.strictEqual(found.name, seedCorrespondent.name);
+    const found = data.results.find((c) => c.id === state.correspondentId);
+    assert.ok(found, `correspondent id=${state.correspondentId} not found`);
+    assert.strictEqual(found.name, RUN_CORRESPONDENT);
   });
-});
 
-describe("create_correspondent", () => {
-  it("creates a correspondent and returns it with an id", async () => {
-    const name = `E2E Corp ${Date.now()}`;
-    const result = (await client.callTool({
-      name: "create_correspondent",
-      arguments: { name },
-    })) as ToolResult;
-    const correspondent = parseToolText(result) as { id: number; name: string };
-    assert.ok(typeof correspondent.id === "number");
-    assert.strictEqual(correspondent.name, name);
-  });
-});
-
-describe("list_document_types", () => {
-  it("returns results array containing seeded document type", async () => {
+  it("list_document_types returns the document type created earlier in this run", async () => {
+    assert.ok(state.documentTypeId, "document type must be created first");
     const result = (await client.callTool({
       name: "list_document_types",
       arguments: {},
     })) as ToolResult;
+    assertOk(result, "list_document_types");
     const data = parseToolText(result) as {
       results: { id: number; name: string }[];
     };
-    assert.ok(Array.isArray(data.results));
-    const found = data.results.find((dt) => dt.id === seedDocumentType.id);
-    assert.ok(found, `seeded document type not found`);
-    assert.strictEqual(found.name, seedDocumentType.name);
+    const found = data.results.find((dt) => dt.id === state.documentTypeId);
+    assert.ok(found, `document type id=${state.documentTypeId} not found`);
+    assert.strictEqual(found.name, RUN_DOCUMENT_TYPE);
   });
-});
 
-describe("create_document_type", () => {
-  it("creates a document type and returns it with an id", async () => {
-    const name = `E2E Type ${Date.now()}`;
+  it("post_document uploads a PDF and resolves to a document id", async () => {
+    const base64Pdf = MINIMAL_PDF.toString("base64");
     const result = (await client.callTool({
-      name: "create_document_type",
-      arguments: { name },
+      name: "post_document",
+      arguments: {
+        file: base64Pdf,
+        filename: "e2e-fixture.pdf",
+        title: RUN_DOCUMENT_TITLE,
+      },
     })) as ToolResult;
-    const docType = parseToolText(result) as { id: number; name: string };
-    assert.ok(typeof docType.id === "number");
-    assert.strictEqual(docType.name, name);
-  });
-});
+    assertOk(result, "post_document");
+    const data = parseToolText(result) as { id?: number; status?: string };
 
-describe("list_documents", () => {
-  it("returns pagination shape with count and results", async () => {
+    if (typeof data.id === "number") {
+      state.documentId = data.id;
+      return;
+    }
+    assert.ok(
+      typeof data.status === "string",
+      `post_document should return id or status, got ${JSON.stringify(data)}`
+    );
+
+    // Async ingestion: poll list_documents until our title appears.
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      const listResult = (await client.callTool({
+        name: "list_documents",
+        arguments: { ordering: "-id", page_size: 20 },
+      })) as ToolResult;
+      if (!listResult.isError) {
+        const list = parseToolText(listResult) as {
+          results: Array<{ id: number; title: string }>;
+        };
+        const match = list.results.find((d) => d.title === RUN_DOCUMENT_TITLE);
+        if (match) {
+          state.documentId = match.id;
+          return;
+        }
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    throw new Error(
+      `Document with title "${RUN_DOCUMENT_TITLE}" not visible via list_documents after 60s (post_document status=${data.status})`
+    );
+  });
+
+  it("list_documents returns pagination shape with count>=1", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
     const result = (await client.callTool({
       name: "list_documents",
       arguments: {},
     })) as ToolResult;
+    assertOk(result, "list_documents");
     const data = parseToolText(result) as {
       count: number;
       results: unknown[];
@@ -219,159 +251,153 @@ describe("list_documents", () => {
     };
     assert.ok(typeof data.count === "number", "count should be a number");
     assert.ok(Array.isArray(data.results), "results should be an array");
-    assert.ok(data.count >= 1, "at least one document expected");
+    assert.ok(data.count >= 1, `expected count>=1, got ${data.count}`);
   });
-});
 
-describe("get_document", () => {
-  it("returns the seeded document by id", async () => {
+  it("get_document returns the uploaded document by id", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
     const result = (await client.callTool({
       name: "get_document",
-      arguments: { id: seedDocumentId },
+      arguments: { id: state.documentId },
     })) as ToolResult;
+    assertOk(result, "get_document");
     const doc = parseToolText(result) as {
       id: number;
       title: string;
       mime_type: string;
     };
-    assert.strictEqual(doc.id, seedDocumentId);
-    assert.ok(typeof doc.title === "string");
+    assert.strictEqual(doc.id, state.documentId);
+    assert.strictEqual(doc.title, RUN_DOCUMENT_TITLE);
     assert.ok(typeof doc.mime_type === "string");
   });
-});
 
-describe("search_documents", () => {
-  it("finds the seeded document with a matching query", async () => {
-    // Retry a few times to allow the Whoosh search index to propagate
+  it("search_documents finds the uploaded document (with retry for Whoosh)", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
     let data: { count: number; results: { id: number }[] } | undefined;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    let lastError = "";
+    for (let attempt = 0; attempt < 10; attempt++) {
       const result = (await client.callTool({
         name: "search_documents",
-        arguments: { query: "E2E Fixture" },
+        arguments: { query: RUN_DOCUMENT_TITLE },
       })) as ToolResult;
-      data = parseToolText(result) as { count: number; results: { id: number }[] };
-      if (data.results.some((d) => d.id === seedDocumentId)) break;
+      if (result.isError) {
+        lastError = errorText(result);
+      } else {
+        data = parseToolText(result) as {
+          count: number;
+          results: { id: number }[];
+        };
+        if (data.results.some((d) => d.id === state.documentId)) break;
+      }
       await new Promise((r) => setTimeout(r, 3000));
     }
-    assert.ok(Array.isArray(data!.results));
+    assert.ok(data, `search_documents never returned a valid payload: ${lastError}`);
     assert.ok(
-      data!.results.some((d) => d.id === seedDocumentId),
-      `seeded document id=${seedDocumentId} not found in search results after retries`
+      data.results.some((d) => d.id === state.documentId),
+      `uploaded document id=${state.documentId} not found in search results after retries`
     );
   });
-});
 
-describe("download_document", () => {
-  it("returns a resource with a URI and non-empty base64 blob", async () => {
+  it("download_document returns a paperless:// resource with non-empty base64 blob", async () => {
+    // Regression for #87 (resource URI scheme).
+    assert.ok(state.documentId, "document must be uploaded first");
     const result = (await client.callTool({
       name: "download_document",
-      arguments: { id: seedDocumentId, original: true },
+      arguments: { id: state.documentId, original: true },
     })) as ToolResult;
-    const errText = result.content.find((c) => c.type === "text")?.text ?? "";
+    assertOk(result, "download_document");
     const resource = result.content.find((c) => c.type === "resource");
     assert.ok(
       resource,
-      `should return a resource content item (isError=${result.isError}: ${errText})`
+      `should return a resource content item: ${errorText(result)}`
     );
     const r = resource.resource as { uri: string; blob?: string; mimeType?: string };
-    assert.ok(r.uri?.startsWith("paperless://documents/"), "resource URI should use paperless:// scheme");
+    assert.ok(
+      r.uri?.startsWith("paperless://documents/"),
+      `resource URI should use paperless:// scheme, got ${r.uri}`
+    );
     assert.ok(r.blob && r.blob.length > 0, "resource blob should be non-empty");
   });
-});
 
-describe("get_document_thumbnail", () => {
-  it("returns a resource with image mime type", async () => {
+  it("get_document_thumbnail returns a paperless:// resource with image mime type", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
     const result = (await client.callTool({
       name: "get_document_thumbnail",
-      arguments: { id: seedDocumentId },
+      arguments: { id: state.documentId },
     })) as ToolResult;
-    const errText = result.content.find((c) => c.type === "text")?.text ?? "";
+    assertOk(result, "get_document_thumbnail");
     const resource = result.content.find((c) => c.type === "resource");
     assert.ok(
       resource,
-      `should return a resource content item (isError=${result.isError}: ${errText})`
+      `should return a resource content item: ${errorText(result)}`
     );
     const r = resource.resource as { mimeType?: string; uri?: string };
     assert.ok(
       r.uri?.startsWith("paperless://documents/"),
-      "thumbnail URI should use paperless:// scheme"
+      `thumbnail URI should use paperless:// scheme, got ${r.uri}`
     );
     assert.ok(
       r.mimeType?.startsWith("image/"),
-      "thumbnail MIME type should be image/*"
+      `thumbnail MIME type should be image/*, got ${r.mimeType}`
     );
   });
-});
 
-describe("bulk_edit_documents", () => {
-  it("adds and removes a tag via modify_tags", async () => {
-    // Assign the seeded tag
+  it("bulk_edit_documents add_tags assigns the tag and get_document reflects it", async () => {
+    // Regression for #100 / #89 (bulk-edit tag wiring).
+    assert.ok(state.documentId && state.tagId, "document and tag must exist");
     const addResult = (await client.callTool({
       name: "bulk_edit_documents",
       arguments: {
-        documents: [seedDocumentId],
+        documents: [state.documentId],
         method: "modify_tags",
-        add_tags: [seedTag.id],
+        add_tags: [state.tagId],
         remove_tags: [],
       },
     })) as ToolResult;
-    const addErrText = addResult.content.find((c) => c.type === "text")?.text ?? "";
-    assert.ok(!addResult.isError, `bulk_edit add_tags failed: ${addErrText}`);
+    assertOk(addResult, "bulk_edit_documents add_tags");
 
-    // Verify tag was added
     const docAfterAdd = (await client.callTool({
       name: "get_document",
-      arguments: { id: seedDocumentId },
+      arguments: { id: state.documentId },
     })) as ToolResult;
-    type TagItem = { id: number; name: string };
+    assertOk(docAfterAdd, "get_document after add_tags");
+    type TagItem = number | { id: number; name?: string };
     const docData = parseToolText(docAfterAdd) as { tags: TagItem[] };
-    const tagIds = docData.tags?.map((t) => t.id);
-    assert.ok(
-      tagIds?.includes(seedTag.id),
-      `tag ${seedTag.id} should be on document after modify_tags add`
+    const tagIds = (docData.tags ?? []).map((t) =>
+      typeof t === "number" ? t : t.id
     );
-
-    // Remove the tag
-    await client.callTool({
-      name: "bulk_edit_documents",
-      arguments: {
-        documents: [seedDocumentId],
-        method: "modify_tags",
-        add_tags: [],
-        remove_tags: [seedTag.id],
-      },
-    });
-
-    // Verify tag was removed
-    const docAfterRemove = (await client.callTool({
-      name: "get_document",
-      arguments: { id: seedDocumentId },
-    })) as ToolResult;
-    const removedData = parseToolText(docAfterRemove) as { tags: TagItem[] };
-    const removedTagIds = (removedData.tags ?? []).map((t) => t.id);
     assert.ok(
-      !removedTagIds.includes(seedTag.id),
-      `tag ${seedTag.id} should be removed after modify_tags remove`
+      tagIds.includes(state.tagId),
+      `tag ${state.tagId} should be on document after add_tags, got tags=${JSON.stringify(tagIds)}`
     );
   });
-});
 
-describe("post_document", () => {
-  it("uploads a document and returns an id or task status", async () => {
-    const base64Pdf = MINIMAL_PDF.toString("base64");
-    const result = (await client.callTool({
-      name: "post_document",
+  it("bulk_edit_documents remove_tags removes the tag and get_document reflects it", async () => {
+    assert.ok(state.documentId && state.tagId, "document and tag must exist");
+    const removeResult = (await client.callTool({
+      name: "bulk_edit_documents",
       arguments: {
-        file: base64Pdf,
-        filename: "e2e-upload.pdf",
-        title: "E2E Upload Test",
+        documents: [state.documentId],
+        method: "modify_tags",
+        add_tags: [],
+        remove_tags: [state.tagId],
       },
     })) as ToolResult;
-    assert.ok(!result.isError, "post_document should not error");
-    const data = parseToolText(result) as { id?: number; status?: string };
+    assertOk(removeResult, "bulk_edit_documents remove_tags");
+
+    const docAfterRemove = (await client.callTool({
+      name: "get_document",
+      arguments: { id: state.documentId },
+    })) as ToolResult;
+    assertOk(docAfterRemove, "get_document after remove_tags");
+    type TagItem = number | { id: number; name?: string };
+    const removedData = parseToolText(docAfterRemove) as { tags: TagItem[] };
+    const removedTagIds = (removedData.tags ?? []).map((t) =>
+      typeof t === "number" ? t : t.id
+    );
     assert.ok(
-      typeof data.id === "number" || typeof data.status === "string",
-      "response should have id or status"
+      !removedTagIds.includes(state.tagId),
+      `tag ${state.tagId} should be removed, got tags=${JSON.stringify(removedTagIds)}`
     );
   });
 });

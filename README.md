@@ -467,7 +467,7 @@ npm test
 
 ### E2E tests
 
-The E2E suite boots a real Paperless-ngx instance, runs the compiled MCP server, and drives it with deterministic JSON-RPC `tools/call` requests — no LLM in the loop.
+The E2E suite boots an empty Paperless-ngx instance, runs the compiled MCP server, and drives a deterministic serial scenario through `tools/call` requests — creating a tag, correspondent, and document type, uploading a PDF, then exercising list / get / search / download / thumbnail / bulk-edit on the same document. No LLM and no Paperless REST client outside MCP.
 
 **Prerequisites:** Docker, Docker Compose, and `jq`.
 

@@ -91,3 +91,73 @@ test("buildBulkEditParameters preserves supported custom field value types", () 
     "5": [123, 456],
   });
 });
+
+// --- includeTagDefaults (new in this PR) ---
+
+test("buildBulkEditParameters includes empty tag arrays when includeTagDefaults=true", () => {
+  const parameters = buildBulkEditParameters({}, undefined, false, true);
+
+  assert.deepEqual((parameters as Record<string, unknown>).add_tags, []);
+  assert.deepEqual((parameters as Record<string, unknown>).remove_tags, []);
+});
+
+test("buildBulkEditParameters does not set tag arrays when includeTagDefaults=false", () => {
+  const parameters = buildBulkEditParameters({}, undefined, false, false);
+
+  assert.ok(!("add_tags" in parameters), "add_tags should not be present when includeTagDefaults=false");
+  assert.ok(!("remove_tags" in parameters), "remove_tags should not be present when includeTagDefaults=false");
+});
+
+test("buildBulkEditParameters does not set tag arrays by default (includeTagDefaults omitted)", () => {
+  const parameters = buildBulkEditParameters({});
+
+  assert.ok(!("add_tags" in parameters));
+  assert.ok(!("remove_tags" in parameters));
+});
+
+test("buildBulkEditParameters does not overwrite existing add_tags when includeTagDefaults=true", () => {
+  const parameters = buildBulkEditParameters(
+    { add_tags: [5, 6] },
+    undefined,
+    false,
+    true
+  );
+
+  assert.deepEqual((parameters as Record<string, unknown>).add_tags, [5, 6]);
+  assert.deepEqual((parameters as Record<string, unknown>).remove_tags, []);
+});
+
+test("buildBulkEditParameters does not overwrite existing remove_tags when includeTagDefaults=true", () => {
+  const parameters = buildBulkEditParameters(
+    { remove_tags: [7] },
+    undefined,
+    false,
+    true
+  );
+
+  assert.deepEqual((parameters as Record<string, unknown>).add_tags, []);
+  assert.deepEqual((parameters as Record<string, unknown>).remove_tags, [7]);
+});
+
+test("buildBulkEditParameters applies both includeCustomFieldDefaults and includeTagDefaults", () => {
+  const parameters = buildBulkEditParameters({}, undefined, true, true);
+
+  assert.deepEqual(parameters.add_custom_fields, {});
+  assert.deepEqual(parameters.remove_custom_fields, []);
+  assert.deepEqual((parameters as Record<string, unknown>).add_tags, []);
+  assert.deepEqual((parameters as Record<string, unknown>).remove_tags, []);
+});
+
+test("buildBulkEditParameters tag defaults do not overwrite custom field values when both flags are true", () => {
+  const parameters = buildBulkEditParameters(
+    { add_tags: [1], remove_tags: [2] },
+    [{ field: 3, value: "yes" }],
+    true,
+    true
+  );
+
+  assert.deepEqual((parameters as Record<string, unknown>).add_tags, [1]);
+  assert.deepEqual((parameters as Record<string, unknown>).remove_tags, [2]);
+  assert.deepEqual(parameters.add_custom_fields, { "3": "yes" });
+  assert.deepEqual(parameters.remove_custom_fields, []);
+});

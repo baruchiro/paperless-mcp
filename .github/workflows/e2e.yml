@@ -5,6 +5,9 @@ on:
     branches:
       - main
   pull_request:
+  schedule:
+    # Weekly run to catch drift against upstream paperless-ngx :latest.
+    - cron: "0 8 * * 1"
 
 jobs:
   e2e:
@@ -20,7 +23,9 @@ jobs:
           --health-retries 10
 
       paperless:
-        image: ghcr.io/paperless-ngx/paperless-ngx:2.14.7
+        # Track upstream stable. Paperless-ngx publishes the latest stable
+        # release under :latest; the weekly schedule catches drift.
+        image: ghcr.io/paperless-ngx/paperless-ngx:latest
         env:
           PAPERLESS_REDIS: redis://redis:6379
           PAPERLESS_ADMIN_USER: admin

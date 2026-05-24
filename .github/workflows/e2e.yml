@@ -14,6 +14,35 @@ jobs:
       matrix:
         mode: [cli, docker]
 
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      paperless:
+        image: ghcr.io/paperless-ngx/paperless-ngx:2.14.7
+        env:
+          PAPERLESS_REDIS: redis://redis:6379
+          PAPERLESS_ADMIN_USER: admin
+          PAPERLESS_ADMIN_PASSWORD: admin123
+          PAPERLESS_ADMIN_MAIL: admin@test.local
+          PAPERLESS_SECRET_KEY: e2e-test-secret-not-for-production
+          PAPERLESS_OCR_LANGUAGE: eng
+          PAPERLESS_OCR_MODE: skip
+          PAPERLESS_TIME_ZONE: UTC
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd "curl -fsS http://localhost:8000/api/ || exit 1"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 60s
+
     steps:
       - uses: actions/checkout@v4
 
@@ -44,23 +73,6 @@ jobs:
           tags: paperless-mcp:e2e
           cache-from: type=gha,scope=paperless-mcp-docker
           cache-to: type=gha,scope=paperless-mcp-docker,mode=max
-
-      - name: Start Paperless-ngx
-        run: docker compose -f docker-compose.e2e.yml up -d
-
-      - name: Wait for Paperless-ngx to be ready
-        run: |
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:8000/api/ > /dev/null 2>&1; then
-              echo "Paperless ready after $i attempts"
-              exit 0
-            fi
-            echo "Waiting... $i/60"
-            sleep 5
-          done
-          echo "Paperless-ngx failed to start"
-          docker compose -f docker-compose.e2e.yml logs
-          exit 1
 
       - name: Get Paperless API token
         run: |
@@ -126,8 +138,6 @@ jobs:
         run: |
           echo "=== E2E test output ==="
           cat /tmp/e2e-output.txt || true
-          echo "=== Paperless-ngx logs ==="
-          docker compose -f docker-compose.e2e.yml logs --tail=100
           if [ "${{ matrix.mode }}" = "docker" ]; then
             echo "=== MCP Docker logs ==="
             docker logs paperless-mcp-e2e --tail=50 || true
@@ -138,4 +148,3 @@ jobs:
         run: |
           kill "$MCP_PID" 2>/dev/null || true
           docker rm -f paperless-mcp-e2e 2>/dev/null || true
-          docker compose -f docker-compose.e2e.yml down -v

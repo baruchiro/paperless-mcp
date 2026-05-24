@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "node --require ts-node/register --test src/**/*.test.ts",
+    "test:e2e": "node --require ts-node/register --test e2e/e2e.test.ts",
     "start": "ts-node src/index.ts",
     "build": "tsc",
     "dxt-pack": "dxt pack",

@@ -14,19 +14,26 @@ const RUN_CORRESPONDENT = `E2E Corp ${Date.now()}`;
 const RUN_DOCUMENT_TYPE = `E2E Type ${Date.now()}`;
 const RUN_DOCUMENT_TITLE = `E2E Document ${Date.now()}`;
 
-const MINIMAL_PDF = Buffer.from(
-  "%PDF-1.4\n" +
-    "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n" +
-    "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n" +
-    "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]>>\nendobj\n" +
-    "xref\n0 4\n" +
-    "0000000000 65535 f \n" +
-    "0000000009 00000 n \n" +
-    "0000000056 00000 n \n" +
-    "0000000111 00000 n \n" +
-    "trailer\n<</Size 4 /Root 1 0 R>>\n" +
-    "startxref\n180\n%%EOF"
-);
+// Paperless rejects duplicate uploads by checksum. When the same suite runs
+// twice against one Paperless instance (e.g. CLI then Docker in one CI job),
+// a constant PDF body would silently fail the second time as a duplicate.
+// Append the per-run title as a trailing PDF comment so the checksum differs.
+const MINIMAL_PDF = Buffer.concat([
+  Buffer.from(
+    "%PDF-1.4\n" +
+      "1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n" +
+      "2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n" +
+      "3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]>>\nendobj\n" +
+      "xref\n0 4\n" +
+      "0000000000 65535 f \n" +
+      "0000000009 00000 n \n" +
+      "0000000056 00000 n \n" +
+      "0000000111 00000 n \n" +
+      "trailer\n<</Size 4 /Root 1 0 R>>\n" +
+      "startxref\n180\n%%EOF\n"
+  ),
+  Buffer.from(`%${RUN_DOCUMENT_TITLE}\n`),
+]);
 
 let mcpProcess: ChildProcess | undefined;
 let client: Client;

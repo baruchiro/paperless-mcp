@@ -147,6 +147,23 @@ export interface DocumentType {
 export interface GetDocumentTypesResponse
   extends PaginationResponse<DocumentType> {}
 
+export interface StoragePath {
+  id: number;
+  slug: string;
+  name: string;
+  path: string;
+  match: string;
+  matching_algorithm: MatchingAlgorithm;
+  is_insensitive: boolean;
+  document_count: number;
+  owner: number | null;
+  permissions: Record<string, unknown>;
+  user_can_change: boolean;
+}
+
+export interface GetStoragePathsResponse
+  extends PaginationResponse<StoragePath> {}
+
 export interface BulkEditDocumentsResult {
   result: string;
 }

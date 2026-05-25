@@ -1,5 +1,42 @@
 # @baruchiro/paperless-mcp
 
+## 0.5.1
+
+### Patch Changes
+
+- ad17c18: Fix MCP resource URI validation for `download_document` and `get_document_thumbnail`.
+
+  The two tools previously returned MCP resources whose `uri` was a raw
+  filename (e.g. `"2026-02-15 Vendor Co._Mobile.pdf"`) or an unscoped
+  string. Python MCP clients (the `mcp` package, pydantic-validated)
+  rejected these with `ValidationError: Input should be a valid URL,
+relative URL without a base`, making downloads and thumbnails
+  unusable from any Python MCP client.
+
+  Tools now return URIs under a custom `paperless://` scheme that mirrors
+  the Paperless REST API paths, so the same identifiers can later back
+  proper MCP resources (`resources/list` / `resources/read`):
+
+  - `download_document` → `paperless://documents/{id}/download?filename=<encoded>`
+  - `get_document_thumbnail` → `paperless://documents/{id}/thumb`
+
+  The original filename is preserved (URL-encoded) as a `filename` query
+  parameter on the download URI, so clients that need the human-readable
+  name can still recover it via standard URL parsing.
+
+## 0.5.0
+
+### Minor Changes
+
+- fef4c62: In HTTP mode, clients can now supply their own Paperless-NGX API token per-request via `Authorization: Bearer <token>`. The client-supplied token takes precedence over the server-configured `PAPERLESS_API_KEY`. If neither is available, the server responds with `401 Unauthorized`. This applies to both `/mcp` and `/sse` endpoints. stdio mode is unchanged.
+
+### Patch Changes
+
+- de661ae: Add `PAPERLESS_API_VERSION` environment variable to configure the Paperless-ngx REST API version (default: `5`). Set to `10` for Paperless-ngx v3+. On HTTP 406, a clear error message is shown directing users to set this variable.
+- 5927777: Fix bulk document custom field edits to send Paperless-NGX compatible `add_custom_fields` parameters and preserve intentionally empty custom field values.
+- 1c1ec60: Fix `bulk_edit_documents` with `method: "delete"` failing with HTTP 400 — MCP-only parameters (`confirm`, `delete_originals`) are no longer forwarded to the Paperless bulk-edit endpoint, which doesn't accept extra kwargs for the `delete` action.
+- 7b483a4: Switch update endpoints for tags, correspondents, document types, and custom fields from PUT to PATCH to support partial updates.
+
 ## 0.4.5
 
 ### Patch Changes

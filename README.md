@@ -455,6 +455,52 @@ The server will show clear error messages if:
 - The requested operation fails
 - The provided parameters are invalid
 
+## Testing
+
+### Unit tests
+
+Run the unit test suite (no external dependencies required):
+
+```bash
+npm test
+```
+
+### E2E tests
+
+The E2E suite boots an empty Paperless-ngx instance, runs the compiled MCP server, and drives a deterministic serial scenario through `tools/call` requests — creating a tag, correspondent, and document type, uploading a PDF, then exercising list / get / search / download / thumbnail / bulk-edit on the same document. No LLM and no Paperless REST client outside MCP.
+
+**Prerequisites:** Docker, Docker Compose, and `jq`.
+
+```bash
+# 1. Build the MCP server
+npm run build
+
+# 2. Start Paperless-ngx
+docker compose -f docker-compose.e2e.yml up -d
+
+# 3. Wait for Paperless to be ready, then get a token
+TOKEN=$(curl -s -X POST http://localhost:8000/api/token/ \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
+
+# 4. Start the MCP server
+node build/index.js --http --port 3001 \
+  --baseUrl http://localhost:8000 --token "$TOKEN" &
+MCP_PID=$!
+
+# 5. Run the E2E tests
+MCP_URL=http://localhost:3001/mcp \
+PAPERLESS_URL=http://localhost:8000 \
+PAPERLESS_TOKEN="$TOKEN" \
+npm run test:e2e
+
+# 6. Cleanup
+kill "$MCP_PID"
+docker compose -f docker-compose.e2e.yml down -v
+```
+
+E2E tests also run automatically in CI on every pull request and push to `main`, covering both the `build/index.js` CLI and the published Docker image.
+
 ## Development
 
 Want to contribute or modify the server? Here's what you need to know:

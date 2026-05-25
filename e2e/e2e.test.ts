@@ -167,6 +167,35 @@ describe("Paperless MCP E2E scenario", () => {
     assert.strictEqual(found.name, RUN_TAG);
   });
 
+  it("get_tag returns the tag by ID with full detail fields", async () => {
+    assert.ok(state.tagId, "tag must be created before get_tag");
+    const result = (await client.callTool({
+      name: "get_tag",
+      arguments: { id: state.tagId },
+    })) as ToolResult;
+    assertOk(result, "get_tag");
+    const tag = parseToolText(result) as {
+      id: number;
+      name: string;
+      slug: string;
+      matching_algorithm: { id: number; name: string };
+    };
+    assert.strictEqual(tag.id, state.tagId);
+    assert.strictEqual(tag.name, RUN_TAG);
+    assert.ok(
+      typeof tag.slug === "string" && tag.slug.length > 0,
+      `slug should be a non-empty string, got ${JSON.stringify(tag.slug)}`
+    );
+    assert.ok(
+      tag.matching_algorithm &&
+        typeof tag.matching_algorithm === "object" &&
+        typeof tag.matching_algorithm.name === "string",
+      `matching_algorithm should be expanded to {id,name}, got ${JSON.stringify(
+        tag.matching_algorithm
+      )}`
+    );
+  });
+
   it("list_correspondents returns the correspondent created earlier in this run", async () => {
     assert.ok(state.correspondentId, "correspondent must be created first");
     const result = (await client.callTool({
@@ -407,4 +436,5 @@ describe("Paperless MCP E2E scenario", () => {
       `tag ${state.tagId} should be removed, got tags=${JSON.stringify(removedTagIds)}`
     );
   });
+
 });

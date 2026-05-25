@@ -46,6 +46,20 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
   );
 
   server.tool(
+    "get_tag",
+    "Get a specific tag by ID with full details including matching rules.",
+    { id: z.number() },
+    withErrorHandling(async (args, extra) => {
+      if (!api) throw new Error("Please configure API connection first");
+      const tag = await api.getTag(args.id);
+      const enhancedTag = enhanceMatchingAlgorithm(tag);
+      return {
+        content: [{ type: "text", text: JSON.stringify(enhancedTag) }],
+      };
+    })
+  );
+
+  server.tool(
     "create_tag",
     "Create a new tag with optional color, matching pattern, and matching algorithm for automatic document tagging.",
     {

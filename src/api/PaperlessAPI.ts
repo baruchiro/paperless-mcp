@@ -221,6 +221,10 @@ export class PaperlessAPI {
     return this.request<GetTagsResponse>("/tags/");
   }
 
+  async getTag(id: number): Promise<Tag> {
+    return this.request<Tag>(`/tags/${id}/`);
+  }
+
   async createTag(data: Partial<Tag>): Promise<Tag> {
     return this.request<Tag>("/tags/", {
       method: "POST",

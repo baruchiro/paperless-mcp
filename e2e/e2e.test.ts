@@ -430,8 +430,7 @@ describe("Paperless MCP E2E scenario", () => {
     );
   });
 
-  it("download_document returns a paperless:// resource with non-empty base64 blob", async () => {
-    // Regression for #87 (resource URI scheme).
+  it("download_document returns a resource reference only (no inline bytes)", async () => {
     assert.ok(state.documentId, "document must be uploaded first");
     const result = (await client.callTool({
       name: "download_document",
@@ -443,15 +442,43 @@ describe("Paperless MCP E2E scenario", () => {
       resource,
       `should return a resource content item: ${errorText(result)}`
     );
-    const r = resource.resource as { uri: string; blob?: string; mimeType?: string };
+    const r = resource.resource as {
+      uri: string;
+      mimeType?: string;
+      blob?: string;
+      text?: string;
+    };
     assert.ok(
       r.uri?.startsWith("paperless://documents/"),
       `resource URI should use paperless:// scheme, got ${r.uri}`
     );
-    assert.ok(r.blob && r.blob.length > 0, "resource blob should be non-empty");
+    assert.equal(
+      r.blob,
+      undefined,
+      "tool result must not embed the file bytes as a base64 blob"
+    );
+    assert.ok(
+      r.text === undefined || r.text === "",
+      `tool result must not embed file content as text, got ${JSON.stringify(r.text)}`
+    );
   });
 
-  it("get_document_thumbnail returns a paperless:// resource with image mime type", async () => {
+  it("resources/read on a download URI returns the actual file bytes", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
+    const uri = `paperless://documents/${state.documentId}/download?original=true`;
+    const read = (await client.readResource({ uri })) as {
+      contents: Array<{ blob?: string; text?: string; mimeType?: string; uri: string }>;
+    };
+    const content = read.contents[0];
+    assert.ok(content, "resources/read should return at least one content item");
+    assert.equal(content.uri, uri);
+    assert.ok(
+      content.blob && content.blob.length > 0,
+      "resources/read should return a non-empty base64 blob for the downloaded file"
+    );
+  });
+
+  it("get_document_thumbnail returns a resource reference only (no inline bytes)", async () => {
     assert.ok(state.documentId, "document must be uploaded first");
     const result = (await client.callTool({
       name: "get_document_thumbnail",
@@ -463,7 +490,12 @@ describe("Paperless MCP E2E scenario", () => {
       resource,
       `should return a resource content item: ${errorText(result)}`
     );
-    const r = resource.resource as { mimeType?: string; uri?: string };
+    const r = resource.resource as {
+      mimeType?: string;
+      uri?: string;
+      blob?: string;
+      text?: string;
+    };
     assert.ok(
       r.uri?.startsWith("paperless://documents/"),
       `thumbnail URI should use paperless:// scheme, got ${r.uri}`
@@ -471,6 +503,52 @@ describe("Paperless MCP E2E scenario", () => {
     assert.ok(
       r.mimeType?.startsWith("image/"),
       `thumbnail MIME type should be image/*, got ${r.mimeType}`
+    );
+    assert.equal(
+      r.blob,
+      undefined,
+      "tool result must not embed the thumbnail bytes as a base64 blob"
+    );
+    assert.ok(
+      r.text === undefined || r.text === "",
+      `tool result must not embed thumbnail content as text, got ${JSON.stringify(r.text)}`
+    );
+  });
+
+  it("resources/read on a thumb URI returns the actual image bytes", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
+    const uri = `paperless://documents/${state.documentId}/thumb`;
+    const read = (await client.readResource({ uri })) as {
+      contents: Array<{ blob?: string; text?: string; mimeType?: string; uri: string }>;
+    };
+    const content = read.contents[0];
+    assert.ok(content, "resources/read should return at least one content item");
+    assert.equal(content.uri, uri);
+    assert.ok(
+      content.mimeType?.startsWith("image/"),
+      `thumbnail content mimeType should be image/*, got ${content.mimeType}`
+    );
+    assert.ok(
+      content.blob && content.blob.length > 0,
+      "resources/read should return a non-empty base64 blob for the thumbnail"
+    );
+  });
+
+  it("resources/list includes the uploaded document's download and thumb URIs", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
+    const list = (await client.listResources()) as {
+      resources: Array<{ uri: string; name?: string; mimeType?: string }>;
+    };
+    const uris = list.resources.map((r) => r.uri);
+    const expectedDownload = `paperless://documents/${state.documentId}/download`;
+    const expectedThumb = `paperless://documents/${state.documentId}/thumb`;
+    assert.ok(
+      uris.includes(expectedDownload),
+      `resources/list should include ${expectedDownload}, got ${JSON.stringify(uris)}`
+    );
+    assert.ok(
+      uris.includes(expectedThumb),
+      `resources/list should include ${expectedThumb}, got ${JSON.stringify(uris)}`
     );
   });
 

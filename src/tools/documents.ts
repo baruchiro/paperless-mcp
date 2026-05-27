@@ -326,29 +326,27 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "download_document",
-    "Download a document file by ID. Returns the document as a base64-encoded resource.",
+    "Download a document file by ID. Returns a paperless:// resource URI; read the resource to fetch the file content.",
     {
-      id: z.number(),
+      id: z.number().int().positive(),
       original: z.boolean().optional(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.downloadDocument(args.id, args.original);
-      const filename =
-        (typeof response.headers.get === "function"
-          ? response.headers.get("content-disposition")
-          : response.headers["content-disposition"]
-        )
-          ?.split("filename=")[1]
-          ?.replace(/"/g, "") || `document-${args.id}`;
+      const uri = buildDocumentResourceUri(args.id, {
+        original: args.original,
+      });
       return {
         content: [
           {
             type: "resource",
             resource: {
-              uri: buildDocumentResourceUri(args.id, filename),
-              blob: Buffer.from(response.data).toString("base64"),
-              mimeType: "application/pdf",
+              uri,
+              // MCP SDK 1.11 embedded resources require text or blob. Keep the
+              // existing resource-shaped tool result while making resources/read
+              // the canonical place for the large binary payload.
+              text: "",
+              mimeType: "application/octet-stream",
             },
           },
         ],
@@ -358,20 +356,21 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "get_document_thumbnail",
-    "Get a document thumbnail (image preview) by ID. Returns the thumbnail as a base64-encoded WebP image resource.",
+    "Get a document thumbnail (image preview) by ID. Returns a paperless:// resource URI; read the resource to fetch the image content.",
     {
-      id: z.number(),
+      id: z.number().int().positive(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.getThumbnail(args.id);
       return {
         content: [
           {
             type: "resource",
             resource: {
               uri: buildThumbnailResourceUri(args.id),
-              blob: Buffer.from(response.data).toString("base64"),
+              // See download_document above: the binary thumbnail is fetched
+              // lazily through resources/read instead of embedded here.
+              text: "",
               mimeType: "image/webp",
             },
           },

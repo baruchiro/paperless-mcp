@@ -10,38 +10,39 @@ test("buildDocumentResourceUri mirrors the REST download path", () => {
   assert.match(uri, /^paperless:\/\/documents\/1\/download(\?|$)/);
 });
 
-test("buildDocumentResourceUri puts the filename in a query parameter", () => {
+test("buildDocumentResourceUri is canonical without filenames", () => {
   const uri = buildDocumentResourceUri(1, "invoice 2026.pdf");
-  assert.equal(
-    uri,
-    "paperless://documents/1/download?filename=invoice%202026.pdf"
-  );
+  assert.equal(uri, "paperless://documents/1/download");
 });
 
-test("buildDocumentResourceUri encodes RFC-3986 reserved chars in the filename", () => {
+test("buildDocumentResourceUri ignores reserved chars in legacy filename input", () => {
   const uri = buildDocumentResourceUri(42, "weird ?#&=+name.pdf");
   const url = new URL(uri);
-  // The path stays canonical — only the literal `?` that separates
-  // path from query is allowed; nothing from the filename should
-  // bleed into the path or break query parsing.
   assert.equal(url.pathname, "/42/download");
-  assert.equal(url.searchParams.get("filename"), "weird ?#&=+name.pdf");
+  assert.equal(url.search, "");
 });
 
-test("buildDocumentResourceUri encodes path separators inside filename", () => {
+test("buildDocumentResourceUri ignores path separators in legacy filename input", () => {
   // A filename containing a slash must not become an extra path segment.
   const uri = buildDocumentResourceUri(7, "sub/dir/file.pdf");
   const url = new URL(uri);
   assert.equal(url.pathname, "/7/download");
-  assert.equal(url.searchParams.get("filename"), "sub/dir/file.pdf");
+  assert.equal(url.search, "");
 });
 
-test("buildDocumentResourceUri preserves unicode filenames", () => {
+test("buildDocumentResourceUri keeps unicode filenames out of the URI", () => {
   const original = "Rechnüng — März.pdf";
   const uri = buildDocumentResourceUri(1, original);
-  // Roundtrip via URL parsing should recover the original name.
   const url = new URL(uri);
-  assert.equal(url.searchParams.get("filename"), original);
+  assert.equal(url.pathname, "/1/download");
+  assert.equal(url.search, "");
+});
+
+test("buildDocumentResourceUri preserves original download intent", () => {
+  assert.equal(
+    buildDocumentResourceUri(1, { original: true }),
+    "paperless://documents/1/download?original=true"
+  );
 });
 
 test("buildDocumentResourceUri produces a valid URL", () => {

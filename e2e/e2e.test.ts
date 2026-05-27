@@ -306,9 +306,6 @@ describe("Paperless MCP E2E scenario", () => {
   });
 
   it("download_document returns a resource reference only (no inline bytes)", async () => {
-    // Regression for #87 (resource URI scheme) and #90/#102: the tool
-    // result must not carry the file bytes — clients fetch them lazily
-    // via resources/read.
     assert.ok(state.documentId, "document must be uploaded first");
     const result = (await client.callTool({
       name: "download_document",
@@ -342,8 +339,6 @@ describe("Paperless MCP E2E scenario", () => {
   });
 
   it("resources/read on a download URI returns the actual file bytes", async () => {
-    // Companion to the download_document test: the lazy-fetch path
-    // is where the bytes live now.
     assert.ok(state.documentId, "document must be uploaded first");
     const uri = `paperless://documents/${state.documentId}/download?original=true`;
     const read = (await client.readResource({ uri })) as {

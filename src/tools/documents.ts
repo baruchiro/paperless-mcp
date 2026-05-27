@@ -49,7 +49,8 @@ export type BulkCustomFieldParameters = {
 export function buildBulkEditParameters<T extends Record<string, unknown>>(
   parameters: T,
   addCustomFields?: BulkCustomFieldUpdate[],
-  includeCustomFieldDefaults = false
+  includeCustomFieldDefaults = false,
+  includeTagDefaults = false
 ): T & BulkCustomFieldParameters {
   const apiParameters: T & BulkCustomFieldParameters = {
     ...parameters,
@@ -67,6 +68,11 @@ export function buildBulkEditParameters<T extends Record<string, unknown>>(
   if (includeCustomFieldDefaults) {
     apiParameters.add_custom_fields ??= {};
     apiParameters.remove_custom_fields ??= [];
+  }
+
+  if (includeTagDefaults) {
+    (apiParameters as Record<string, unknown>).add_tags ??= [];
+    (apiParameters as Record<string, unknown>).remove_tags ??= [];
   }
 
   return apiParameters;
@@ -168,7 +174,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           : buildBulkEditParameters(
               parameters,
               add_custom_fields,
-              method === "modify_custom_fields"
+              method === "modify_custom_fields",
+              method === "modify_tags"
             )
       );
       return {

@@ -8,6 +8,7 @@ on:
   schedule:
     # Weekly run to catch drift against upstream paperless-ngx :latest.
     - cron: "0 8 * * 1"
+  workflow_dispatch:
 
 jobs:
   e2e:

@@ -11,6 +11,9 @@ import {
   GetCorrespondentsResponse,
   GetCustomFieldsResponse,
   GetDocumentTypesResponse,
+  GetMailAccountsResponse,
+  GetMailRulesResponse,
+  MailRule,
   GetTagsResponse,
   Tag,
 } from "./types";
@@ -304,6 +307,55 @@ export class PaperlessAPI {
 
   async deleteDocumentType(id: number): Promise<void> {
     return this.request<void>(`/document_types/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
+  // Mail account operations
+  async getMailAccounts(queryString?: string): Promise<GetMailAccountsResponse> {
+    const url = queryString
+      ? `/mail_accounts/?${queryString}`
+      : "/mail_accounts/";
+    return this.request<GetMailAccountsResponse>(url);
+  }
+
+  async getMailAccount(id: number) {
+    return this.request(`/mail_accounts/${id}/`);
+  }
+
+  async processMailAccount(id: number) {
+    return this.request(`/mail_accounts/${id}/process/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
+  // Mail rule operations
+  async getMailRules(queryString?: string): Promise<GetMailRulesResponse> {
+    const url = queryString ? `/mail_rules/?${queryString}` : "/mail_rules/";
+    return this.request<GetMailRulesResponse>(url);
+  }
+
+  async getMailRule(id: number): Promise<MailRule> {
+    return this.request<MailRule>(`/mail_rules/${id}/`);
+  }
+
+  async createMailRule(data: Partial<MailRule>): Promise<MailRule> {
+    return this.request<MailRule>("/mail_rules/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateMailRule(id: number, data: Partial<MailRule>): Promise<MailRule> {
+    return this.request<MailRule>(`/mail_rules/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteMailRule(id: number): Promise<void> {
+    return this.request<void>(`/mail_rules/${id}/`, {
       method: "DELETE",
     });
   }

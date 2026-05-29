@@ -154,6 +154,7 @@ export interface MailAccount {
   imap_port: number | null;
   imap_security: number;
   username: string;
+  password?: string;
   character_set: string;
   is_token: boolean;
   owner: number | null;

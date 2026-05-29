@@ -13,6 +13,7 @@ import {
   GetDocumentTypesResponse,
   GetMailAccountsResponse,
   GetMailRulesResponse,
+  MailAccount,
   MailRule,
   GetTagsResponse,
   Tag,
@@ -319,12 +320,12 @@ export class PaperlessAPI {
     return this.request<GetMailAccountsResponse>(url);
   }
 
-  async getMailAccount(id: number) {
-    return this.request(`/mail_accounts/${id}/`);
+  async getMailAccount(id: number): Promise<MailAccount> {
+    return this.request<MailAccount>(`/mail_accounts/${id}/`);
   }
 
-  async processMailAccount(id: number) {
-    return this.request(`/mail_accounts/${id}/process/`, {
+  async processMailAccount(id: number): Promise<void> {
+    return this.request<void>(`/mail_accounts/${id}/process/`, {
       method: "POST",
       body: JSON.stringify({}),
     });

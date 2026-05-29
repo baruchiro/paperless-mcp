@@ -137,6 +137,27 @@ test("get_mail_account redacts returned password", async () => {
   });
 });
 
+test("process_mail_account reports success after processing", async () => {
+  const calls: unknown[] = [];
+  const api = {
+    processMailAccount: async (id: number) => {
+      calls.push(["process", id]);
+    },
+  } as unknown as PaperlessAPI;
+
+  await withMailClient(api, async (client) => {
+    const result = (await client.callTool({
+      name: "process_mail_account",
+      arguments: { id: 5 },
+    })) as CallToolResult;
+    const response = parseToolText(result);
+
+    assert.deepEqual(response, { status: "processed" });
+  });
+
+  assert.deepEqual(calls, [["process", 5]]);
+});
+
 test("mail rule write tools pass through payloads", async () => {
   const calls: unknown[] = [];
   const api = {

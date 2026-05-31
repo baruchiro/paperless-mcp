@@ -72,16 +72,16 @@ function buildServer(requestToken: string) {
 async function main() {
   if (useHttp) {
     if (noAuth) {
-      console.warn(
+      console.log(
         "[paperless-mcp] --no-auth is enabled: requests without an 'Authorization: Bearer' header " +
           "will use the server's Paperless token. Only use this on a trusted/local network."
       );
     } else if (resolvedToken) {
-      console.warn(
-        "[paperless-mcp] BREAKING CHANGE (v2.0.0): a server token is configured, but unauthenticated " +
-          "requests will be REJECTED. Clients must send 'Authorization: Bearer <paperless-token>'. " +
-          "To restore the previous behaviour where unauthenticated requests use the server token, " +
-          "restart with the --no-auth flag (trusted/local networks only)."
+      console.log(
+        "[paperless-mcp] A server token is configured, but unauthenticated requests are rejected. " +
+          "Clients must send 'Authorization: Bearer <paperless-token>'. " +
+          "To use the server token for unauthenticated requests instead, restart with the --no-auth flag " +
+          "(trusted/local networks only)."
       );
     }
 

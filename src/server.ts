@@ -64,18 +64,19 @@ export function getBearerToken(
 }
 
 export function sendUnauthorized(res: express.Response): void {
+  // Log operator-facing guidance server-side; keep the wire response minimal so
+  // we don't echo configuration hints back to unauthenticated callers.
+  console.error(
+    "[paperless-mcp] Rejected request with no 'Authorization: Bearer <paperless-ngx-api-token>' header. " +
+      "As of v2.0.0, HTTP mode requires a per-request Bearer token and no longer falls back to the " +
+      "server-configured token for unauthenticated requests. Have clients send their Paperless-NGX API " +
+      "token as a Bearer token, or restart the server with --no-auth to use the server token for " +
+      "unauthenticated requests (trusted/local networks only)."
+  );
   res
     .status(401)
     .set("WWW-Authenticate", 'Bearer realm="paperless-mcp"')
-    .json({
-      error: "unauthorized",
-      message:
-        "Missing 'Authorization: Bearer <paperless-ngx-api-token>' header. " +
-        "As of v2.0.0, paperless-mcp requires a per-request Bearer token in HTTP mode and no longer " +
-        "silently falls back to the server-configured token for unauthenticated requests. " +
-        "Either send your Paperless-NGX API token as a Bearer token, or restart the server with " +
-        "the --no-auth flag to allow unauthenticated requests to use the server token (local/trusted networks only).",
-    });
+    .json({ error: "unauthorized" });
 }
 
 function buildInstructions(publicUrl: string): string {

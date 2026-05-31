@@ -12,7 +12,7 @@ import {
 const { version } = require("../package.json") as { version: string };
 
 const {
-  values: { baseUrl, token, http: useHttp, port, publicUrl },
+  values: { baseUrl, token, http: useHttp, port, publicUrl, "no-auth": noAuth },
 } = parseArgs({
   options: {
     baseUrl: { type: "string" },
@@ -20,6 +20,7 @@ const {
     http: { type: "boolean", default: false },
     port: { type: "string" },
     publicUrl: { type: "string", default: "" },
+    "no-auth": { type: "boolean", default: false },
   },
   allowPositionals: true,
 });
@@ -32,7 +33,7 @@ const resolvedPort = port ? parseInt(port, 10) : 3000;
 
 if (!resolvedBaseUrl) {
   console.error(
-    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>]"
+    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth]"
   );
   console.error(
     "Or set PAPERLESS_URL and PAPERLESS_API_KEY environment variables."
@@ -42,10 +43,19 @@ if (!resolvedBaseUrl) {
 
 if (!useHttp && !resolvedToken) {
   console.error(
-    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>]"
+    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth]"
   );
   console.error(
     "Or set PAPERLESS_URL and PAPERLESS_API_KEY environment variables."
+  );
+  process.exit(1);
+}
+
+if (noAuth && !resolvedToken) {
+  console.error(
+    "--no-auth allows unauthenticated requests to use the server's Paperless token, " +
+      "but no server token is configured. Provide --token <token> or set PAPERLESS_API_KEY, " +
+      "or drop --no-auth and have clients authenticate with 'Authorization: Bearer <token>'."
   );
   process.exit(1);
 }
@@ -61,6 +71,20 @@ function buildServer(requestToken: string) {
 
 async function main() {
   if (useHttp) {
+    if (noAuth) {
+      console.warn(
+        "[paperless-mcp] --no-auth is enabled: requests without an 'Authorization: Bearer' header " +
+          "will use the server's Paperless token. Only use this on a trusted/local network."
+      );
+    } else if (resolvedToken) {
+      console.warn(
+        "[paperless-mcp] BREAKING CHANGE (v2.0.0): a server token is configured, but unauthenticated " +
+          "requests will be REJECTED. Clients must send 'Authorization: Bearer <paperless-token>'. " +
+          "To restore the previous behaviour where unauthenticated requests use the server token, " +
+          "restart with the --no-auth flag (trusted/local networks only)."
+      );
+    }
+
     const app = express();
     app.use(express.json());
 
@@ -68,7 +92,10 @@ async function main() {
     const sseTransports: Record<string, SSEServerTransport> = {};
 
     app.post("/mcp", async (req, res) => {
-      const requestToken = getBearerToken(req, resolvedToken);
+      const requestToken = getBearerToken(req, {
+        fallbackToken: resolvedToken,
+        allowAnonymous: noAuth,
+      });
       if (!requestToken) {
         sendUnauthorized(res);
         return;
@@ -126,7 +153,10 @@ async function main() {
 
     app.get("/sse", async (req, res) => {
       console.log("SSE request received");
-      const requestToken = getBearerToken(req, resolvedToken);
+      const requestToken = getBearerToken(req, {
+        fallbackToken: resolvedToken,
+        allowAnonymous: noAuth,
+      });
       if (!requestToken) {
         sendUnauthorized(res);
         return;

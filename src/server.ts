@@ -35,22 +35,47 @@ export function createMcpServer({
   return server;
 }
 
+export interface ResolveTokenOptions {
+  /**
+   * Server-configured token used as a fallback for unauthenticated requests.
+   * Only consulted when `allowAnonymous` is true.
+   */
+  fallbackToken?: string;
+  /**
+   * When true, requests without a `Bearer` header fall back to `fallbackToken`
+   * (the legacy behaviour). When false (the default in HTTP mode), a request
+   * without a `Bearer` header is rejected and never uses the server token.
+   */
+  allowAnonymous: boolean;
+}
+
 export function getBearerToken(
   req: express.Request,
-  fallbackToken?: string
+  options: ResolveTokenOptions
 ): string | undefined {
   const authHeader = req.headers["authorization"];
   if (authHeader && authHeader.startsWith("Bearer ")) {
     return authHeader.slice(7);
   }
-  return fallbackToken || undefined;
+  if (options.allowAnonymous) {
+    return options.fallbackToken || undefined;
+  }
+  return undefined;
 }
 
 export function sendUnauthorized(res: express.Response): void {
   res
     .status(401)
     .set("WWW-Authenticate", 'Bearer realm="paperless-mcp"')
-    .end();
+    .json({
+      error: "unauthorized",
+      message:
+        "Missing 'Authorization: Bearer <paperless-ngx-api-token>' header. " +
+        "As of v2.0.0, paperless-mcp requires a per-request Bearer token in HTTP mode and no longer " +
+        "silently falls back to the server-configured token for unauthenticated requests. " +
+        "Either send your Paperless-NGX API token as a Bearer token, or restart the server with " +
+        "the --no-auth flag to allow unauthenticated requests to use the server token (local/trusted networks only).",
+    });
 }
 
 function buildInstructions(publicUrl: string): string {

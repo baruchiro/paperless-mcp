@@ -53,7 +53,7 @@ export class PaperlessAPI {
         console.error({
           error: "Error executing request",
           url,
-          options,
+          method: options.method || "GET",
           status: response.status,
           response: body,
         });
@@ -77,7 +77,7 @@ export class PaperlessAPI {
         error: "Error executing request",
         message: error instanceof Error ? error.message : String(error),
         url,
-        options,
+        method: options.method || "GET",
         responseData: axios.isAxiosError(error) ? error.response?.data : undefined,
         status: axios.isAxiosError(error) ? error.response?.status : undefined,
       });

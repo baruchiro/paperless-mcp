@@ -1,4 +1,6 @@
-# Paperless-NGX MCP Server - Copilot Instructions
+# Paperless-NGX MCP Server - Claude Instructions
+
+> These are the project's AI instructions, read automatically by Claude Code as `CLAUDE.md`. They are the single source of truth for how to work in this repo - they previously lived in `.github/copilot-instructions.md` and `.cursor/rules/*.mdc`, which have been consolidated here.
 
 ## Project Overview
 
@@ -265,6 +267,133 @@ When reviewing a pull request in this repository, enforce everything above. The 
 - Verify each finding against the current code before raising it - do not flag issues that were already addressed in a later commit.
 - Keep feedback concise. One clear comment per issue beats a wall of text.
 
+## API Validation and Type Safety
+
+### OpenAPI Specification Reference
+
+The authoritative source for all API endpoints, request/response schemas, and validation rules is `Paperless_ngx_REST_API.yaml`. This OpenAPI 3.0.3 specification defines all endpoints and HTTP methods, request/response schemas and data types, required vs optional parameters, authentication requirements, and error response formats.
+
+### Type Definitions
+
+All TypeScript interfaces must be defined in `src/api/types.ts` and match the OpenAPI schema definitions exactly:
+
+- **Pagination**: Use `PaginationResponse<T>` for list endpoints
+- **Entity Types**: Define interfaces matching the API schema (e.g., `Tag`, `Document`, `Correspondent`)
+- **Request Types**: Use `Partial<T>` for create/update operations
+- **Response Types**: Extend `PaginationResponse<T>` for list responses
+
+Validation rules:
+1. **Schema Compliance**: All types must match OpenAPI schema definitions exactly
+2. **Required Fields**: Mark required fields as non-optional in TypeScript
+3. **Optional Fields**: Use `?` for optional fields, `| null` for nullable fields
+4. **Enums**: Use union types for enum values defined in the API spec
+5. **Nested Objects**: Define separate interfaces for complex nested structures
+
+### API Implementation
+
+The `src/api/PaperlessAPI.ts` class implements all API operations:
+
+- **Base URL**: Always use `/api` prefix for all endpoints
+- **Authentication**: Include `Authorization: Token ${token}` header
+- **Content-Type**: Use `application/json` for JSON requests
+- **Version**: Include `Accept: application/json; version=5` header
+- **File Uploads**: Use `FormData` for multipart requests
+- Use generic types for all API calls; return typed responses matching defined interfaces
+- Check HTTP status codes and handle errors gracefully
+
+### Validation Checklist
+
+When adding or modifying endpoints:
+1. Verify the endpoint exists in `Paperless_ngx_REST_API.yaml`
+2. Add/update interfaces in `src/api/types.ts`
+3. Implement the method in `src/api/PaperlessAPI.ts`
+4. Add the corresponding MCP tool following patterns in `src/tools/`
+5. Include proper error handling and validation
+6. Verify against actual API responses
+
+Common issues to watch for: missing required fields, type mismatches, wrong enum values, mishandled nullable fields, and non-ISO 8601 date formats.
+
+## TypeScript Type Safety
+
+### Avoid Using `any`
+
+Never use `any` unless absolutely necessary. Prefer:
+- Specific interfaces/types for API parameters, responses, and function signatures
+- `Record<string, unknown>` for objects with unknown structure
+- `unknown` for truly unknown types (including caught errors: `catch (error: unknown)`)
+- Union types for multiple possible types
+
+Instead of:
+
+```typescript
+let apiParameters: any = {};
+```
+
+Define an interface:
+
+```typescript
+interface ApiParameters {
+  custom_fields?: Array<{
+    field: number;
+    value: string | number | boolean | null;
+  }>;
+  add_tags?: number[];
+  remove_tags?: number[];
+}
+
+let apiParameters: ApiParameters = {};
+```
+
+- Define interfaces in `src/api/types.ts` and reuse existing types.
+- Prefer explicit type annotations for arguments and return values, especially for exported functions and tool handlers.
+- Use Zod schemas for runtime validation of tool arguments where applicable.
+
+## MCP Server Patterns (Adding a Tool)
+
+Follow the pattern in `src/tools/customFields.ts`:
+
+```typescript
+export function registerEntityTools(server: McpServer, api: PaperlessAPI) {
+  server.tool(
+    "list_entities",
+    "Description with IMPORTANT notes about caching and efficiency",
+    {
+      // Zod schema for parameters
+    },
+    withErrorHandling(async (args, extra) => {
+      // Implementation
+    })
+  );
+}
+```
+
+### Parameter Validation
+- Use Zod schemas for all parameters.
+- **Prefer Zod schemas similar to the API** - keep tool inputs close to the API rather than adding reassignment logic in code.
+- Include optional parameters with proper defaults; support filtering and pagination.
+- Validate enum values against the API specification.
+
+### Caching and Efficiency
+- Fetch related entities upfront for name resolution and cache mappings for the session.
+- Search locally before making additional API calls.
+- Use large page sizes to reduce request counts.
+- Note important efficiency considerations in tool descriptions and docs.
+
+### Tool Categories
+- **List**: `list_*` - paginated lists with filtering
+- **Get**: `get_*` - single entity by ID
+- **Create**: `create_*` - create new entities
+- **Update**: `update_*` - update existing entities
+- **Delete**: `delete_*` - delete entities
+- **Bulk**: `bulk_edit_*` - bulk operations
+
+## HTTP Transport Mode (`src/index.ts`)
+
+- The server runs in HTTP mode with the `--http` CLI flag; otherwise it runs in stdio mode.
+- In HTTP mode, `src/index.ts` starts an Express server and exposes the MCP API at `/mcp`.
+- Each POST to `/mcp` creates a new `McpServer` and `StreamableHTTPServerTransport` for stateless, isolated handling.
+- The port is set with `--port` (default: 3000). Express must be installed for HTTP mode.
+
 ## Related Documentation
 - [Paperless-NGX API Documentation](https://docs.paperless-ngx.com/api/)
 - **`Paperless_ngx_REST_API.yaml`** - OpenAPI specification file in the root project folder
@@ -272,4 +401,4 @@ When reviewing a pull request in this repository, enforce everything above. The 
   - When reading this file, use chunking or parsing tools to query specific sections rather than reading the entire file
   - Contains complete endpoint definitions, request/response schemas, and authentication details
 - [Model Context Protocol Documentation](https://modelcontextprotocol.io/)
-- [Repository README](../README.md)
+- [Repository README](README.md)

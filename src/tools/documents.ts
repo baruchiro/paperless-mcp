@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
-import { readFileSync, existsSync, statSync } from "fs";
+import { readFile, access, stat } from "fs/promises";
+import { constants } from "fs";
 import { basename, resolve, isAbsolute } from "path";
 import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
@@ -46,7 +47,7 @@ const ALLOWED_UPLOAD_PATHS = process.env.PAPERLESS_MCP_UPLOAD_PATHS
  * @param filePath - The file path to validate
  * @throws Error if the path is unsafe or file is invalid
  */
-function validateFilePath(filePath: string): void {
+async function validateFilePath(filePath: string): Promise<void> {
   // Must be an absolute path
   if (!isAbsolute(filePath)) {
     throw new Error("file_path must be an absolute path");
@@ -76,14 +77,16 @@ function validateFilePath(filePath: string): void {
   }
 
   // Check if file exists
-  if (!existsSync(realPath)) {
+  try {
+    await access(realPath, constants.F_OK);
+  } catch (err) {
     throw new Error("File not found");
   }
 
   // Get file stats
   let stats;
   try {
-    stats = statSync(realPath);
+    stats = await stat(realPath);
   } catch (err) {
     throw new Error("Cannot access file");
   }
@@ -271,39 +274,100 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     })
   );
 
+  const postDocumentBaseSchema = z.object({
+    file: z.string().optional().describe("Base64-encoded file content. Either 'file' or 'file_path' must be provided."),
+    file_path: z.string().optional().describe("Absolute path to a file on the server's filesystem. Either 'file' or 'file_path' must be provided. The filename is derived from the path unless 'filename' is also specified. For security, configure PAPERLESS_MCP_UPLOAD_PATHS to restrict allowed directories."),
+    filename: z.string().optional().describe("Filename for the uploaded document. Required when using 'file', optional when using 'file_path' (defaults to the basename of the path)."),
+    title: z.string().optional(),
+    created: z.string().optional(),
+    correspondent: z.number().optional(),
+    document_type: z.number().optional(),
+    storage_path: z.number().optional(),
+    tags: z.array(z.number()).optional(),
+    archive_serial_number: z.number().optional(),
+    custom_fields: z.array(z.number()).optional(),
+  });
+
+  const postDocumentSchema = postDocumentBaseSchema.superRefine((data, ctx) => {
+    // Exactly one of file or file_path must be provided
+    const hasFile = data.file !== undefined;
+    const hasFilePath = data.file_path !== undefined;
+
+    if (!hasFile && !hasFilePath) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Either 'file' (base64) or 'file_path' must be provided.",
+        path: ["file"],
+      });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Either 'file' (base64) or 'file_path' must be provided.",
+        path: ["file_path"],
+      });
+    }
+
+    if (hasFile && hasFilePath) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Only one of 'file' or 'file_path' should be provided, not both.",
+        path: ["file"],
+      });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Only one of 'file' or 'file_path' should be provided, not both.",
+        path: ["file_path"],
+      });
+    }
+
+    // filename is required when file is present
+    if (hasFile && !data.filename) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "'filename' is required when using 'file' (base64 mode).",
+        path: ["filename"],
+      });
+    }
+
+    // file_path must be absolute if provided
+    if (hasFilePath && data.file_path && !isAbsolute(data.file_path)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "file_path must be an absolute path",
+        path: ["file_path"],
+      });
+    }
+  });
+
   server.tool(
     "post_document",
     "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields. Provide either 'file' (base64-encoded content) or 'file_path' (absolute path to a file on the server's filesystem). Using file_path avoids base64 encoding overhead for large files. SECURITY: When using file_path, set PAPERLESS_MCP_UPLOAD_PATHS environment variable to restrict uploads to specific directories (colon-separated paths).",
-    {
-      file: z.string().optional().describe("Base64-encoded file content. Either 'file' or 'file_path' must be provided."),
-      file_path: z.string().optional().describe("Absolute path to a file on the server's filesystem. Either 'file' or 'file_path' must be provided. The filename is derived from the path unless 'filename' is also specified. For security, configure PAPERLESS_MCP_UPLOAD_PATHS to restrict allowed directories."),
-      filename: z.string().optional().describe("Filename for the uploaded document. Required when using 'file', optional when using 'file_path' (defaults to the basename of the path)."),
-      title: z.string().optional(),
-      created: z.string().optional(),
-      correspondent: z.number().optional(),
-      document_type: z.number().optional(),
-      storage_path: z.number().optional(),
-      tags: z.array(z.number()).optional(),
-      archive_serial_number: z.number().optional(),
-      custom_fields: z.array(z.number()).optional(),
-    },
+    postDocumentBaseSchema.shape,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+
+      // Validate args with superRefine schema
+      const validationResult = postDocumentSchema.safeParse(args);
+      if (!validationResult.success) {
+        throw new Error(validationResult.error.errors.map(e => e.message).join("; "));
+      }
 
       let document: Buffer;
       let filename: string;
 
       if (args.file_path) {
         // Validate and read file from filesystem
-        validateFilePath(args.file_path);
+        await validateFilePath(args.file_path);
 
         try {
-          document = readFileSync(args.file_path);
+          document = await readFile(args.file_path);
         } catch (err) {
           throw new Error("Failed to read file");
         }
 
         filename = args.filename || basename(args.file_path);
+        if (!filename) {
+          throw new Error("Could not derive filename from file_path");
+        }
       } else if (args.file) {
         // Validate base64 input
         const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -311,9 +375,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           throw new Error(
             "Invalid base64-encoded file data. Please provide a valid base64 string."
           );
-        }
-        if (!args.filename) {
-          throw new Error("'filename' is required when using 'file' (base64 mode).");
         }
 
         document = Buffer.from(args.file, "base64");
@@ -328,8 +389,9 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           throw new Error("File is empty");
         }
 
-        filename = args.filename;
+        filename = args.filename!;
       } else {
+        // This should never happen due to schema validation, but TypeScript needs it
         throw new Error("Either 'file' (base64) or 'file_path' must be provided.");
       }
 

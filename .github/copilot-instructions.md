@@ -107,6 +107,8 @@ npm run start
 
 ### Comments and Documentation
 - Minimal inline comments - code should be self-documenting
+- **Do not write comments that restate the code they precede.** If the next line is `if (!isAbsolute(path))`, do not add a comment saying "path must be absolute" - the code already says that. Comments must add information the code cannot convey (the *why*, a non-obvious constraint, a reference), never paraphrase the *what*.
+- Prefer deleting a redundant comment over keeping it. When in doubt, leave it out.
 - JSDoc comments for complex functions or API methods
 - Tool descriptions must clearly explain critical behaviors (e.g., delete vs remove operations)
 - Include warnings for destructive operations
@@ -142,6 +144,12 @@ When creating or modifying tools, clearly distinguish:
 - **Do not commit:** Environment files (`.env`, `.env.local`, `.env.*.local`)
 - **Do not commit:** Build artifacts (`build/`, `dist/`, `*.dxt`)
 - **Do not commit:** Dependencies (`node_modules/`)
+- **Do not commit:** Scratch, process, or summary files generated while working - e.g. `REVIEW_SUMMARY.md`, `NOTES.md`, `CHANGES.md`, `PLAN.md`, `TODO.md`, or anything describing *what you did*. These belong in the PR description or commit message, never in the repository. Before committing, review the file list and exclude anything that is not part of the actual change.
+
+### Do Not Add New Repo-Level Files Unasked
+- Do not create new top-level / meta files such as `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, GitHub templates, or new docs unless the task explicitly asks for them. A feature PR should change only what the feature needs.
+- If a change seems to warrant a new policy/meta file, raise it in the PR description and let a maintainer decide - do not add it silently.
+- New runtime files (source, tests, fixtures) are expected; the constraint is about documentation and project-governance files that change the project's surface area.
 
 ### API Token Handling
 - Tokens are passed via environment variables or CLI arguments
@@ -236,6 +244,26 @@ When creating or modifying tools, clearly distinguish:
 1. **Always create a changeset** for your changes: `npx changeset`
 2. Build before publishing: `npm run build`
 3. Package is auto-published via GitHub Actions when "Version Packages" PR is merged
+
+## Code Review Guidelines (for AI reviewers)
+
+When reviewing a pull request in this repository, enforce everything above. The maintainer has repeatedly had to flag the same issues by hand - catch them in review instead. In particular:
+
+### Always Flag
+1. **Stray files** - Any committed file that is not part of the feature: scratch/summary docs (`REVIEW_SUMMARY.md`, `NOTES.md`, etc.), build artifacts, dependencies, or env files. Ask why it is in the diff and recommend removal.
+2. **Unsolicited meta files** - A new `SECURITY.md`, `CONTRIBUTING.md`, GitHub template, or similar that the PR's stated goal did not call for. Ask "what is this file and does this PR need it?"
+3. **Redundant comments** - Comments that merely restate the line(s) they precede (e.g. a "must be absolute" comment directly above `if (!isAbsolute(...))`). Recommend deleting them. Keep only comments that explain *why*.
+4. **Missing changeset** - Any code change without a `.changeset/*.md` file (see the changeset section above).
+5. **Schema vs. runtime drift** - MCP tool params validated in prose/description but not enforced in the Zod schema. Constraints (required/mutually-exclusive params, absolute paths, etc.) belong in the schema.
+6. **Blocking I/O** - Synchronous `fs` calls (`readFileSync`, `existsSync`, `statSync`) in async handlers. Require the `fs/promises` equivalents.
+7. **Path / security boundaries** - File-path inputs that are not validated as absolute, not confined to an allowlist, and not symlink-resolved with `fs.promises.realpath` before the allowlist check (`path.resolve` alone does NOT dereference symlinks).
+8. **Placeholder tests** - Tests that `assert.ok(true)` or re-check local strings instead of driving the real handler/helper. Require assertions against actual thrown errors and actual arguments passed to the API.
+
+### Review Style
+- Be specific and actionable: name the file/line and state the concrete change you want.
+- Prefer the smallest correct fix. Do not request large refactors for a focused PR; if the change is architecturally significant, say so and defer to the maintainer.
+- Verify each finding against the current code before raising it - do not flag issues that were already addressed in a later commit.
+- Keep feedback concise. One clear comment per issue beats a wall of text.
 
 ## Related Documentation
 - [Paperless-NGX API Documentation](https://docs.paperless-ngx.com/api/)

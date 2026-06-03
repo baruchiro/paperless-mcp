@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
+import { readFileSync, existsSync } from "fs";
+import { basename } from "path";
 import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
@@ -191,10 +193,11 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "post_document",
-    "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields.",
+    "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields. Provide either 'file' (base64-encoded content) or 'file_path' (absolute path to a file on the server's filesystem). Using file_path avoids base64 encoding overhead for large files.",
     {
-      file: z.string(),
-      filename: z.string(),
+      file: z.string().optional().describe("Base64-encoded file content. Either 'file' or 'file_path' must be provided."),
+      file_path: z.string().optional().describe("Absolute path to a file on the server's filesystem. Either 'file' or 'file_path' must be provided. The filename is derived from the path unless 'filename' is also specified."),
+      filename: z.string().optional().describe("Filename for the uploaded document. Required when using 'file', optional when using 'file_path' (defaults to the basename of the path)."),
       title: z.string().optional(),
       created: z.string().optional(),
       correspondent: z.number().optional(),
@@ -207,15 +210,34 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
 
-      // Validate base64 input
-      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-      if (!base64Regex.test(args.file)) {
-        throw new Error(
-          "Invalid base64-encoded file data. Please provide a valid base64 string."
-        );
+      let document: Buffer;
+      let filename: string;
+
+      if (args.file_path) {
+        // Read file from filesystem
+        if (!existsSync(args.file_path)) {
+          throw new Error(`File not found: ${args.file_path}`);
+        }
+        document = readFileSync(args.file_path);
+        filename = args.filename || basename(args.file_path);
+      } else if (args.file) {
+        // Validate base64 input
+        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+        if (!base64Regex.test(args.file)) {
+          throw new Error(
+            "Invalid base64-encoded file data. Please provide a valid base64 string."
+          );
+        }
+        if (!args.filename) {
+          throw new Error("'filename' is required when using 'file' (base64 mode).");
+        }
+        document = Buffer.from(args.file, "base64");
+        filename = args.filename;
+      } else {
+        throw new Error("Either 'file' (base64) or 'file_path' must be provided.");
       }
-      const { file, filename, ...metadata } = args;
-      const document = Buffer.from(file, "base64");
+
+      const { file, file_path, filename: _fn, ...metadata } = args;
 
       const response = await api.postDocument(document, filename, metadata);
       let result;

@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
-import { readFileSync, existsSync } from "fs";
-import { basename } from "path";
+import { readFileSync, existsSync, statSync } from "fs";
+import { basename, resolve, isAbsolute } from "path";
 import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
@@ -24,6 +24,86 @@ export type BulkCustomFieldParameters = {
   add_custom_fields?: Record<string, BulkCustomFieldValue>;
   remove_custom_fields?: number[];
 };
+
+// Maximum file size for uploads: 100MB
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+
+// Allowed upload directories (can be configured via environment variable)
+const ALLOWED_UPLOAD_PATHS = process.env.PAPERLESS_MCP_UPLOAD_PATHS
+  ? process.env.PAPERLESS_MCP_UPLOAD_PATHS.split(":")
+  : [];
+
+/**
+ * Validates that a file path is safe to read for document upload.
+ *
+ * Security checks:
+ * - Path must be absolute
+ * - Path must be within allowed directories (if configured)
+ * - File must exist and be a regular file (not a directory or special file)
+ * - File size must not exceed maximum
+ * - Resolves symbolic links and validates the real path
+ *
+ * @param filePath - The file path to validate
+ * @throws Error if the path is unsafe or file is invalid
+ */
+function validateFilePath(filePath: string): void {
+  // Must be an absolute path
+  if (!isAbsolute(filePath)) {
+    throw new Error("file_path must be an absolute path");
+  }
+
+  // Resolve to real path (follows symlinks)
+  let realPath: string;
+  try {
+    realPath = resolve(filePath);
+  } catch (err) {
+    throw new Error("Invalid file path");
+  }
+
+  // If allowed paths are configured, ensure the file is within one of them
+  if (ALLOWED_UPLOAD_PATHS.length > 0) {
+    const isAllowed = ALLOWED_UPLOAD_PATHS.some((allowedPath) => {
+      const resolvedAllowedPath = resolve(allowedPath);
+      return realPath.startsWith(resolvedAllowedPath + "/") || realPath === resolvedAllowedPath;
+    });
+
+    if (!isAllowed) {
+      throw new Error(
+        "file_path is outside allowed upload directories. " +
+        "Configure PAPERLESS_MCP_UPLOAD_PATHS environment variable to specify allowed paths."
+      );
+    }
+  }
+
+  // Check if file exists
+  if (!existsSync(realPath)) {
+    throw new Error("File not found");
+  }
+
+  // Get file stats
+  let stats;
+  try {
+    stats = statSync(realPath);
+  } catch (err) {
+    throw new Error("Cannot access file");
+  }
+
+  // Must be a regular file (not directory, socket, device, etc.)
+  if (!stats.isFile()) {
+    throw new Error("Path must point to a regular file");
+  }
+
+  // Check file size
+  if (stats.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error(
+      `File size (${Math.round(stats.size / 1024 / 1024)}MB) exceeds maximum allowed size (${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)`
+    );
+  }
+
+  if (stats.size === 0) {
+    throw new Error("File is empty");
+  }
+}
 
 /**
  * Builds Paperless-NGX bulk edit parameters from base parameters plus optional
@@ -193,10 +273,10 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "post_document",
-    "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields. Provide either 'file' (base64-encoded content) or 'file_path' (absolute path to a file on the server's filesystem). Using file_path avoids base64 encoding overhead for large files.",
+    "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields. Provide either 'file' (base64-encoded content) or 'file_path' (absolute path to a file on the server's filesystem). Using file_path avoids base64 encoding overhead for large files. SECURITY: When using file_path, set PAPERLESS_MCP_UPLOAD_PATHS environment variable to restrict uploads to specific directories (colon-separated paths).",
     {
       file: z.string().optional().describe("Base64-encoded file content. Either 'file' or 'file_path' must be provided."),
-      file_path: z.string().optional().describe("Absolute path to a file on the server's filesystem. Either 'file' or 'file_path' must be provided. The filename is derived from the path unless 'filename' is also specified."),
+      file_path: z.string().optional().describe("Absolute path to a file on the server's filesystem. Either 'file' or 'file_path' must be provided. The filename is derived from the path unless 'filename' is also specified. For security, configure PAPERLESS_MCP_UPLOAD_PATHS to restrict allowed directories."),
       filename: z.string().optional().describe("Filename for the uploaded document. Required when using 'file', optional when using 'file_path' (defaults to the basename of the path)."),
       title: z.string().optional(),
       created: z.string().optional(),
@@ -214,11 +294,15 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       let filename: string;
 
       if (args.file_path) {
-        // Read file from filesystem
-        if (!existsSync(args.file_path)) {
-          throw new Error(`File not found: ${args.file_path}`);
+        // Validate and read file from filesystem
+        validateFilePath(args.file_path);
+
+        try {
+          document = readFileSync(args.file_path);
+        } catch (err) {
+          throw new Error("Failed to read file");
         }
-        document = readFileSync(args.file_path);
+
         filename = args.filename || basename(args.file_path);
       } else if (args.file) {
         // Validate base64 input
@@ -231,7 +315,19 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         if (!args.filename) {
           throw new Error("'filename' is required when using 'file' (base64 mode).");
         }
+
         document = Buffer.from(args.file, "base64");
+
+        // Validate decoded size
+        if (document.length > MAX_FILE_SIZE_BYTES) {
+          throw new Error(
+            `File size (${Math.round(document.length / 1024 / 1024)}MB) exceeds maximum allowed size (${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)`
+          );
+        }
+        if (document.length === 0) {
+          throw new Error("File is empty");
+        }
+
         filename = args.filename;
       } else {
         throw new Error("Either 'file' (base64) or 'file_path' must be provided.");

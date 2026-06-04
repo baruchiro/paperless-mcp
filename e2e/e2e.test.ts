@@ -12,6 +12,9 @@ const MCP_URL = process.env.MCP_URL ?? `http://localhost:${MCP_PORT}/mcp`;
 const RUN_TAG = `e2e-tag-${Date.now()}`;
 const RUN_CORRESPONDENT = `E2E Corp ${Date.now()}`;
 const RUN_DOCUMENT_TYPE = `E2E Type ${Date.now()}`;
+const RUN_STORAGE_PATH = `E2E Storage ${Date.now()}`;
+const RUN_STORAGE_PATH_RENAMED = `E2E Storage Renamed ${Date.now()}`;
+const RUN_STORAGE_PATH_TEMPLATE = "e2e/{{ created_year }}/{{ title }}";
 const RUN_DOCUMENT_TITLE = `E2E Document ${Date.now()}`;
 
 // Paperless rejects duplicate uploads by checksum. When the same suite runs
@@ -42,6 +45,7 @@ const state: {
   tagId?: number;
   correspondentId?: number;
   documentTypeId?: number;
+  storagePathId?: number;
   documentId?: number;
 } = {};
 
@@ -167,6 +171,35 @@ describe("Paperless MCP E2E scenario", () => {
     assert.strictEqual(found.name, RUN_TAG);
   });
 
+  it("get_tag returns the tag by ID with full detail fields", async () => {
+    assert.ok(state.tagId, "tag must be created before get_tag");
+    const result = (await client.callTool({
+      name: "get_tag",
+      arguments: { id: state.tagId },
+    })) as ToolResult;
+    assertOk(result, "get_tag");
+    const tag = parseToolText(result) as {
+      id: number;
+      name: string;
+      slug: string;
+      matching_algorithm: { id: number; name: string };
+    };
+    assert.strictEqual(tag.id, state.tagId);
+    assert.strictEqual(tag.name, RUN_TAG);
+    assert.ok(
+      typeof tag.slug === "string" && tag.slug.length > 0,
+      `slug should be a non-empty string, got ${JSON.stringify(tag.slug)}`
+    );
+    assert.ok(
+      tag.matching_algorithm &&
+        typeof tag.matching_algorithm === "object" &&
+        typeof tag.matching_algorithm.name === "string",
+      `matching_algorithm should be expanded to {id,name}, got ${JSON.stringify(
+        tag.matching_algorithm
+      )}`
+    );
+  });
+
   it("list_correspondents returns the correspondent created earlier in this run", async () => {
     assert.ok(state.correspondentId, "correspondent must be created first");
     const result = (await client.callTool({
@@ -195,6 +228,98 @@ describe("Paperless MCP E2E scenario", () => {
     const found = data.results.find((dt) => dt.id === state.documentTypeId);
     assert.ok(found, `document type id=${state.documentTypeId} not found`);
     assert.strictEqual(found.name, RUN_DOCUMENT_TYPE);
+  });
+
+  it("create_storage_path creates a storage path and returns it with an id", async () => {
+    const result = (await client.callTool({
+      name: "create_storage_path",
+      arguments: {
+        name: RUN_STORAGE_PATH,
+        path: RUN_STORAGE_PATH_TEMPLATE,
+      },
+    })) as ToolResult;
+    assertOk(result, "create_storage_path");
+    const storagePath = parseToolText(result) as {
+      id: number;
+      name: string;
+      path: string;
+    };
+    assert.ok(
+      typeof storagePath.id === "number",
+      `storage_path.id should be a number, got ${JSON.stringify(storagePath)}`
+    );
+    assert.strictEqual(storagePath.name, RUN_STORAGE_PATH);
+    assert.strictEqual(storagePath.path, RUN_STORAGE_PATH_TEMPLATE);
+    state.storagePathId = storagePath.id;
+  });
+
+  it("get_storage_path returns the storage path by ID with full detail fields", async () => {
+    assert.ok(state.storagePathId, "storage path must be created first");
+    const result = (await client.callTool({
+      name: "get_storage_path",
+      arguments: { id: state.storagePathId },
+    })) as ToolResult;
+    assertOk(result, "get_storage_path");
+    const storagePath = parseToolText(result) as {
+      id: number;
+      name: string;
+      path: string;
+      slug: string;
+      matching_algorithm: { id: number; name: string };
+    };
+    assert.strictEqual(storagePath.id, state.storagePathId);
+    assert.strictEqual(storagePath.name, RUN_STORAGE_PATH);
+    assert.strictEqual(storagePath.path, RUN_STORAGE_PATH_TEMPLATE);
+    assert.ok(
+      typeof storagePath.slug === "string" && storagePath.slug.length > 0,
+      "slug should be a non-empty string"
+    );
+    assert.ok(
+      storagePath.matching_algorithm &&
+        typeof storagePath.matching_algorithm.name === "string",
+      "matching_algorithm should be expanded to {id,name}"
+    );
+  });
+
+  it("list_storage_paths returns the storage path created earlier in this run", async () => {
+    assert.ok(state.storagePathId, "storage path must be created first");
+    const result = (await client.callTool({
+      name: "list_storage_paths",
+      arguments: {},
+    })) as ToolResult;
+    assertOk(result, "list_storage_paths");
+    const data = parseToolText(result) as {
+      results: { id: number; name: string }[];
+    };
+    assert.ok(Array.isArray(data.results), "results should be an array");
+    const found = data.results.find((sp) => sp.id === state.storagePathId);
+    assert.ok(
+      found,
+      `storage_path id=${state.storagePathId} not found in list_storage_paths`
+    );
+    assert.strictEqual(found.name, RUN_STORAGE_PATH);
+  });
+
+  it("update_storage_path renames the storage path and the change is visible via get", async () => {
+    assert.ok(state.storagePathId, "storage path must be created first");
+    const updateResult = (await client.callTool({
+      name: "update_storage_path",
+      arguments: {
+        id: state.storagePathId,
+        name: RUN_STORAGE_PATH_RENAMED,
+      },
+    })) as ToolResult;
+    assertOk(updateResult, "update_storage_path");
+
+    const getResult = (await client.callTool({
+      name: "get_storage_path",
+      arguments: { id: state.storagePathId },
+    })) as ToolResult;
+    assertOk(getResult, "get_storage_path after update");
+    const updated = parseToolText(getResult) as { name: string; path: string };
+    assert.strictEqual(updated.name, RUN_STORAGE_PATH_RENAMED);
+    // path must be unchanged — update only sent `name`.
+    assert.strictEqual(updated.path, RUN_STORAGE_PATH_TEMPLATE);
   });
 
   it("post_document uploads a PDF and resolves to a document id", async () => {
@@ -483,6 +608,77 @@ describe("Paperless MCP E2E scenario", () => {
     assert.ok(
       !removedTagIds.includes(state.tagId),
       `tag ${state.tagId} should be removed, got tags=${JSON.stringify(removedTagIds)}`
+    );
+  });
+
+  it("bulk_edit_documents set_storage_path assigns the storage path and get_document reflects it", async () => {
+    assert.ok(
+      state.documentId && state.storagePathId,
+      "document and storage path must exist"
+    );
+    const setResult = (await client.callTool({
+      name: "bulk_edit_documents",
+      arguments: {
+        documents: [state.documentId],
+        method: "set_storage_path",
+        storage_path: state.storagePathId,
+      },
+    })) as ToolResult;
+    assertOk(setResult, "bulk_edit_documents set_storage_path");
+
+    const docAfterSet = (await client.callTool({
+      name: "get_document",
+      arguments: { id: state.documentId },
+    })) as ToolResult;
+    assertOk(docAfterSet, "get_document after set_storage_path");
+    const setData = parseToolText(docAfterSet) as {
+      storage_path: number | { id: number } | null;
+    };
+    const assignedId =
+      typeof setData.storage_path === "number"
+        ? setData.storage_path
+        : setData.storage_path?.id;
+    assert.strictEqual(
+      assignedId,
+      state.storagePathId,
+      `document storage_path should be ${state.storagePathId}, got ${JSON.stringify(
+        setData.storage_path
+      )}`
+    );
+  });
+
+  it("delete_storage_path requires confirm=true and then removes the storage path", async () => {
+    assert.ok(state.storagePathId, "storage path must be created first");
+
+    // Unconfirmed delete must surface an isError result.
+    const unconfirmed = (await client.callTool({
+      name: "delete_storage_path",
+      arguments: { id: state.storagePathId, confirm: false },
+    })) as ToolResult;
+    assert.ok(
+      unconfirmed.isError,
+      "delete_storage_path without confirm=true should return isError"
+    );
+
+    // Confirmed delete succeeds.
+    const deleted = (await client.callTool({
+      name: "delete_storage_path",
+      arguments: { id: state.storagePathId, confirm: true },
+    })) as ToolResult;
+    assertOk(deleted, "delete_storage_path");
+    const payload = parseToolText(deleted) as { status: string };
+    assert.strictEqual(payload.status, "deleted");
+
+    // Subsequent get_storage_path must fail (404).
+    const gone = (await client.callTool({
+      name: "get_storage_path",
+      arguments: { id: state.storagePathId },
+    })) as ToolResult;
+    assert.ok(
+      gone.isError,
+      `get_storage_path for deleted id should be isError, got ${errorText(
+        gone
+      )}`
     );
   });
 });

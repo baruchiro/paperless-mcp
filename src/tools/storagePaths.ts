@@ -9,10 +9,13 @@ import {
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
-export function registerTagTools(server: McpServer, api: PaperlessAPI) {
+export function registerStoragePathTools(
+  server: McpServer,
+  api: PaperlessAPI
+) {
   server.tool(
-    "list_tags",
-    "List all tags. IMPORTANT: When a user query may refer to a tag or document type, you should fetch all tags and all document types up front (with a large enough page_size), cache them for the session, and search locally for matches by name or slug before making further API calls. This reduces redundant requests and handles ambiguity between tags and document types efficiently.",
+    "list_storage_paths",
+    "List all storage paths with optional filtering and pagination. Storage paths define how documents are organized in the filesystem (e.g. '02_Privat/{{ created_year }}/{{ title }}').",
     {
       page: z.number().optional(),
       page_size: z.number().optional(),
@@ -22,21 +25,19 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
-    withErrorHandling(async (args = {}) => {
+    withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
-      const tagsResponse = await api.request(
-        `/tags/${queryString ? `?${queryString}` : ""}`
-      );
+      const response = await api.getStoragePaths(queryString);
       const enhancedResults = enhanceMatchingAlgorithmArray(
-        tagsResponse.results || []
+        response.results || []
       );
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
-              ...tagsResponse,
+              ...response,
               results: enhancedResults,
             }),
           },
@@ -46,28 +47,31 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
   );
 
   server.tool(
-    "get_tag",
-    "Get a specific tag by ID with full details including matching rules.",
+    "get_storage_path",
+    "Get a specific storage path by ID with full details including the path template and matching rules.",
     { id: z.number() },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const tag = await api.getTag(args.id);
-      const enhancedTag = enhanceMatchingAlgorithm(tag);
+      const response = await api.getStoragePath(args.id);
+      const enhancedStoragePath = enhanceMatchingAlgorithm(response);
       return {
-        content: [{ type: "text", text: JSON.stringify(enhancedTag) }],
+        content: [
+          { type: "text", text: JSON.stringify(enhancedStoragePath) },
+        ],
       };
     })
   );
 
   server.tool(
-    "create_tag",
-    "Create a new tag with optional color, matching pattern, and matching algorithm for automatic document tagging.",
+    "create_storage_path",
+    "Create a new storage path. The 'path' field is a template string using Django template syntax (e.g. '{{ correspondent }}/{{ created_year }}/{{ title }}'). See the Paperless-NGX docs for available placeholders.",
     {
       name: z.string(),
-      color: z
+      path: z
         .string()
-        .regex(/^#[0-9A-Fa-f]{6}$/)
-        .optional(),
+        .describe(
+          "Storage path template, e.g. '{{ correspondent }}/{{ created_year }}/{{ title }}'"
+        ),
       match: z.string().optional(),
       matching_algorithm: z
         .number()
@@ -79,29 +83,28 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const tag = await api.createTag(args);
-      const enhancedTag = enhanceMatchingAlgorithm(tag);
+      const response = await api.createStoragePath(args);
+      const enhancedStoragePath = enhanceMatchingAlgorithm(response);
       return {
         content: [
-          {
-            type: "text",
-            text: JSON.stringify(enhancedTag),
-          },
+          { type: "text", text: JSON.stringify(enhancedStoragePath) },
         ],
       };
     })
   );
 
   server.tool(
-    "update_tag",
-    "Update an existing tag's name, color, matching pattern, or matching algorithm.",
+    "update_storage_path",
+    "Update an existing storage path's name, path template, matching pattern, or matching algorithm.",
     {
       id: z.number(),
       name: z.string(),
-      color: z
+      path: z
         .string()
-        .regex(/^#[0-9A-Fa-f]{6}$/)
-        .optional(),
+        .optional()
+        .describe(
+          "Storage path template, e.g. '{{ correspondent }}/{{ created_year }}/{{ title }}'"
+        ),
       match: z.string().optional(),
       matching_algorithm: z
         .number()
@@ -113,22 +116,20 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const tag = await api.updateTag(args.id, args);
-      const enhancedTag = enhanceMatchingAlgorithm(tag);
+      const { id, ...data } = args;
+      const response = await api.updateStoragePath(id, data);
+      const enhancedStoragePath = enhanceMatchingAlgorithm(response);
       return {
         content: [
-          {
-            type: "text",
-            text: JSON.stringify(enhancedTag),
-          },
+          { type: "text", text: JSON.stringify(enhancedStoragePath) },
         ],
       };
     })
   );
 
   server.tool(
-    "delete_tag",
-    "⚠️ DESTRUCTIVE: Permanently delete a tag from the entire system. This will remove the tag from ALL documents that use it. Use with extreme caution.",
+    "delete_storage_path",
+    "⚠️ DESTRUCTIVE: Permanently delete a storage path from the entire system. Documents assigned to this storage path will lose the assignment.",
     {
       id: z.number(),
       confirm: z
@@ -142,23 +143,20 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
-      await api.deleteTag(args.id);
+      await api.deleteStoragePath(args.id);
       return {
         content: [
-          {
-            type: "text",
-            text: JSON.stringify({ status: "deleted" }),
-          },
+          { type: "text", text: JSON.stringify({ status: "deleted" }) },
         ],
       };
     })
   );
 
   server.tool(
-    "bulk_edit_tags",
-    "Bulk edit tags. ⚠️ WARNING: 'delete' operation permanently removes tags from the entire system. Use with caution.",
+    "bulk_edit_storage_paths",
+    "Bulk edit storage paths. ⚠️ WARNING: 'delete' operation permanently removes storage paths from the entire system.",
     {
-      tag_ids: z.array(z.number()),
+      storage_path_ids: z.array(z.number()),
       operation: z.enum(["set_permissions", "delete"]),
       confirm: z
         .boolean()
@@ -189,8 +187,8 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         );
       }
       return api.bulkEditObjects(
-        args.tag_ids,
-        "tags",
+        args.storage_path_ids,
+        "storage_paths",
         args.operation,
         args.operation === "set_permissions"
           ? {

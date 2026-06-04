@@ -11,7 +11,9 @@ import {
   GetCorrespondentsResponse,
   GetCustomFieldsResponse,
   GetDocumentTypesResponse,
+  GetStoragePathsResponse,
   GetTagsResponse,
+  StoragePath,
   Tag,
 } from "./types";
 import { headersToObject } from "./utils";
@@ -221,6 +223,10 @@ export class PaperlessAPI {
     return this.request<GetTagsResponse>("/tags/");
   }
 
+  async getTag(id: number): Promise<Tag> {
+    return this.request<Tag>(`/tags/${id}/`);
+  }
+
   async createTag(data: Partial<Tag>): Promise<Tag> {
     return this.request<Tag>("/tags/", {
       method: "POST",
@@ -276,6 +282,43 @@ export class PaperlessAPI {
 
   async deleteCorrespondent(id: number): Promise<void> {
     return this.request<void>(`/correspondents/${id}/`, {
+      method: "DELETE",
+    });
+  }
+
+  // Storage path operations
+  async getStoragePaths(
+    queryString?: string
+  ): Promise<GetStoragePathsResponse> {
+    const url = queryString
+      ? `/storage_paths/?${queryString}`
+      : "/storage_paths/";
+    return this.request<GetStoragePathsResponse>(url);
+  }
+
+  async getStoragePath(id: number): Promise<StoragePath> {
+    return this.request<StoragePath>(`/storage_paths/${id}/`);
+  }
+
+  async createStoragePath(data: Partial<StoragePath>): Promise<StoragePath> {
+    return this.request<StoragePath>("/storage_paths/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateStoragePath(
+    id: number,
+    data: Partial<StoragePath>
+  ): Promise<StoragePath> {
+    return this.request<StoragePath>(`/storage_paths/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteStoragePath(id: number): Promise<void> {
+    return this.request<void>(`/storage_paths/${id}/`, {
       method: "DELETE",
     });
   }

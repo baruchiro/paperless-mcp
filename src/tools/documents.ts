@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
-import { readFile, access, stat } from "fs/promises";
+import { readFile, access, stat, realpath } from "fs/promises";
 import { constants } from "fs";
-import { basename, resolve, isAbsolute } from "path";
+import { basename, isAbsolute } from "path";
 import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
@@ -34,40 +34,24 @@ const ALLOWED_UPLOAD_PATHS = process.env.PAPERLESS_MCP_UPLOAD_PATHS
   ? process.env.PAPERLESS_MCP_UPLOAD_PATHS.split(":")
   : [];
 
-/**
- * Validates that a file path is safe to read for document upload.
- *
- * Security checks:
- * - Path must be absolute
- * - Path must be within allowed directories (if configured)
- * - File must exist and be a regular file (not a directory or special file)
- * - File size must not exceed maximum
- * - Resolves symbolic links and validates the real path
- *
- * @param filePath - The file path to validate
- * @throws Error if the path is unsafe or file is invalid
- */
-async function validateFilePath(filePath: string): Promise<void> {
-  // Must be an absolute path
+/** Validates that a file path is safe to read for document upload. */
+export async function validateFilePath(filePath: string): Promise<void> {
   if (!isAbsolute(filePath)) {
     throw new Error("file_path must be an absolute path");
   }
 
-  // Resolve to real path (follows symlinks)
+  // Resolve symlinks to get canonical path for allowlist checks
   let realPath: string;
   try {
-    realPath = resolve(filePath);
-  } catch (err) {
-    throw new Error("Invalid file path");
+    realPath = await realpath(filePath);
+  } catch {
+    throw new Error("File not found");
   }
 
-  // If allowed paths are configured, ensure the file is within one of them
   if (ALLOWED_UPLOAD_PATHS.length > 0) {
     const isAllowed = ALLOWED_UPLOAD_PATHS.some((allowedPath) => {
-      const resolvedAllowedPath = resolve(allowedPath);
-      return realPath.startsWith(resolvedAllowedPath + "/") || realPath === resolvedAllowedPath;
+      return realPath.startsWith(allowedPath + "/") || realPath === allowedPath;
     });
-
     if (!isAllowed) {
       throw new Error(
         "file_path is outside allowed upload directories. " +
@@ -76,27 +60,12 @@ async function validateFilePath(filePath: string): Promise<void> {
     }
   }
 
-  // Check if file exists
-  try {
-    await access(realPath, constants.F_OK);
-  } catch (err) {
-    throw new Error("File not found");
-  }
+  const stats = await stat(realPath);
 
-  // Get file stats
-  let stats;
-  try {
-    stats = await stat(realPath);
-  } catch (err) {
-    throw new Error("Cannot access file");
-  }
-
-  // Must be a regular file (not directory, socket, device, etc.)
   if (!stats.isFile()) {
     throw new Error("Path must point to a regular file");
   }
 
-  // Check file size
   if (stats.size > MAX_FILE_SIZE_BYTES) {
     throw new Error(
       `File size (${Math.round(stats.size / 1024 / 1024)}MB) exceeds maximum allowed size (${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)`

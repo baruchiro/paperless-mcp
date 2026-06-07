@@ -270,14 +270,10 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       if (args.created__date__gte) query.set("created__date__gte", args.created__date__gte);
       if (args.created__date__lte) query.set("created__date__lte", args.created__date__lte);
       if (args.ordering) query.set("ordering", args.ordering);
-      if (args.archive_serial_number !== undefined)
-        query.set("archive_serial_number", args.archive_serial_number.toString());
-      if (args.archive_serial_number__isnull !== undefined)
-        query.set("archive_serial_number__isnull", args.archive_serial_number__isnull.toString());
-      if (args.custom_field_query)
-        query.set("custom_field_query", args.custom_field_query);
-      if (args.custom_fields__icontains)
-        query.set("custom_fields__icontains", args.custom_fields__icontains);
+      if (args.archive_serial_number !== undefined) query.set("archive_serial_number", args.archive_serial_number.toString());
+      if (args.archive_serial_number__isnull !== undefined) query.set("archive_serial_number__isnull", args.archive_serial_number__isnull.toString());
+      if (args.custom_field_query) query.set("custom_field_query", args.custom_field_query);
+      if (args.custom_fields__icontains) query.set("custom_fields__icontains", args.custom_fields__icontains);
 
       const docsResponse = await api.getDocuments(
         query.toString() ? `?${query.toString()}` : ""

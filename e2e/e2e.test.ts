@@ -43,7 +43,47 @@ const state: {
   correspondentId?: number;
   documentTypeId?: number;
   documentId?: number;
+  mailAccountId?: number;
+  mailRuleId?: number;
 } = {};
+
+const RUN_MAIL_ACCOUNT = `E2E Mail Account ${Date.now()}`;
+const RUN_MAIL_RULE = `E2E Mail Rule ${Date.now()}`;
+
+// Mail rules require an existing mail account, and this PR intentionally does
+// not expose a create_mail_account tool. Provision the account directly via the
+// Paperless REST API so the rule CRUD tools have something real to point at.
+async function createMailAccount(name: string): Promise<number> {
+  const res = await fetch(`${PAPERLESS_URL}/api/mail_accounts/`, {
+    method: "POST",
+    headers: {
+      Authorization: `Token ${PAPERLESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name,
+      imap_server: "imap.example.invalid",
+      imap_port: 993,
+      imap_security: 2, // SSL
+      username: "e2e-user",
+      password: "e2e-password",
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Failed to create mail account: ${res.status} ${await res.text()}`
+    );
+  }
+  const account = (await res.json()) as { id: number };
+  return account.id;
+}
+
+async function deleteMailAccount(id: number): Promise<void> {
+  await fetch(`${PAPERLESS_URL}/api/mail_accounts/${id}/`, {
+    method: "DELETE",
+    headers: { Authorization: `Token ${PAPERLESS_TOKEN}` },
+  });
+}
 
 async function waitForMcp(url: string, maxAttempts = 30): Promise<void> {
   const base = url.replace(/\/mcp$/, "");
@@ -110,6 +150,13 @@ before(async () => {
 });
 
 after(async () => {
+  if (state.mailAccountId !== undefined) {
+    try {
+      await deleteMailAccount(state.mailAccountId);
+    } catch (err) {
+      console.error("Failed to clean up mail account:", err);
+    }
+  }
   await client?.close?.();
   mcpProcess?.kill("SIGTERM");
 });
@@ -484,5 +531,179 @@ describe("Paperless MCP E2E scenario", () => {
       !removedTagIds.includes(state.tagId),
       `tag ${state.tagId} should be removed, got tags=${JSON.stringify(removedTagIds)}`
     );
+  });
+});
+
+describe("Paperless MCP mail rule E2E scenario", () => {
+  it("provisions a mail account to attach rules to", async () => {
+    state.mailAccountId = await createMailAccount(RUN_MAIL_ACCOUNT);
+    assert.ok(
+      typeof state.mailAccountId === "number",
+      "mail account id should be a number"
+    );
+  });
+
+  it("list_mail_accounts returns the account with its password redacted", async () => {
+    assert.ok(state.mailAccountId, "mail account must be created first");
+    const result = (await client.callTool({
+      name: "list_mail_accounts",
+      arguments: {},
+    })) as ToolResult;
+    assertOk(result, "list_mail_accounts");
+    const data = parseToolText(result) as {
+      results: Array<{ id: number; name: string; password?: unknown }>;
+    };
+    const found = data.results.find((a) => a.id === state.mailAccountId);
+    assert.ok(found, `mail account id=${state.mailAccountId} not found`);
+    assert.strictEqual(found.name, RUN_MAIL_ACCOUNT);
+    assert.strictEqual(
+      found.password,
+      undefined,
+      "list_mail_accounts must not expose account passwords"
+    );
+  });
+
+  it("get_mail_account returns the account with its password redacted", async () => {
+    assert.ok(state.mailAccountId, "mail account must be created first");
+    const result = (await client.callTool({
+      name: "get_mail_account",
+      arguments: { id: state.mailAccountId },
+    })) as ToolResult;
+    assertOk(result, "get_mail_account");
+    const account = parseToolText(result) as {
+      id: number;
+      name: string;
+      password?: unknown;
+    };
+    assert.strictEqual(account.id, state.mailAccountId);
+    assert.strictEqual(account.name, RUN_MAIL_ACCOUNT);
+    assert.strictEqual(
+      account.password,
+      undefined,
+      "get_mail_account must not expose the account password"
+    );
+  });
+
+  it("create_mail_rule creates a rule against the account", async () => {
+    assert.ok(state.mailAccountId, "mail account must be created first");
+    const result = (await client.callTool({
+      name: "create_mail_rule",
+      arguments: {
+        name: RUN_MAIL_RULE,
+        account: state.mailAccountId,
+        folder: "INBOX",
+        filter_subject: "invoice",
+        action: 3, // mark as read
+        attachment_type: 1,
+      },
+    })) as ToolResult;
+    assertOk(result, "create_mail_rule");
+    const rule = parseToolText(result) as {
+      id: number;
+      name: string;
+      account: number;
+    };
+    assert.ok(typeof rule.id === "number", `rule.id should be a number, got ${JSON.stringify(rule)}`);
+    assert.strictEqual(rule.name, RUN_MAIL_RULE);
+    assert.strictEqual(rule.account, state.mailAccountId);
+    state.mailRuleId = rule.id;
+  });
+
+  it("list_mail_rules returns the rule created earlier in this run", async () => {
+    assert.ok(state.mailRuleId, "mail rule must be created first");
+    const result = (await client.callTool({
+      name: "list_mail_rules",
+      arguments: {},
+    })) as ToolResult;
+    assertOk(result, "list_mail_rules");
+    const data = parseToolText(result) as {
+      results: Array<{ id: number; name: string }>;
+    };
+    const found = data.results.find((r) => r.id === state.mailRuleId);
+    assert.ok(found, `mail rule id=${state.mailRuleId} not found in list_mail_rules`);
+    assert.strictEqual(found.name, RUN_MAIL_RULE);
+  });
+
+  it("get_mail_rule returns the rule by id", async () => {
+    assert.ok(state.mailRuleId, "mail rule must be created first");
+    const result = (await client.callTool({
+      name: "get_mail_rule",
+      arguments: { id: state.mailRuleId },
+    })) as ToolResult;
+    assertOk(result, "get_mail_rule");
+    const rule = parseToolText(result) as { id: number; name: string };
+    assert.strictEqual(rule.id, state.mailRuleId);
+    assert.strictEqual(rule.name, RUN_MAIL_RULE);
+  });
+
+  it("update_mail_rule patches only the supplied fields", async () => {
+    assert.ok(state.mailRuleId, "mail rule must be created first");
+    const result = (await client.callTool({
+      name: "update_mail_rule",
+      arguments: { id: state.mailRuleId, enabled: false },
+    })) as ToolResult;
+    assertOk(result, "update_mail_rule");
+    const rule = parseToolText(result) as {
+      id: number;
+      name: string;
+      enabled: boolean;
+    };
+    assert.strictEqual(rule.id, state.mailRuleId);
+    assert.strictEqual(rule.enabled, false, "enabled should be patched to false");
+    assert.strictEqual(
+      rule.name,
+      RUN_MAIL_RULE,
+      "unsupplied fields like name should be left unchanged"
+    );
+  });
+
+  it("process_mail_account accepts the empty-body request (settles the required-body question)", async () => {
+    assert.ok(state.mailAccountId, "mail account must be created first");
+    const result = (await client.callTool({
+      name: "process_mail_account",
+      arguments: { id: state.mailAccountId },
+    })) as ToolResult;
+
+    if (!result.isError) {
+      const data = parseToolText(result) as { status?: string };
+      assert.strictEqual(data.status, "processed");
+      return;
+    }
+
+    // Processing may fail asynchronously against the unreachable dummy IMAP
+    // server, but the open question is whether POST .../process/ accepts our
+    // empty JSON body or rejects it as a missing required MailAccountRequest.
+    // A validation error ("field is required") would prove the body must be
+    // populated; any other failure is unrelated to that question.
+    const msg = errorText(result);
+    assert.ok(
+      !/required|may not be (blank|null)|this field/i.test(msg),
+      `process_mail_account rejected the empty body as invalid: ${msg}`
+    );
+  });
+
+  it("delete_mail_rule removes the rule when confirmed", async () => {
+    assert.ok(state.mailRuleId, "mail rule must be created first");
+    const result = (await client.callTool({
+      name: "delete_mail_rule",
+      arguments: { id: state.mailRuleId, confirm: true },
+    })) as ToolResult;
+    assertOk(result, "delete_mail_rule");
+    const data = parseToolText(result) as { status?: string };
+    assert.strictEqual(data.status, "deleted");
+
+    const listResult = (await client.callTool({
+      name: "list_mail_rules",
+      arguments: {},
+    })) as ToolResult;
+    assertOk(listResult, "list_mail_rules after delete");
+    const list = parseToolText(listResult) as {
+      results: Array<{ id: number }>;
+    };
+    assert.ok(
+      !list.results.some((r) => r.id === state.mailRuleId),
+      `mail rule id=${state.mailRuleId} should be gone after delete`
+    );
+    state.mailRuleId = undefined;
   });
 });

@@ -678,19 +678,28 @@ npm run start -- <baseUrl> <token> --http --port 3000
 
 #### Per-request API token (HTTP/Docker mode)
 
-In HTTP mode, clients can supply their own Paperless-NGX API token via the standard `Authorization` header instead of (or in addition to) the server-configured `PAPERLESS_API_KEY`. The client-supplied token takes precedence.
+In HTTP mode, clients authenticate by supplying a Paperless-NGX API token via the standard `Authorization` header:
 
 ```
 Authorization: Bearer <paperless-ngx-api-token>
 ```
 
-| Scenario | Token used |
-|---|---|
-| Client sends `Authorization: Bearer <tok>` | `<tok>` (client-supplied, takes precedence) |
-| No header, `PAPERLESS_API_KEY` env var set | `PAPERLESS_API_KEY` from env |
-| No header, no env var | `401 Unauthorized` |
+The token is passed straight through to Paperless-NGX, so each client's own Paperless permissions are enforced end-to-end. This lets a single server instance serve multiple users, each with their own token. The same behaviour applies to both `/mcp` and `/sse` endpoints.
 
-This allows a single server instance to serve multiple users, each authenticating with their own Paperless-NGX token. The same behaviour applies to both `/mcp` and `/sse` endpoints.
+> **⚠️ Breaking change in v2.0.0 — HTTP mode is now authenticated by default.**
+>
+> Previously, a request with no `Authorization` header silently fell back to the server-configured `PAPERLESS_API_KEY`, which left the HTTP endpoint open to anyone who could reach the port. As of v2.0.0, requests without a `Bearer` token are rejected with `401 Unauthorized`. The server token is **never** used for unauthenticated requests unless you explicitly opt in with `--no-auth`.
+
+| Scenario | `--no-auth` off (default) | `--no-auth` on |
+|---|---|---|
+| Client sends `Authorization: Bearer <tok>` | `<tok>` (client-supplied) | `<tok>` (client-supplied) |
+| No header, `PAPERLESS_API_KEY` / `--token` set | `401 Unauthorized` | server token |
+| No header, no server token | `401 Unauthorized` | `401 Unauthorized` |
+
+**Migrating from v1.x:** if you relied on the old fallback (a single shared `PAPERLESS_API_KEY` with clients that don't send a token), you have two options:
+
+1. **Recommended:** have each client send `Authorization: Bearer <paperless-token>`.
+2. **Restore the old behaviour** (trusted/local networks only): start the server with the `--no-auth` flag, e.g. append it to the Docker `command`/args or your CLI invocation. This requires a server token (`PAPERLESS_API_KEY` or `--token`) to be configured.
 
 <details>
 <summary>Docker Deployment</summary>

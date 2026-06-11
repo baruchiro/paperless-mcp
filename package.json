@@ -44,7 +44,7 @@
     "url": "https://github.com/baruchiro/paperless-mcp/issues"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.11.1",
+    "@modelcontextprotocol/sdk": "1.11.1",
     "axios": "^1.9.0",
     "express": "^5.1.0",
     "form-data": "^4.0.2",

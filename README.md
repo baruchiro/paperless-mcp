@@ -468,6 +468,133 @@ bulk_edit_custom_fields({
 })
 ```
 
+### Mail Operations
+
+Tools for managing Paperless mail accounts and the mail rules that drive
+automatic email ingestion. Account passwords/tokens are never exposed: they are
+redacted from every tool response.
+
+#### list_mail_accounts
+List mail accounts so you can pick the account ID needed when creating a mail
+rule. Passwords are redacted.
+
+Parameters:
+- page (optional): Page number
+- page_size (optional): Number of results per page
+
+```typescript
+list_mail_accounts()
+```
+
+#### get_mail_account
+Get a single mail account by ID. Password/token fields are redacted.
+
+Parameters:
+- id: Mail account ID
+
+```typescript
+get_mail_account({
+  id: 1
+})
+```
+
+#### process_mail_account
+Manually trigger Paperless mail processing for one account. This can consume
+matching mails according to the account's enabled mail rules.
+
+Parameters:
+- id: Mail account ID
+
+```typescript
+process_mail_account({
+  id: 1
+})
+```
+
+#### list_mail_rules
+List mail rules with optional pagination.
+
+Parameters:
+- page (optional): Page number
+- page_size (optional): Number of results per page
+
+```typescript
+list_mail_rules()
+```
+
+#### get_mail_rule
+Get a single mail rule by ID.
+
+Parameters:
+- id: Mail rule ID
+
+```typescript
+get_mail_rule({
+  id: 1
+})
+```
+
+#### create_mail_rule
+Create a mail rule. Use `list_mail_accounts` first to choose the account.
+
+Required parameters:
+- name: Rule name
+- account: Mail account ID
+- folder: IMAP folder to scan (e.g. "INBOX")
+
+Common optional parameters:
+- enabled (default true): Whether the rule is active
+- filter_from / filter_to / filter_subject / filter_body: Match incoming mail
+- maximum_age: Only process mail newer than this many days
+- action: 1=Delete, 2=Move to folder, 3=Mark as read, 4=Flag, 5=Tag
+- action_parameter: Target folder/tag for the chosen action
+- assign_title_from: 1=Subject, 2=Attachment filename, 3=Do not assign
+- assign_tags / assign_correspondent / assign_document_type: Metadata to apply
+- assign_correspondent_from: 1=None, 2=Mail address, 3=Sender name, 4=Use assign_correspondent
+- attachment_type: 1=Attachments only, 2=All files incl. inline
+- consumption_scope: 1=Attachments only, 2=Full mail as .eml, 3=Both
+- pdf_layout: 0=System default, 1=Text+HTML, 2=HTML+text, 3=HTML only, 4=Text only
+
+```typescript
+create_mail_rule({
+  name: "Invoices",
+  account: 1,
+  folder: "INBOX",
+  filter_subject: "invoice",
+  action: 3,
+  attachment_type: 1
+})
+```
+
+#### update_mail_rule
+Patch an existing mail rule. Only the fields you supply are changed.
+
+Parameters:
+- id: Mail rule ID
+- ...any of the `create_mail_rule` fields to update
+
+```typescript
+update_mail_rule({
+  id: 1,
+  enabled: false
+})
+```
+
+#### delete_mail_rule
+Delete a mail rule. Requires an explicit confirmation flag. This changes future
+mail ingestion behavior but does not delete any existing documents.
+
+Parameters:
+- id: Mail rule ID
+- confirm: Must be `true` to confirm deletion
+
+```typescript
+delete_mail_rule({
+  id: 1,
+  confirm: true
+})
+```
+
 ## Error Handling
 
 The server will show clear error messages if:

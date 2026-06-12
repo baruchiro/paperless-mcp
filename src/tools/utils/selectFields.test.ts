@@ -88,6 +88,25 @@ describe("resolveSelectCustomFieldValue", () => {
   test("rejects an out-of-range index rather than forwarding it", () => {
     assert.throws(() => resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, 9));
   });
+
+  test("throws on a value that matches one option's label and another's id", () => {
+    const collidingField: CustomField = {
+      id: 5,
+      name: "Collision",
+      data_type: "select",
+      extra_data: {
+        select_options: [
+          { id: "High", label: "Low" },
+          { id: "xyz789", label: "High" },
+        ],
+      },
+      document_count: 0,
+    };
+    assert.throws(
+      () => resolveSelectCustomFieldValue(collidingField, "High"),
+      /Ambiguous/
+    );
+  });
 });
 
 describe("resolveSelectCustomFieldValue with stored encoding (bulk_edit path)", () => {

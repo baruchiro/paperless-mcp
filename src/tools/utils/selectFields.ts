@@ -53,10 +53,17 @@ function findSelectOption(
   value: CustomFieldValue
 ): NormalizedSelectOption | undefined {
   if (typeof value === "string") {
-    return (
-      options.find((option) => option.label === value) ??
-      options.find((option) => option.id === value)
-    );
+    const byLabel = options.find((option) => option.label === value);
+    const byId = options.find((option) => option.id === value);
+    if (byLabel && byId && byLabel.index !== byId.index) {
+      // The value is one option's label and a different option's id; we cannot
+      // tell which was intended, so reject rather than silently mis-encode it.
+      throw new Error(
+        `Ambiguous select value ${JSON.stringify(value)}: it matches one ` +
+          `option's label and a different option's id.`
+      );
+    }
+    return byLabel ?? byId;
   }
   if (typeof value === "number" && Number.isInteger(value)) {
     return options.find((option) => option.index === value);

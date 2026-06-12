@@ -26,10 +26,8 @@ export type BulkCustomFieldParameters = {
   remove_custom_fields?: number[];
 };
 
-// Maximum file size for uploads: 100MB
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
-// Allowed upload directories (can be configured via environment variable)
 const ALLOWED_UPLOAD_PATHS = process.env.PAPERLESS_MCP_UPLOAD_PATHS
   ? process.env.PAPERLESS_MCP_UPLOAD_PATHS.split(":")
   : [];
@@ -258,7 +256,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   });
 
   const postDocumentSchema = postDocumentBaseSchema.superRefine((data, ctx) => {
-    // Exactly one of file or file_path must be provided
     const hasFile = data.file !== undefined;
     const hasFilePath = data.file_path !== undefined;
 
@@ -288,7 +285,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       });
     }
 
-    // filename is required when file is present
     if (hasFile && !data.filename) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -297,7 +293,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       });
     }
 
-    // file_path must be absolute if provided
     if (hasFilePath && data.file_path && !isAbsolute(data.file_path)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -314,7 +309,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
 
-      // Validate args with superRefine schema
       const validationResult = postDocumentSchema.safeParse(args);
       if (!validationResult.success) {
         throw new Error(validationResult.error.errors.map(e => e.message).join("; "));
@@ -324,7 +318,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       let filename: string;
 
       if (args.file_path) {
-        // Validate and read file from filesystem
         await validateFilePath(args.file_path);
 
         try {
@@ -338,7 +331,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           throw new Error("Could not derive filename from file_path");
         }
       } else if (args.file) {
-        // Validate base64 input
         const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
         if (!base64Regex.test(args.file)) {
           throw new Error(
@@ -348,7 +340,6 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
         document = Buffer.from(args.file, "base64");
 
-        // Validate decoded size
         if (document.length > MAX_FILE_SIZE_BYTES) {
           throw new Error(
             `File size (${Math.round(document.length / 1024 / 1024)}MB) exceeds maximum allowed size (${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)`

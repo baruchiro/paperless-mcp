@@ -8,6 +8,7 @@ import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
 import { withErrorHandling } from "./utils/middlewares";
 import { validateCustomFields } from "./utils/monetary";
+import { resolveSelectCustomFieldValues } from "./utils/selectFields";
 import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
 import {
   buildDocumentResourceUri,
@@ -217,6 +218,13 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const { documents, method, add_custom_fields, confirm, ...parameters } = args;
 
       validateCustomFields(add_custom_fields);
+      // bulk_edit writes value_select directly, so select values must be the
+      // stored form (option id on 2.17+, index on pre-2.17).
+      const resolvedCustomFields = await resolveSelectCustomFieldValues(
+        api,
+        add_custom_fields,
+        "stored"
+      );
 
       const response = await api.bulkEditDocuments(
         documents,
@@ -225,7 +233,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           ? {}
           : buildBulkEditParameters(
               parameters,
-              add_custom_fields,
+              resolvedCustomFields,
               method === "modify_custom_fields",
               method === "modify_tags"
             )
@@ -596,6 +604,12 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const { id, ...updateData } = args;
 
       validateCustomFields(updateData.custom_fields);
+      // The document endpoint converts a submitted option index to the stored id.
+      updateData.custom_fields = await resolveSelectCustomFieldValues(
+        api,
+        updateData.custom_fields,
+        "index"
+      );
 
       const response = await api.updateDocument(id, updateData);
 

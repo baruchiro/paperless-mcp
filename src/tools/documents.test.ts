@@ -3,7 +3,13 @@ import { test, describe, before, after } from "node:test";
 import { writeFileSync, mkdtempSync, rmSync, symlinkSync, truncateSync, realpathSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { buildBulkEditParameters, validateFilePath } from "./documents";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport";
+import type { CallToolResult, JSONRPCMessage } from "@modelcontextprotocol/sdk/types";
+import { PaperlessAPI } from "../api/PaperlessAPI";
+import { CustomField } from "../api/types";
+import { buildBulkEditParameters, registerDocumentTools, validateFilePath } from "./documents";
 
 // ALLOWED_UPLOAD_PATHS is read from the environment at module load, so the
 // allowlist can only be exercised by re-importing the module with the env set.
@@ -192,5 +198,219 @@ describe("validateFilePath", () => {
     await assert.rejects(() => validate(testFile), {
       message: /outside allowed upload directories/,
     });
+  });
+});
+
+class TestTransport implements Transport {
+  peer?: TestTransport;
+  onclose?: () => void;
+  onerror?: (error: Error) => void;
+  onmessage?: (message: JSONRPCMessage) => void;
+
+  async start(): Promise<void> {}
+
+  async send(message: JSONRPCMessage): Promise<void> {
+    queueMicrotask(() => this.peer?.onmessage?.(message));
+  }
+
+  async close(): Promise<void> {
+    this.onclose?.();
+  }
+}
+
+function createTransportPair() {
+  const clientTransport = new TestTransport();
+  const serverTransport = new TestTransport();
+  clientTransport.peer = serverTransport;
+  serverTransport.peer = clientTransport;
+  return { clientTransport, serverTransport };
+}
+
+function parseToolText(result: CallToolResult) {
+  const item = result.content?.[0];
+  if (!item || item.type !== "text") {
+    throw new Error("Expected text tool response");
+  }
+  return JSON.parse(item.text);
+}
+
+async function withDocumentClient(
+  api: PaperlessAPI,
+  run: (client: Client) => Promise<void>
+) {
+  const server = new McpServer({ name: "paperless-doc-test", version: "1.0.0" });
+  registerDocumentTools(server, api);
+
+  const client = new Client({
+    name: "paperless-doc-test-client",
+    version: "1.0.0",
+  });
+  const { clientTransport, serverTransport } = createTransportPair();
+
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+
+  try {
+    await run(client);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+}
+
+interface DocumentApiCalls {
+  updateDocument: Array<[number, Record<string, unknown>]>;
+  bulkEditDocuments: Array<[number[], string, Record<string, unknown>]>;
+  getCustomField: number[];
+}
+
+function createDocumentApi(fields: CustomField[]) {
+  const calls: DocumentApiCalls = {
+    updateDocument: [],
+    bulkEditDocuments: [],
+    getCustomField: [],
+  };
+  const fieldMap = new Map(fields.map((field) => [field.id, field]));
+  const api = {
+    getCustomField: async (id: number) => {
+      calls.getCustomField.push(id);
+      const field = fieldMap.get(id);
+      if (!field) throw new Error(`custom field ${id} not found`);
+      return field;
+    },
+    updateDocument: async (id: number, data: Record<string, unknown>) => {
+      calls.updateDocument.push([id, data]);
+      return { id, custom_fields: data.custom_fields ?? [] };
+    },
+    bulkEditDocuments: async (
+      documents: number[],
+      method: string,
+      parameters: Record<string, unknown>
+    ) => {
+      calls.bulkEditDocuments.push([documents, method, parameters]);
+      return { result: "OK" };
+    },
+    getCorrespondents: async () => ({ results: [] }),
+    getDocumentTypes: async () => ({ results: [] }),
+    getTags: async () => ({ results: [] }),
+    getCustomFields: async () => ({ results: [] }),
+  } as unknown as PaperlessAPI;
+  return { api, calls };
+}
+
+const LEGACY_SELECT_FIELD: CustomField = {
+  id: 2,
+  name: "כמה זמן לשמור",
+  data_type: "select",
+  extra_data: { select_options: ["שנה", "7 שנים", "שנתיים"], default_currency: null },
+  document_count: 10,
+};
+
+const OBJECT_SELECT_FIELD: CustomField = {
+  id: 3,
+  name: "Priority",
+  data_type: "select",
+  extra_data: {
+    select_options: [
+      { id: "abc123", label: "Low" },
+      { id: "def456", label: "High" },
+    ],
+  },
+  document_count: 5,
+};
+
+describe("select custom field value resolution in document handlers", () => {
+  test("update_document translates a select label to its zero-based index", async () => {
+    const { api, calls } = createDocumentApi([LEGACY_SELECT_FIELD]);
+
+    await withDocumentClient(api, async (client) => {
+      const result = (await client.callTool({
+        name: "update_document",
+        arguments: { id: 42, custom_fields: [{ field: 2, value: "שנה" }] },
+      })) as CallToolResult;
+      assert.ok(!result.isError, parseToolText(result)?.error);
+    });
+
+    assert.equal(calls.updateDocument.length, 1);
+    const [, data] = calls.updateDocument[0];
+    assert.deepEqual(data.custom_fields, [{ field: 2, value: 0 }]);
+  });
+
+  test("update_document translates a select label to its option index (Paperless 2.17+)", async () => {
+    const { api, calls } = createDocumentApi([OBJECT_SELECT_FIELD]);
+
+    await withDocumentClient(api, async (client) => {
+      const result = (await client.callTool({
+        name: "update_document",
+        arguments: { id: 7, custom_fields: [{ field: 3, value: "High" }] },
+      })) as CallToolResult;
+      assert.ok(!result.isError, parseToolText(result)?.error);
+    });
+
+    const [, data] = calls.updateDocument[0];
+    assert.deepEqual(data.custom_fields, [{ field: 3, value: 1 }]);
+  });
+
+  test("bulk_edit_documents translates a select label in add_custom_fields", async () => {
+    const { api, calls } = createDocumentApi([LEGACY_SELECT_FIELD]);
+
+    await withDocumentClient(api, async (client) => {
+      const result = (await client.callTool({
+        name: "bulk_edit_documents",
+        arguments: {
+          documents: [1, 2],
+          method: "modify_custom_fields",
+          add_custom_fields: [{ field: 2, value: "7 שנים" }],
+        },
+      })) as CallToolResult;
+      assert.ok(!result.isError, parseToolText(result)?.error);
+    });
+
+    assert.equal(calls.bulkEditDocuments.length, 1);
+    const [, , parameters] = calls.bulkEditDocuments[0];
+    // pre-2.17 string options have no id, so the stored form is the index.
+    assert.deepEqual(parameters.add_custom_fields, { "2": 1 });
+  });
+
+  test("bulk_edit_documents sends the option id for 2.17+ select fields (stored form)", async () => {
+    const { api, calls } = createDocumentApi([OBJECT_SELECT_FIELD]);
+
+    await withDocumentClient(api, async (client) => {
+      const result = (await client.callTool({
+        name: "bulk_edit_documents",
+        arguments: {
+          documents: [1],
+          method: "modify_custom_fields",
+          add_custom_fields: [{ field: 3, value: "High" }],
+        },
+      })) as CallToolResult;
+      assert.ok(!result.isError, parseToolText(result)?.error);
+    });
+
+    const [, , parameters] = calls.bulkEditDocuments[0];
+    // bulk_edit writes value_select directly, so it needs the option id, unlike
+    // update_document which takes the index.
+    assert.deepEqual(parameters.add_custom_fields, { "3": "def456" });
+  });
+
+  test("update_document rejects an unknown select option with a helpful error", async () => {
+    const { api, calls } = createDocumentApi([LEGACY_SELECT_FIELD]);
+
+    await withDocumentClient(api, async (client) => {
+      const result = (await client.callTool({
+        name: "update_document",
+        arguments: { id: 42, custom_fields: [{ field: 2, value: "forever" }] },
+      })) as CallToolResult;
+      assert.ok(result.isError, "expected an error for an unknown select option");
+      const message = parseToolText(result)?.error ?? "";
+      assert.match(message, /forever/);
+      assert.match(message, /שנה/);
+    });
+
+    assert.equal(
+      calls.updateDocument.length,
+      0,
+      "no document update should be sent when the option is invalid"
+    );
   });
 });

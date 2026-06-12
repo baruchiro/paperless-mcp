@@ -377,7 +377,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "list_documents",
-    "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. Using the correct ID filter will yield much more accurate results. Note: Document content is excluded from results by default. Use 'get_document_content' to retrieve content when needed.",
+    "List and filter documents by fields such as title, correspondent, document type, tag, storage path, creation date, archive serial number, custom fields, and more. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, you should FIRST use the relevant tool (e.g., 'list_tags', 'list_correspondents', 'list_document_types', 'list_storage_paths') to find the correct ID, and then use that ID as a filter here. Only use the 'search' argument for free-text search when no specific field applies. For custom fields, use 'custom_fields__icontains' for a case-insensitive substring match across custom field values, or 'custom_field_query' for a JSON-encoded query expression (e.g. '[field_id, \"icontains\", \"value\"]'). Using the correct ID filter will yield much more accurate results. Note: Document content is excluded from results by default. Use 'get_document_content' to retrieve content when needed.",
     {
       page: z.number().optional(),
       page_size: z.number().optional(),
@@ -389,6 +389,10 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       created__date__gte: z.string().optional(),
       created__date__lte: z.string().optional(),
       ordering: z.string().optional(),
+      archive_serial_number: z.number().optional(),
+      archive_serial_number__isnull: z.boolean().optional(),
+      custom_field_query: z.string().min(1).optional(),
+      custom_fields__icontains: z.string().min(1).optional(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -406,6 +410,10 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       if (args.created__date__gte) query.set("created__date__gte", args.created__date__gte);
       if (args.created__date__lte) query.set("created__date__lte", args.created__date__lte);
       if (args.ordering) query.set("ordering", args.ordering);
+      if (args.archive_serial_number !== undefined) query.set("archive_serial_number", args.archive_serial_number.toString());
+      if (args.archive_serial_number__isnull !== undefined) query.set("archive_serial_number__isnull", args.archive_serial_number__isnull.toString());
+      if (args.custom_field_query) query.set("custom_field_query", args.custom_field_query);
+      if (args.custom_fields__icontains) query.set("custom_fields__icontains", args.custom_fields__icontains);
 
       const docsResponse = await api.getDocuments(
         query.toString() ? `?${query.toString()}` : ""

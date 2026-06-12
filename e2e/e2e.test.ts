@@ -13,6 +13,7 @@ const RUN_TAG = `e2e-tag-${Date.now()}`;
 const RUN_CORRESPONDENT = `E2E Corp ${Date.now()}`;
 const RUN_DOCUMENT_TYPE = `E2E Type ${Date.now()}`;
 const RUN_DOCUMENT_TITLE = `E2E Document ${Date.now()}`;
+const RUN_CUSTOM_FIELD = `E2E Select ${Date.now()}`;
 
 // Paperless rejects duplicate uploads by checksum. When the same suite runs
 // twice against one Paperless instance (e.g. CLI then Docker in one CI job),
@@ -43,6 +44,9 @@ const state: {
   correspondentId?: number;
   documentTypeId?: number;
   documentId?: number;
+  customFieldId?: number;
+  customFieldOptionLabel?: string;
+  customFieldSecondLabel?: string;
   mailAccountId?: number;
   mailRuleId?: number;
 } = {};
@@ -80,6 +84,13 @@ async function createMailAccount(name: string): Promise<number> {
 
 async function deleteMailAccount(id: number): Promise<void> {
   await fetch(`${PAPERLESS_URL}/api/mail_accounts/${id}/`, {
+    method: "DELETE",
+    headers: { Authorization: `Token ${PAPERLESS_TOKEN}` },
+  });
+}
+
+async function deleteCustomFieldDirect(id: number): Promise<void> {
+  await fetch(`${PAPERLESS_URL}/api/custom_fields/${id}/`, {
     method: "DELETE",
     headers: { Authorization: `Token ${PAPERLESS_TOKEN}` },
   });
@@ -155,6 +166,13 @@ after(async () => {
       await deleteMailAccount(state.mailAccountId);
     } catch (err) {
       console.error("Failed to clean up mail account:", err);
+    }
+  }
+  if (state.customFieldId !== undefined) {
+    try {
+      await deleteCustomFieldDirect(state.customFieldId);
+    } catch (err) {
+      console.error("Failed to clean up custom field:", err);
     }
   }
   await client?.close?.();
@@ -531,6 +549,150 @@ describe("Paperless MCP E2E scenario", () => {
       !removedTagIds.includes(state.tagId),
       `tag ${state.tagId} should be removed, got tags=${JSON.stringify(removedTagIds)}`
     );
+  });
+
+  it("create_custom_field creates a select field and returns its options", async () => {
+    const result = (await client.callTool({
+      name: "create_custom_field",
+      arguments: {
+        name: RUN_CUSTOM_FIELD,
+        data_type: "select",
+        extra_data: {
+          select_options: [{ label: "Keep" }, { label: "Discard" }],
+        },
+      },
+    })) as ToolResult;
+    assertOk(result, "create_custom_field");
+    const field = parseToolText(result) as {
+      id: number;
+      data_type: string;
+      extra_data?: {
+        select_options?: Array<string | { id?: string; label?: string }>;
+      };
+    };
+    assert.ok(
+      typeof field.id === "number",
+      `field.id should be a number, got ${JSON.stringify(field)}`
+    );
+    assert.strictEqual(field.data_type, "select");
+    state.customFieldId = field.id;
+
+    // Options come back as plain strings (pre-2.17) or {id,label} objects
+    // (2.17+); derive the labels generically so the scenario is version-agnostic.
+    const options = field.extra_data?.select_options ?? [];
+    const labelOf = (opt: string | { label?: string } | undefined) =>
+      typeof opt === "string" ? opt : opt?.label;
+    state.customFieldOptionLabel = labelOf(options[0]);
+    state.customFieldSecondLabel = labelOf(options[1]);
+    assert.ok(
+      state.customFieldOptionLabel && state.customFieldSecondLabel,
+      `expected two select option labels, got ${JSON.stringify(options)}`
+    );
+  });
+
+  it("update_document sets a select field by its option label (regression #119)", async () => {
+    assert.ok(
+      state.documentId && state.customFieldId && state.customFieldOptionLabel,
+      "document and select field must exist"
+    );
+    // Before the fix the label string was forwarded verbatim and Paperless
+    // rejected it with an HTTP 500.
+    const result = (await client.callTool({
+      name: "update_document",
+      arguments: {
+        id: state.documentId,
+        custom_fields: [
+          { field: state.customFieldId, value: state.customFieldOptionLabel },
+        ],
+      },
+    })) as ToolResult;
+    assertOk(result, "update_document select by label");
+
+    const docResult = (await client.callTool({
+      name: "get_document",
+      arguments: { id: state.documentId },
+    })) as ToolResult;
+    assertOk(docResult, "get_document after select update");
+    const doc = parseToolText(docResult) as {
+      custom_fields: Array<{ field: number; value: unknown }>;
+    };
+    const cf = (doc.custom_fields ?? []).find(
+      (c) => c.field === state.customFieldId
+    );
+    assert.ok(cf, `select field ${state.customFieldId} should be set on the document`);
+    assert.notStrictEqual(cf.value, null, "select value should not be null");
+    assert.notStrictEqual(
+      cf.value,
+      state.customFieldOptionLabel,
+      "stored value should be the option id/index, not the raw label"
+    );
+  });
+
+  it("bulk_edit_documents sets a select field by its option label", async () => {
+    assert.ok(
+      state.documentId && state.customFieldId && state.customFieldSecondLabel,
+      "document and select field must exist"
+    );
+    const result = (await client.callTool({
+      name: "bulk_edit_documents",
+      arguments: {
+        documents: [state.documentId],
+        method: "modify_custom_fields",
+        add_custom_fields: [
+          { field: state.customFieldId, value: state.customFieldSecondLabel },
+        ],
+      },
+    })) as ToolResult;
+    assertOk(result, "bulk_edit_documents select by label");
+
+    const docResult = (await client.callTool({
+      name: "get_document",
+      arguments: { id: state.documentId },
+    })) as ToolResult;
+    assertOk(docResult, "get_document after bulk select update");
+    const doc = parseToolText(docResult) as {
+      custom_fields: Array<{ field: number; value: unknown }>;
+    };
+    const cf = (doc.custom_fields ?? []).find(
+      (c) => c.field === state.customFieldId
+    );
+    assert.ok(cf, `select field ${state.customFieldId} should still be set`);
+    assert.notStrictEqual(
+      cf.value,
+      state.customFieldSecondLabel,
+      "stored value should be the option id/index, not the raw label"
+    );
+  });
+
+  it("update_document rejects an unknown select option without a Paperless 500", async () => {
+    assert.ok(
+      state.documentId && state.customFieldId,
+      "document and select field must exist"
+    );
+    const result = (await client.callTool({
+      name: "update_document",
+      arguments: {
+        id: state.documentId,
+        custom_fields: [
+          { field: state.customFieldId, value: "definitely-not-an-option" },
+        ],
+      },
+    })) as ToolResult;
+    assert.ok(
+      result.isError,
+      "an unknown select option should be rejected by the MCP before reaching Paperless"
+    );
+    assert.match(errorText(result), /definitely-not-an-option/);
+  });
+
+  it("delete_custom_field removes the select field when confirmed", async () => {
+    assert.ok(state.customFieldId, "select field must exist");
+    const result = (await client.callTool({
+      name: "delete_custom_field",
+      arguments: { id: state.customFieldId, confirm: true },
+    })) as ToolResult;
+    assertOk(result, "delete_custom_field");
+    state.customFieldId = undefined;
   });
 });
 

@@ -752,28 +752,17 @@ describe("Paperless MCP E2E scenario", () => {
     const options = field.extra_data?.select_options ?? [];
     const labelOf = (opt: string | { label?: string } | undefined) =>
       typeof opt === "string" ? opt : opt?.label;
-    // Mirror the resolver's encoding: an option id when present, else its index.
-    const encodedOf = (
-      opt: string | { id?: string } | undefined,
-      index: number
-    ): string | number => {
-      if (opt && typeof opt === "object" && typeof opt.id === "string") {
-        return opt.id;
-      }
-      return index;
-    };
     state.selectOptionLabel = labelOf(options[0]);
     state.selectSecondLabel = labelOf(options[1]);
-    state.selectOptionValue = encodedOf(options[0], 0);
-    state.selectSecondValue = encodedOf(options[1], 1);
+    // At API version 5, get_document returns a select value as the option's
+    // zero-based index — regardless of whether it was set via update_document
+    // (index submitted) or bulk_edit (id submitted); Paperless stores the id and
+    // converts back to the index on read. options[0]/[1] preserve creation order.
+    state.selectOptionValue = 0;
+    state.selectSecondValue = 1;
     assert.ok(
       state.selectOptionLabel && state.selectSecondLabel,
       `expected two select option labels, got ${JSON.stringify(options)}`
-    );
-    assert.ok(
-      state.selectOptionValue !== undefined &&
-        state.selectSecondValue !== undefined,
-      `expected encoded values for both options, got ${JSON.stringify(options)}`
     );
   });
 

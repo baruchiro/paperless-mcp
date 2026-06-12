@@ -368,7 +368,29 @@ describe("select custom field value resolution in document handlers", () => {
 
     assert.equal(calls.bulkEditDocuments.length, 1);
     const [, , parameters] = calls.bulkEditDocuments[0];
+    // pre-2.17 string options have no id, so the stored form is the index.
     assert.deepEqual(parameters.add_custom_fields, { "2": 1 });
+  });
+
+  test("bulk_edit_documents sends the option id for 2.17+ select fields (stored form)", async () => {
+    const { api, calls } = createDocumentApi([OBJECT_SELECT_FIELD]);
+
+    await withDocumentClient(api, async (client) => {
+      const result = (await client.callTool({
+        name: "bulk_edit_documents",
+        arguments: {
+          documents: [1],
+          method: "modify_custom_fields",
+          add_custom_fields: [{ field: 3, value: "High" }],
+        },
+      })) as CallToolResult;
+      assert.ok(!result.isError, parseToolText(result)?.error);
+    });
+
+    const [, , parameters] = calls.bulkEditDocuments[0];
+    // bulk_edit writes value_select directly, so it needs the option id, unlike
+    // update_document which takes the index.
+    assert.deepEqual(parameters.add_custom_fields, { "3": "def456" });
   });
 
   test("update_document rejects an unknown select option with a helpful error", async () => {

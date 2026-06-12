@@ -90,6 +90,40 @@ describe("resolveSelectCustomFieldValue", () => {
   });
 });
 
+describe("resolveSelectCustomFieldValue with stored encoding (bulk_edit path)", () => {
+  test("translates a label to the option id on 2.17+ object options", () => {
+    assert.equal(
+      resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "Low", "stored"),
+      "abc123"
+    );
+    assert.equal(
+      resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "High", "stored"),
+      "def456"
+    );
+  });
+
+  test("translates a label to the index on pre-2.17 string options (no id to store)", () => {
+    assert.equal(
+      resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "7 שנים", "stored"),
+      1
+    );
+  });
+
+  test("passes an already-stored option id through unchanged", () => {
+    assert.equal(
+      resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "def456", "stored"),
+      "def456"
+    );
+  });
+
+  test("maps an option index to its stored id (2.17+)", () => {
+    assert.equal(
+      resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, 1, "stored"),
+      "def456"
+    );
+  });
+});
+
 function apiReturning(fields: CustomField[]) {
   const requestedIds: number[] = [];
   const fieldMap = new Map(fields.map((field) => [field.id, field]));
@@ -124,6 +158,18 @@ describe("resolveSelectCustomFieldValues", () => {
       { field: 2, value: 2 },
       { field: 4, value: "INV-001" },
     ]);
+  });
+
+  test("applies the stored encoding (option id) when requested", async () => {
+    const { api } = apiReturning([OBJECT_SELECT_FIELD]);
+
+    const resolved = await resolveSelectCustomFieldValues(
+      api,
+      [{ field: 3, value: "High" }],
+      "stored"
+    );
+
+    assert.deepEqual(resolved, [{ field: 3, value: "def456" }]);
   });
 
   test("fetches each referenced field definition only once", async () => {

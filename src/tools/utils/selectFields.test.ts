@@ -55,6 +55,24 @@ describe("resolveSelectCustomFieldValue", () => {
     assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "def456"), "def456");
   });
 
+  test("prefers an already-encoded id over a colliding label of another option", () => {
+    // Pathological: option 0's id equals option 1's label. An already-encoded id
+    // must be preserved rather than re-mapped to the option whose label collides.
+    const collidingField: CustomField = {
+      id: 5,
+      name: "Collision",
+      data_type: "select",
+      extra_data: {
+        select_options: [
+          { id: "High", label: "Low" },
+          { id: "xyz789", label: "High" },
+        ],
+      },
+      document_count: 0,
+    };
+    assert.equal(resolveSelectCustomFieldValue(collidingField, "High"), "High");
+  });
+
   test("returns null unchanged so the field can be cleared", () => {
     assert.equal(resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, null), null);
   });

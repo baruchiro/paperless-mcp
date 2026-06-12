@@ -13,7 +13,12 @@ const RUN_TAG = `e2e-tag-${Date.now()}`;
 const RUN_CORRESPONDENT = `E2E Corp ${Date.now()}`;
 const RUN_DOCUMENT_TYPE = `E2E Type ${Date.now()}`;
 const RUN_DOCUMENT_TITLE = `E2E Document ${Date.now()}`;
-const RUN_CUSTOM_FIELD = `E2E Select ${Date.now()}`;
+const RUN_SELECT_FIELD = `E2E Select ${Date.now()}`;
+const RUN_CUSTOM_FIELD = `e2e_cf_${Date.now()}`;
+const RUN_CUSTOM_FIELD_VALUE = `cf-value-${Date.now()}`;
+// archive_serial_number is a unique uint32 in Paperless; derive an in-range
+// value from the run timestamp so the CLI and Docker passes use distinct ASNs.
+const RUN_ASN = Date.now() % 4294967295;
 
 // Paperless rejects duplicate uploads by checksum. When the same suite runs
 // twice against one Paperless instance (e.g. CLI then Docker in one CI job),
@@ -45,8 +50,11 @@ const state: {
   documentTypeId?: number;
   documentId?: number;
   customFieldId?: number;
-  customFieldOptionLabel?: string;
-  customFieldSecondLabel?: string;
+  selectFieldId?: number;
+  selectOptionLabel?: string;
+  selectSecondLabel?: string;
+  selectOptionValue?: string | number;
+  selectSecondValue?: string | number;
   mailAccountId?: number;
   mailRuleId?: number;
 } = {};
@@ -90,10 +98,17 @@ async function deleteMailAccount(id: number): Promise<void> {
 }
 
 async function deleteCustomFieldDirect(id: number): Promise<void> {
-  await fetch(`${PAPERLESS_URL}/api/custom_fields/${id}/`, {
+  const res = await fetch(`${PAPERLESS_URL}/api/custom_fields/${id}/`, {
     method: "DELETE",
     headers: { Authorization: `Token ${PAPERLESS_TOKEN}` },
   });
+  // fetch() does not reject on HTTP errors; surface a failed cleanup so a leaked
+  // field is visible. A 404 means it was already removed (e.g. by a delete test).
+  if (!res.ok && res.status !== 404) {
+    throw new Error(
+      `Failed to delete custom field ${id}: ${res.status} ${await res.text()}`
+    );
+  }
 }
 
 async function waitForMcp(url: string, maxAttempts = 30): Promise<void> {
@@ -168,11 +183,13 @@ after(async () => {
       console.error("Failed to clean up mail account:", err);
     }
   }
-  if (state.customFieldId !== undefined) {
-    try {
-      await deleteCustomFieldDirect(state.customFieldId);
-    } catch (err) {
-      console.error("Failed to clean up custom field:", err);
+  for (const fieldId of [state.customFieldId, state.selectFieldId]) {
+    if (fieldId !== undefined) {
+      try {
+        await deleteCustomFieldDirect(fieldId);
+      } catch (err) {
+        console.error("Failed to clean up custom field:", err);
+      }
     }
   }
   await client?.close?.();
@@ -551,18 +568,157 @@ describe("Paperless MCP E2E scenario", () => {
     );
   });
 
+  it("create_custom_field creates a string field used by the filter tests", async () => {
+    const result = (await client.callTool({
+      name: "create_custom_field",
+      arguments: { name: RUN_CUSTOM_FIELD, data_type: "string" },
+    })) as ToolResult;
+    assertOk(result, "create_custom_field");
+    const field = parseToolText(result) as { id: number; name: string };
+    assert.ok(typeof field.id === "number", `field.id should be a number, got ${JSON.stringify(field)}`);
+    assert.strictEqual(field.name, RUN_CUSTOM_FIELD);
+    state.customFieldId = field.id;
+  });
+
+  it("update_document sets archive_serial_number and the custom field value", async () => {
+    assert.ok(state.documentId && state.customFieldId, "document and custom field must exist");
+    const result = (await client.callTool({
+      name: "update_document",
+      arguments: {
+        id: state.documentId,
+        archive_serial_number: RUN_ASN,
+        custom_fields: [{ field: state.customFieldId, value: RUN_CUSTOM_FIELD_VALUE }],
+      },
+    })) as ToolResult;
+    assertOk(result, "update_document");
+  });
+
+  it("list_documents filters by exact archive_serial_number", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
+    const match = (await client.callTool({
+      name: "list_documents",
+      arguments: { archive_serial_number: RUN_ASN },
+    })) as ToolResult;
+    assertOk(match, "list_documents archive_serial_number");
+    const matchData = parseToolText(match) as { results: Array<{ id: number }> };
+    assert.ok(
+      matchData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} not found filtering by archive_serial_number=${RUN_ASN}`
+    );
+
+    // A different ASN must not return our document, proving the filter discriminates.
+    const otherAsn = RUN_ASN === 0 ? 1 : RUN_ASN - 1;
+    const miss = (await client.callTool({
+      name: "list_documents",
+      arguments: { archive_serial_number: otherAsn },
+    })) as ToolResult;
+    assertOk(miss, "list_documents archive_serial_number (other)");
+    const missData = parseToolText(miss) as { results: Array<{ id: number }> };
+    assert.ok(
+      !missData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} should not match archive_serial_number=${otherAsn}`
+    );
+  });
+
+  it("list_documents filters by archive_serial_number__isnull", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
+    // Our document now has an ASN, so it must be excluded when isnull=true...
+    const isnullTrue = (await client.callTool({
+      name: "list_documents",
+      arguments: { archive_serial_number__isnull: true, page_size: 100 },
+    })) as ToolResult;
+    assertOk(isnullTrue, "list_documents archive_serial_number__isnull=true");
+    const trueData = parseToolText(isnullTrue) as { results: Array<{ id: number }> };
+    assert.ok(
+      !trueData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} has an ASN and must not appear when archive_serial_number__isnull=true`
+    );
+
+    // ...and included when isnull=false.
+    const isnullFalse = (await client.callTool({
+      name: "list_documents",
+      arguments: { archive_serial_number__isnull: false, page_size: 100 },
+    })) as ToolResult;
+    assertOk(isnullFalse, "list_documents archive_serial_number__isnull=false");
+    const falseData = parseToolText(isnullFalse) as { results: Array<{ id: number }> };
+    assert.ok(
+      falseData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} has an ASN and must appear when archive_serial_number__isnull=false`
+    );
+  });
+
+  it("list_documents filters by custom_fields__icontains", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
+    const match = (await client.callTool({
+      name: "list_documents",
+      arguments: { custom_fields__icontains: RUN_CUSTOM_FIELD_VALUE },
+    })) as ToolResult;
+    assertOk(match, "list_documents custom_fields__icontains");
+    const matchData = parseToolText(match) as { results: Array<{ id: number }> };
+    assert.ok(
+      matchData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} not found filtering by custom_fields__icontains=${RUN_CUSTOM_FIELD_VALUE}`
+    );
+
+    const miss = (await client.callTool({
+      name: "list_documents",
+      arguments: { custom_fields__icontains: `no-such-${RUN_CUSTOM_FIELD_VALUE}` },
+    })) as ToolResult;
+    assertOk(miss, "list_documents custom_fields__icontains (no match)");
+    const missData = parseToolText(miss) as { results: Array<{ id: number }> };
+    assert.ok(
+      !missData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} should not match a custom_fields__icontains value it does not contain`
+    );
+  });
+
+  it("list_documents filters by custom_field_query", async () => {
+    assert.ok(state.documentId && state.customFieldId, "document and custom field must exist");
+    const query = JSON.stringify([
+      state.customFieldId,
+      "icontains",
+      RUN_CUSTOM_FIELD_VALUE,
+    ]);
+    const result = (await client.callTool({
+      name: "list_documents",
+      arguments: { custom_field_query: query },
+    })) as ToolResult;
+    assertOk(result, "list_documents custom_field_query");
+    const data = parseToolText(result) as { results: Array<{ id: number }> };
+    assert.ok(
+      data.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} not found filtering by custom_field_query=${query}`
+    );
+
+    const missQuery = JSON.stringify([
+      state.customFieldId,
+      "icontains",
+      `no-such-${RUN_CUSTOM_FIELD_VALUE}`,
+    ]);
+    const miss = (await client.callTool({
+      name: "list_documents",
+      arguments: { custom_field_query: missQuery },
+    })) as ToolResult;
+    assertOk(miss, "list_documents custom_field_query (no match)");
+    const missData = parseToolText(miss) as { results: Array<{ id: number }> };
+    assert.ok(
+      !missData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} should not match custom_field_query=${missQuery}`
+    );
+  });
+
   it("create_custom_field creates a select field and returns its options", async () => {
     const result = (await client.callTool({
       name: "create_custom_field",
       arguments: {
-        name: RUN_CUSTOM_FIELD,
+        name: RUN_SELECT_FIELD,
         data_type: "select",
         extra_data: {
           select_options: [{ label: "Keep" }, { label: "Discard" }],
         },
       },
     })) as ToolResult;
-    assertOk(result, "create_custom_field");
+    assertOk(result, "create_custom_field (select)");
     const field = parseToolText(result) as {
       id: number;
       data_type: string;
@@ -575,24 +731,37 @@ describe("Paperless MCP E2E scenario", () => {
       `field.id should be a number, got ${JSON.stringify(field)}`
     );
     assert.strictEqual(field.data_type, "select");
-    state.customFieldId = field.id;
+    state.selectFieldId = field.id;
 
-    // Options come back as plain strings (pre-2.17) or {id,label} objects
-    // (2.17+); derive the labels generically so the scenario is version-agnostic.
+    // Options come back as plain strings (pre-2.17, stored by index) or
+    // {id,label} objects (2.17+, stored by id); derive both the label to send
+    // and the encoded value Paperless should persist, so the scenario is
+    // version-agnostic and can assert the exact stored encoding.
     const options = field.extra_data?.select_options ?? [];
     const labelOf = (opt: string | { label?: string } | undefined) =>
       typeof opt === "string" ? opt : opt?.label;
-    state.customFieldOptionLabel = labelOf(options[0]);
-    state.customFieldSecondLabel = labelOf(options[1]);
+    const encodedOf = (
+      opt: string | { id?: string } | undefined,
+      index: number
+    ) => (typeof opt === "string" ? index : opt?.id);
+    state.selectOptionLabel = labelOf(options[0]);
+    state.selectSecondLabel = labelOf(options[1]);
+    state.selectOptionValue = encodedOf(options[0], 0);
+    state.selectSecondValue = encodedOf(options[1], 1);
     assert.ok(
-      state.customFieldOptionLabel && state.customFieldSecondLabel,
+      state.selectOptionLabel && state.selectSecondLabel,
       `expected two select option labels, got ${JSON.stringify(options)}`
+    );
+    assert.ok(
+      state.selectOptionValue !== undefined &&
+        state.selectSecondValue !== undefined,
+      `expected encoded values for both options, got ${JSON.stringify(options)}`
     );
   });
 
   it("update_document sets a select field by its option label (regression #119)", async () => {
     assert.ok(
-      state.documentId && state.customFieldId && state.customFieldOptionLabel,
+      state.documentId && state.selectFieldId && state.selectOptionLabel,
       "document and select field must exist"
     );
     // Before the fix the label string was forwarded verbatim and Paperless
@@ -602,7 +771,7 @@ describe("Paperless MCP E2E scenario", () => {
       arguments: {
         id: state.documentId,
         custom_fields: [
-          { field: state.customFieldId, value: state.customFieldOptionLabel },
+          { field: state.selectFieldId, value: state.selectOptionLabel },
         ],
       },
     })) as ToolResult;
@@ -617,20 +786,17 @@ describe("Paperless MCP E2E scenario", () => {
       custom_fields: Array<{ field: number; value: unknown }>;
     };
     const cf = (doc.custom_fields ?? []).find(
-      (c) => c.field === state.customFieldId
+      (c) => c.field === state.selectFieldId
     );
-    assert.ok(cf, `select field ${state.customFieldId} should be set on the document`);
-    assert.notStrictEqual(cf.value, null, "select value should not be null");
-    assert.notStrictEqual(
-      cf.value,
-      state.customFieldOptionLabel,
-      "stored value should be the option id/index, not the raw label"
-    );
+    assert.ok(cf, `select field ${state.selectFieldId} should be set on the document`);
+    // The label must have been translated to the exact stored encoding
+    // (option id on 2.17+, zero-based index on pre-2.17), not the raw label.
+    assert.strictEqual(cf.value, state.selectOptionValue);
   });
 
   it("bulk_edit_documents sets a select field by its option label", async () => {
     assert.ok(
-      state.documentId && state.customFieldId && state.customFieldSecondLabel,
+      state.documentId && state.selectFieldId && state.selectSecondLabel,
       "document and select field must exist"
     );
     const result = (await client.callTool({
@@ -639,7 +805,7 @@ describe("Paperless MCP E2E scenario", () => {
         documents: [state.documentId],
         method: "modify_custom_fields",
         add_custom_fields: [
-          { field: state.customFieldId, value: state.customFieldSecondLabel },
+          { field: state.selectFieldId, value: state.selectSecondLabel },
         ],
       },
     })) as ToolResult;
@@ -654,19 +820,15 @@ describe("Paperless MCP E2E scenario", () => {
       custom_fields: Array<{ field: number; value: unknown }>;
     };
     const cf = (doc.custom_fields ?? []).find(
-      (c) => c.field === state.customFieldId
+      (c) => c.field === state.selectFieldId
     );
-    assert.ok(cf, `select field ${state.customFieldId} should still be set`);
-    assert.notStrictEqual(
-      cf.value,
-      state.customFieldSecondLabel,
-      "stored value should be the option id/index, not the raw label"
-    );
+    assert.ok(cf, `select field ${state.selectFieldId} should still be set`);
+    assert.strictEqual(cf.value, state.selectSecondValue);
   });
 
   it("update_document rejects an unknown select option without a Paperless 500", async () => {
     assert.ok(
-      state.documentId && state.customFieldId,
+      state.documentId && state.selectFieldId,
       "document and select field must exist"
     );
     const result = (await client.callTool({
@@ -674,7 +836,7 @@ describe("Paperless MCP E2E scenario", () => {
       arguments: {
         id: state.documentId,
         custom_fields: [
-          { field: state.customFieldId, value: "definitely-not-an-option" },
+          { field: state.selectFieldId, value: "definitely-not-an-option" },
         ],
       },
     })) as ToolResult;
@@ -686,13 +848,13 @@ describe("Paperless MCP E2E scenario", () => {
   });
 
   it("delete_custom_field removes the select field when confirmed", async () => {
-    assert.ok(state.customFieldId, "select field must exist");
+    assert.ok(state.selectFieldId, "select field must exist");
     const result = (await client.callTool({
       name: "delete_custom_field",
-      arguments: { id: state.customFieldId, confirm: true },
+      arguments: { id: state.selectFieldId, confirm: true },
     })) as ToolResult;
     assertOk(result, "delete_custom_field");
-    state.customFieldId = undefined;
+    state.selectFieldId = undefined;
   });
 });
 

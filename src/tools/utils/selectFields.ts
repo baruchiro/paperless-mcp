@@ -40,9 +40,11 @@ function normalizeSelectOptions(field: CustomField): NormalizedSelectOption[] {
  * `list_custom_fields`), but Paperless rejects the label string with an HTTP
  * 500: it expects the option id (2.17+) or its zero-based index (pre-2.17).
  *
- * The supplied value is matched against the field's `select_options` by label
- * first, then by its already-encoded form (so a correct id/index passes through
- * untouched). Values for non-select fields and `null` (which clears the field)
+ * The supplied value is matched against the field's `select_options` by its
+ * already-encoded form first (so a correct id/index always passes through
+ * untouched), then by label. Checking the encoding first preserves idempotency
+ * even in the pathological case where one option's label equals another option's
+ * stored id. Values for non-select fields and `null` (which clears the field)
  * are returned unchanged. An unmatched value throws an actionable error listing
  * the valid options instead of letting Paperless 500.
  */
@@ -59,16 +61,16 @@ export function resolveSelectCustomFieldValue(
     return value;
   }
 
+  const alreadyEncoded = options.some((option) => option.storedValue === value);
+  if (alreadyEncoded) {
+    return value;
+  }
+
   if (typeof value === "string") {
     const byLabel = options.find((option) => option.label === value);
     if (byLabel) {
       return byLabel.storedValue;
     }
-  }
-
-  const alreadyEncoded = options.some((option) => option.storedValue === value);
-  if (alreadyEncoded) {
-    return value;
   }
 
   const optionList = options

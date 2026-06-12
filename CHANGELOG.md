@@ -1,5 +1,24 @@
 # @baruchiro/paperless-mcp
 
+## 2.0.0
+
+### Major Changes
+
+- 18d49ce: Secure HTTP mode by default and stop leaking the API token in logs.
+
+  **BREAKING CHANGE:** In HTTP mode, requests without an `Authorization: Bearer <token>` header are now rejected with `401 Unauthorized`. Previously they silently fell back to the server-configured `PAPERLESS_API_KEY`, which left the endpoint unauthenticated for anyone able to reach the port. To restore the old fallback behaviour (trusted/local networks only), start the server with the new `--no-auth` flag; it requires a server token to be configured. Client-supplied Bearer tokens and stdio mode are unchanged.
+
+  Also stops logging the raw request `options` (which included the request body) on API errors; only `url`, `method`, and `status` are logged now.
+
+### Minor Changes
+
+- 36e0255: Add `archive_serial_number`, `archive_serial_number__isnull`, `custom_field_query`, and `custom_fields__icontains` filters to the `list_documents` tool.
+- c55da21: Add MCP tools for Paperless mail accounts and mail rules.
+
+### Patch Changes
+
+- 6f8aada: Allow `post_document` to upload from an absolute server-side `file_path` instead of base64 `file`, avoiding base64 overhead for large files. Reads are validated (absolute path, regular file, 100MB limit, non-empty) and can be confined to allowed directories via the `PAPERLESS_MCP_UPLOAD_PATHS` environment variable.
+
 ## 1.0.0
 
 ### Major Changes

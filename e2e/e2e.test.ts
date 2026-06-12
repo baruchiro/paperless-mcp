@@ -707,43 +707,61 @@ describe("Paperless MCP E2E scenario", () => {
     );
   });
 
-  it("create_custom_field creates a select field and returns its options", async () => {
+  it("create_custom_field creates a select field, then reads back its options", async () => {
+    // Create options with explicit ids: that is how the Paperless UI stores
+    // 2.17+ select fields (each option is {id,label} and the stored value is the
+    // id). Providing them up front avoids depending on whether a given Paperless
+    // version auto-generates ids for label-only options.
     const result = (await client.callTool({
       name: "create_custom_field",
       arguments: {
         name: RUN_SELECT_FIELD,
         data_type: "select",
         extra_data: {
-          select_options: [{ label: "Keep" }, { label: "Discard" }],
+          select_options: [
+            { id: "keep", label: "Keep" },
+            { id: "discard", label: "Discard" },
+          ],
         },
       },
     })) as ToolResult;
     assertOk(result, "create_custom_field (select)");
-    const field = parseToolText(result) as {
-      id: number;
-      data_type: string;
+    const created = parseToolText(result) as { id: number; data_type: string };
+    assert.ok(
+      typeof created.id === "number",
+      `field.id should be a number, got ${JSON.stringify(created)}`
+    );
+    assert.strictEqual(created.data_type, "select");
+    state.selectFieldId = created.id;
+
+    // Read the field back so the scenario uses the exact options Paperless
+    // persisted — the same definition the MCP resolver fetches when translating
+    // a label. This keeps the test version-agnostic: options may be plain
+    // strings (pre-2.17, stored by index) or {id,label} objects (2.17+, stored
+    // by id), and Paperless may normalise the ids we supplied.
+    const getResult = (await client.callTool({
+      name: "get_custom_field",
+      arguments: { id: created.id },
+    })) as ToolResult;
+    assertOk(getResult, "get_custom_field (select)");
+    const field = parseToolText(getResult) as {
       extra_data?: {
         select_options?: Array<string | { id?: string; label?: string }>;
       };
     };
-    assert.ok(
-      typeof field.id === "number",
-      `field.id should be a number, got ${JSON.stringify(field)}`
-    );
-    assert.strictEqual(field.data_type, "select");
-    state.selectFieldId = field.id;
-
-    // Options come back as plain strings (pre-2.17, stored by index) or
-    // {id,label} objects (2.17+, stored by id); derive both the label to send
-    // and the encoded value Paperless should persist, so the scenario is
-    // version-agnostic and can assert the exact stored encoding.
     const options = field.extra_data?.select_options ?? [];
     const labelOf = (opt: string | { label?: string } | undefined) =>
       typeof opt === "string" ? opt : opt?.label;
+    // Mirror the resolver's encoding: an option id when present, else its index.
     const encodedOf = (
       opt: string | { id?: string } | undefined,
       index: number
-    ) => (typeof opt === "string" ? index : opt?.id);
+    ): string | number => {
+      if (opt && typeof opt === "object" && typeof opt.id === "string") {
+        return opt.id;
+      }
+      return index;
+    };
     state.selectOptionLabel = labelOf(options[0]);
     state.selectSecondLabel = labelOf(options[1]);
     state.selectOptionValue = encodedOf(options[0], 0);

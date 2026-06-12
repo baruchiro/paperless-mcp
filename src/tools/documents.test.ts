@@ -336,7 +336,7 @@ describe("select custom field value resolution in document handlers", () => {
     assert.deepEqual(data.custom_fields, [{ field: 2, value: 0 }]);
   });
 
-  test("update_document translates a select label to its option id (Paperless 2.17+)", async () => {
+  test("update_document translates a select label to its option index (Paperless 2.17+)", async () => {
     const { api, calls } = createDocumentApi([OBJECT_SELECT_FIELD]);
 
     await withDocumentClient(api, async (client) => {
@@ -348,7 +348,7 @@ describe("select custom field value resolution in document handlers", () => {
     });
 
     const [, data] = calls.updateDocument[0];
-    assert.deepEqual(data.custom_fields, [{ field: 3, value: "def456" }]);
+    assert.deepEqual(data.custom_fields, [{ field: 3, value: 1 }]);
   });
 
   test("bulk_edit_documents translates a select label in add_custom_fields", async () => {

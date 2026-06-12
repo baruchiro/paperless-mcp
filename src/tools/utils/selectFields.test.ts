@@ -42,35 +42,26 @@ describe("resolveSelectCustomFieldValue", () => {
     assert.equal(resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "שנתיים"), 2);
   });
 
-  test("translates a label to its option id (2.17+ object options)", () => {
-    assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "Low"), "abc123");
-    assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "High"), "def456");
+  test("translates a label to its zero-based index (2.17+ object options)", () => {
+    assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "Low"), 0);
+    assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "High"), 1);
   });
 
   test("passes through an already-encoded index (pre-2.17)", () => {
     assert.equal(resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, 1), 1);
   });
 
-  test("passes through an already-encoded option id (2.17+)", () => {
-    assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "def456"), "def456");
+  test("maps an option id back to its zero-based index (2.17+ round-trip)", () => {
+    // A value read from a document comes back as the stored option id; it must
+    // resolve to the index Paperless expects on the next write.
+    assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "def456"), 1);
   });
 
-  test("prefers an already-encoded id over a colliding label of another option", () => {
-    // Pathological: option 0's id equals option 1's label. An already-encoded id
-    // must be preserved rather than re-mapped to the option whose label collides.
-    const collidingField: CustomField = {
-      id: 5,
-      name: "Collision",
-      data_type: "select",
-      extra_data: {
-        select_options: [
-          { id: "High", label: "Low" },
-          { id: "xyz789", label: "High" },
-        ],
-      },
-      document_count: 0,
-    };
-    assert.equal(resolveSelectCustomFieldValue(collidingField, "High"), "High");
+  test("resolves both the label and the option id to the same index", () => {
+    // Paperless indexes select_options by the submitted value, so the input is
+    // always the index regardless of whether the agent passed a label or an id.
+    assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "Low"), 0);
+    assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "abc123"), 0);
   });
 
   test("returns null unchanged so the field can be cleared", () => {

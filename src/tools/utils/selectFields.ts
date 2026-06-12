@@ -7,10 +7,11 @@ import {
 
 interface NormalizedSelectOption {
   index: number;
-  // The value Paperless stores for the option: its id on 2.17+ (a short hashed
-  // string) or its zero-based index on pre-2.17 instances (plain-string options).
-  storedValue: string | number;
   label: string;
+  // Present on Paperless 2.17+ where options are {id, label}; absent on pre-2.17
+  // instances where options are plain strings. Only used to recognise an
+  // already-stored value being sent back.
+  id?: string;
 }
 
 function normalizeSelectOptions(field: CustomField): NormalizedSelectOption[] {
@@ -26,27 +27,31 @@ function normalizeSelectOptions(field: CustomField): NormalizedSelectOption[] {
       const { id, label } = option as { id?: unknown; label?: unknown };
       return {
         index,
-        storedValue: typeof id === "string" || typeof id === "number" ? id : index,
         label: typeof label === "string" ? label : String(label),
+        id: typeof id === "string" ? id : undefined,
       };
     }
-    return { index, storedValue: index, label: String(option) };
+    return { index, label: String(option) };
   });
 }
 
 /**
  * Translates a `select` custom field value into the encoding Paperless-NGX
- * stores. Agents only ever see option labels (from `get_custom_field` /
- * `list_custom_fields`), but Paperless rejects the label string with an HTTP
- * 500: it expects the option id (2.17+) or its zero-based index (pre-2.17).
+ * expects on input: the option's **zero-based index** into `select_options`.
  *
- * The supplied value is matched against the field's `select_options` by its
- * already-encoded form first (so a correct id/index always passes through
- * untouched), then by label. Checking the encoding first preserves idempotency
- * even in the pathological case where one option's label equals another option's
- * stored id. Values for non-select fields and `null` (which clears the field)
- * are returned unchanged. An unmatched value throws an actionable error listing
- * the valid options instead of letting Paperless 500.
+ * Agents only ever see option labels (from `get_custom_field` /
+ * `list_custom_fields`). Paperless rejects the label with an HTTP 500 because
+ * its serializer does `select_options[value]` — i.e. it indexes the options
+ * list with the supplied value and then resolves it to the stored option id.
+ * Passing the label (or the stored id) is a string index into a list and raises
+ * `TypeError: list indices must be integers`. The value must therefore be the
+ * integer index; Paperless converts it to the stored id (2.17+) itself.
+ *
+ * The supplied value is matched against the field's `select_options` by label,
+ * then by option id (so a value read back from a document round-trips), and an
+ * existing valid index passes through. Non-select fields and `null` (which
+ * clears the field) are returned unchanged. An unmatched value throws an
+ * actionable error listing the valid options instead of letting Paperless 500.
  */
 export function resolveSelectCustomFieldValue(
   field: CustomField,
@@ -61,28 +66,36 @@ export function resolveSelectCustomFieldValue(
     return value;
   }
 
-  const alreadyEncoded = options.some((option) => option.storedValue === value);
-  if (alreadyEncoded) {
+  // Already the integer index Paperless expects.
+  if (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value < options.length
+  ) {
     return value;
   }
 
   if (typeof value === "string") {
     const byLabel = options.find((option) => option.label === value);
     if (byLabel) {
-      return byLabel.storedValue;
+      return byLabel.index;
+    }
+    // A value previously read from a document comes back as the stored option
+    // id; map it to its index so the round-trip succeeds.
+    const byId = options.find((option) => option.id === value);
+    if (byId) {
+      return byId.index;
     }
   }
 
   const optionList = options
-    .map(
-      (option) =>
-        `${JSON.stringify(option.label)} → ${JSON.stringify(option.storedValue)}`
-    )
+    .map((option) => `${JSON.stringify(option.label)} (index ${option.index})`)
     .join(", ");
   throw new Error(
     `Invalid value ${JSON.stringify(value)} for select custom field ` +
-      `"${field.name}" (id ${field.id}). Pass one of the option labels (or its ` +
-      `stored value). Valid options: ${optionList}.`
+      `"${field.name}" (id ${field.id}). Pass one of the option labels. ` +
+      `Valid options: ${optionList}.`
   );
 }
 

@@ -67,6 +67,7 @@ Add these to your MCP config file:
 | `PAPERLESS_API_KEY` | Yes | — | API token from your Paperless-NGX profile |
 | `PAPERLESS_PUBLIC_URL` | No | `PAPERLESS_URL` | Public-facing URL for document links |
 | `PAPERLESS_API_VERSION` | No | `5` | Paperless-ngx REST API version. Use `10` for Paperless-ngx v3+. If you see HTTP 406 errors, set this to `10`. |
+| `PAPERLESS_MCP_UPLOAD_PATHS` | No | — | Colon-separated list of allowed directories for `file_path` uploads. **Recommended for security.** Example: `/var/uploads:/tmp/scans` |
 
 That's it! Now you can ask Claude to help you manage your Paperless-NGX documents.
 
@@ -244,9 +245,17 @@ bulk_edit_documents({
 #### post_document
 Upload a new document to Paperless-NGX.
 
+**Two upload modes:**
+
+1. **Base64 mode** (traditional): Provide `file` (base64-encoded content) + `filename`
+2. **Filesystem mode** (efficient): Provide `file_path` (absolute path on server)
+
+**Security Note:** When using `file_path`, set the `PAPERLESS_MCP_UPLOAD_PATHS` environment variable (colon-separated list of allowed directories) to restrict uploads to specific locations. Without this, any file on the server's filesystem could be uploaded.
+
 Parameters:
-- file: Base64 encoded file content
-- filename: Name of the file
+- file (optional): Base64 encoded file content. Either `file` or `file_path` required.
+- file_path (optional): Absolute path to file on server's filesystem. Either `file` or `file_path` required.
+- filename (optional): Name of the file. Required with `file`, optional with `file_path` (derives from path).
 - title (optional): Title for the document
 - created (optional): DateTime when the document was created (e.g. "2024-01-19" or "2024-01-19 06:15:00+02:00")
 - correspondent (optional): ID of a correspondent
@@ -256,7 +265,10 @@ Parameters:
 - archive_serial_number (optional): Archive serial number
 - custom_fields (optional): Array of custom field IDs
 
+**File size limit:** 100MB for both modes
+
 ```typescript
+// Base64 mode (traditional)
 post_document({
   file: "base64_encoded_content",
   filename: "invoice.pdf",
@@ -267,6 +279,15 @@ post_document({
   tags: [1, 3],
   archive_serial_number: "2024-001",
   custom_fields: [1, 2]
+})
+
+// Filesystem mode (more efficient for large files)
+post_document({
+  file_path: "/var/uploads/invoice.pdf",
+  title: "January Invoice",
+  correspondent: 1,
+  document_type: 2,
+  tags: [1, 3]
 })
 ```
 

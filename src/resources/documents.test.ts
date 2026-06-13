@@ -80,11 +80,11 @@ async function withResourceClient(
   }
 }
 
-test("resources/list exposes download and thumbnail resources for the first page only", async () => {
-  // `all` lists IDs across every page (potentially tens of thousands of
-  // documents) — `resources/list` must not expand that or it will produce
-  // an unbounded payload. Only the documents on the fetched page should
-  // appear; the rest are still reachable via the resource template.
+test("resources/list does not enumerate documents at startup", async () => {
+  // Documents are dynamic DMS data and must not be pre-registered as MCP
+  // resources: enumerating them floods `resources/list` and the LLM context
+  // window (issue #112). The list must stay empty even when documents exist;
+  // documents are reached on demand via tools + the `resources/read` template.
   const api = {
     getDocuments: async () =>
       emptyPaginationResponse(
@@ -107,25 +107,7 @@ test("resources/list exposes download and thumbnail resources for the first page
   await withResourceClient(api, async (client) => {
     const result = await client.listResources();
 
-    assert.deepEqual(
-      result.resources.map((resource) => resource.uri),
-      [
-        "paperless://documents/1/download",
-        "paperless://documents/1/thumb",
-        "paperless://documents/2/download",
-        "paperless://documents/2/thumb",
-      ]
-    );
-    assert.equal(result.resources[0].name, "Invoice download");
-    assert.equal(result.resources[0].mimeType, "application/pdf");
-    assert.equal(result.resources[3].name, "Receipt thumbnail");
-    // Document 3 lives in `all` but not on this page — it must not leak in.
-    for (const resource of result.resources) {
-      assert.ok(
-        !resource.uri.includes("/3/"),
-        `unexpected page-3 resource in list: ${resource.uri}`
-      );
-    }
+    assert.deepEqual(result.resources, []);
   });
 });
 

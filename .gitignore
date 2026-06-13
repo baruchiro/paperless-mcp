@@ -6,9 +6,6 @@ node_modules/
 .env.local
 .env.*.local
 
-# Local deployment compose holds the inline PAPERLESS_API_KEY
-docker-compose.yml
-
 # Build output
 dist/
 build/

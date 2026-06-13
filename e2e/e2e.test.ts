@@ -456,21 +456,15 @@ describe("Paperless MCP E2E scenario", () => {
     );
   });
 
-  it("resources/list includes the uploaded document's download and thumb URIs", async () => {
+  it("resources/list does not enumerate documents at startup", async () => {
     assert.ok(state.documentId, "document must be uploaded first");
     const list = (await client.listResources()) as {
       resources: Array<{ uri: string; name?: string; mimeType?: string }>;
     };
-    const uris = list.resources.map((r) => r.uri);
-    const expectedDownload = `paperless://documents/${state.documentId}/download`;
-    const expectedThumb = `paperless://documents/${state.documentId}/thumb`;
-    assert.ok(
-      uris.includes(expectedDownload),
-      `resources/list should include ${expectedDownload}, got ${JSON.stringify(uris)}`
-    );
-    assert.ok(
-      uris.includes(expectedThumb),
-      `resources/list should include ${expectedThumb}, got ${JSON.stringify(uris)}`
+    assert.deepEqual(
+      list.resources,
+      [],
+      "resources/list must stay empty; use list_documents + resources/read on demand"
     );
   });
 

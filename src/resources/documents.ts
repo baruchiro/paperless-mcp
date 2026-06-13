@@ -16,10 +16,6 @@ export function registerDocumentResources(server: McpServer, api: PaperlessAPI) 
   server.resource(
     "paperless-document-resource",
     new ResourceTemplate("paperless://documents/{id}/{resource}", {
-      // Documents are dynamic DMS data and must not be enumerated at startup:
-      // pre-registering every document (download + thumbnail) floods the
-      // client's `resources/list` and the LLM context window (see issue #112).
-      // Documents are reached on demand via tools + `resources/read` below.
       list: undefined,
     }),
     async (uri, variables) => readDocumentResource(api, uri, variables)

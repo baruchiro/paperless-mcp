@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createMcpServer } from "../server";
 
-// Enforce that every registered MCP tool declares annotations. If this fails,
-// a tool was added without an annotation argument at its server.tool(...) call.
 test("every registered tool declares MCP annotations", () => {
   const server = createMcpServer({
     baseUrl: "http://localhost",

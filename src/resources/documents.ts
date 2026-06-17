@@ -4,18 +4,11 @@ import {
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type {
   BlobResourceContents,
-  ListResourcesResult,
   ReadResourceResult,
-  Resource,
   TextResourceContents,
 } from "@modelcontextprotocol/sdk/types";
 import type { AxiosResponse } from "axios";
 import { PaperlessAPI } from "../api/PaperlessAPI";
-import { Document } from "../api/types";
-import {
-  buildDocumentResourceUri,
-  buildThumbnailResourceUri,
-} from "../tools/utils/resourceUri";
 
 type TemplateVariables = Record<string, string | string[]>;
 
@@ -23,7 +16,7 @@ export function registerDocumentResources(server: McpServer, api: PaperlessAPI) 
   server.resource(
     "paperless-document-resource",
     new ResourceTemplate("paperless://documents/{id}/{resource}", {
-      list: async () => listDocumentResources(api),
+      list: undefined,
     }),
     async (uri, variables) => readDocumentResource(api, uri, variables)
   );
@@ -41,26 +34,6 @@ export function registerDocumentResources(server: McpServer, api: PaperlessAPI) 
         isTrueQueryValue(readVariable(variables, "original"))
       )
   );
-}
-
-export async function listDocumentResources(
-  api: PaperlessAPI
-): Promise<ListResourcesResult> {
-  // Return only the first page of documents. Paperless libraries can
-  // contain tens of thousands of documents; expanding the full `all`
-  // ID array would produce an unbounded `resources/list` payload.
-  // Clients that need to enumerate more documents can use the
-  // `list_documents` tool (which paginates) and read
-  // `paperless://documents/{id}/download` directly — the resource
-  // template handles `resources/read` for any document ID.
-  const documentsResponse = await api.getDocuments();
-  const documents = documentsResponse.results || [];
-
-  return {
-    resources: documents.flatMap((document) =>
-      buildResourcesForDocument(document.id, document)
-    ),
-  };
 }
 
 export async function readDocumentResource(
@@ -112,26 +85,6 @@ async function readDocumentThumbnailResource(
   return {
     contents: [responseToResourceContents(uri.href, response, "image/webp")],
   };
-}
-
-function buildResourcesForDocument(id: number, document?: Document): Resource[] {
-  const label =
-    document?.title || document?.original_file_name || `Document ${id}`;
-
-  return [
-    {
-      uri: buildDocumentResourceUri(id),
-      name: `${label} download`,
-      description: `Full file content for Paperless document ${id}`,
-      mimeType: document?.mime_type || "application/octet-stream",
-    },
-    {
-      uri: buildThumbnailResourceUri(id),
-      name: `${label} thumbnail`,
-      description: `Thumbnail image for Paperless document ${id}`,
-      mimeType: "image/webp",
-    },
-  ];
 }
 
 function responseToResourceContents(

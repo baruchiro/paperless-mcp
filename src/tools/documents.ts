@@ -5,6 +5,7 @@ import { constants } from "fs";
 import { basename, isAbsolute } from "path";
 import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
+import { READ_ONLY, WRITE, DESTRUCTIVE } from "./utils/annotations";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
 import { withErrorHandling } from "./utils/middlewares";
 import { validateCustomFields } from "./utils/monetary";
@@ -207,6 +208,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           "Must be true when method is 'delete' to confirm destructive operation"
         ),
     },
+    DESTRUCTIVE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.method === "delete" && !args.confirm) {
@@ -306,6 +308,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     "post_document",
     "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields. Provide either 'file' (base64-encoded content) or 'file_path' (absolute path to a file on the server's filesystem). Using file_path avoids base64 encoding overhead for large files. SECURITY: When using file_path, set PAPERLESS_MCP_UPLOAD_PATHS environment variable to restrict uploads to specific directories (colon-separated paths).",
     postDocumentBaseSchema.shape,
+    WRITE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
 
@@ -394,6 +397,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       custom_field_query: z.string().min(1).optional(),
       custom_fields__icontains: z.string().min(1).optional(),
     },
+    READ_ONLY,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const query = new URLSearchParams();
@@ -428,6 +432,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       id: z.number(),
     },
+    READ_ONLY,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
@@ -441,6 +446,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       id: z.number(),
     },
+    READ_ONLY,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const doc = await api.getDocument(args.id);
@@ -465,6 +471,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       query: z.string(),
     },
+    READ_ONLY,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const docsResponse = await api.searchDocuments(args.query);
@@ -479,6 +486,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       id: z.number().int().positive(),
       original: z.boolean().optional(),
     },
+    READ_ONLY,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const uri = buildDocumentResourceUri(args.id, {
@@ -508,6 +516,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     {
       id: z.number().int().positive(),
     },
+    READ_ONLY,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       return {
@@ -591,6 +600,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         .optional()
         .describe("Array of custom field values to assign"),
     },
+    WRITE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...updateData } = args;

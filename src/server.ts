@@ -1,5 +1,4 @@
-import { McpServer, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type express from "express";
 import { PaperlessAPI } from "./api/PaperlessAPI";
 import { registerDocumentResources } from "./resources/documents";
@@ -17,22 +16,6 @@ export interface CreateMcpServerOptions {
   publicUrl: string;
 }
 
-/**
- * Derive MCP tool annotations from the tool-name verb prefix so clients can
- * distinguish reads from writes and flag destructive calls: list_/get_/search_/
- * download_ are read-only, delete_/bulk_edit_ are destructive, everything else
- * is a non-destructive write. Paperless-ngx is a closed system, so
- * openWorldHint is false.
- */
-function toolAnnotations(name: string): ToolAnnotations {
-  const n = name.toLowerCase();
-  if (/^(list_|get_|search_|download_)/.test(n)) {
-    return { readOnlyHint: true, openWorldHint: false };
-  }
-  const destructive = /^(delete_|bulk_edit_)/.test(n);
-  return { readOnlyHint: false, destructiveHint: destructive, openWorldHint: false };
-}
-
 export function createMcpServer({
   baseUrl,
   token,
@@ -44,18 +27,6 @@ export function createMcpServer({
     { name: "paperless-ngx", version },
     { instructions: buildInstructions(publicUrl) }
   );
-
-  // The SDK leaves tool annotations unset unless passed explicitly. Wrap
-  // server.tool so every tool the register*Tools helpers register gets its
-  // annotations stamped by verb prefix — no change needed at each call site.
-  const registerBaseTool = server.tool.bind(server) as (...args: unknown[]) => RegisteredTool;
-  server.tool = ((name: string, ...rest: unknown[]): RegisteredTool => {
-    const registered = registerBaseTool(name, ...rest);
-    if (!registered.annotations) {
-      registered.update({ annotations: toolAnnotations(name) });
-    }
-    return registered;
-  }) as typeof server.tool;
 
   registerDocumentTools(server, api);
   registerDocumentResources(server, api);

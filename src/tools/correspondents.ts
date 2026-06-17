@@ -6,6 +6,7 @@ import {
   enhanceMatchingAlgorithm,
   enhanceMatchingAlgorithmArray,
 } from "../api/utils";
+import { READ_ONLY, WRITE, DESTRUCTIVE } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -25,6 +26,7 @@ export function registerCorrespondentTools(
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
+    READ_ONLY,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
@@ -50,6 +52,7 @@ export function registerCorrespondentTools(
     "get_correspondent",
     "Get a specific correspondent by ID with full details including matching rules.",
     { id: z.number() },
+    READ_ONLY,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.getCorrespondent(args.id);
@@ -76,6 +79,7 @@ export function registerCorrespondentTools(
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
     },
+    WRITE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createCorrespondent(args);
@@ -103,6 +107,7 @@ export function registerCorrespondentTools(
         .optional()
         .describe(MATCHING_ALGORITHM_DESCRIPTION),
     },
+    WRITE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
@@ -125,6 +130,7 @@ export function registerCorrespondentTools(
         .boolean()
         .describe("Must be true to confirm this destructive operation"),
     },
+    DESTRUCTIVE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {
@@ -168,6 +174,7 @@ export function registerCorrespondentTools(
         .optional(),
       merge: z.boolean().optional(),
     },
+    DESTRUCTIVE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
       if (args.operation === "delete" && !args.confirm) {

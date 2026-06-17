@@ -13,6 +13,11 @@ const RUN_TAG = `e2e-tag-${Date.now()}`;
 const RUN_CORRESPONDENT = `E2E Corp ${Date.now()}`;
 const RUN_DOCUMENT_TYPE = `E2E Type ${Date.now()}`;
 const RUN_DOCUMENT_TITLE = `E2E Document ${Date.now()}`;
+const RUN_CUSTOM_FIELD = `e2e_cf_${Date.now()}`;
+const RUN_CUSTOM_FIELD_VALUE = `cf-value-${Date.now()}`;
+// archive_serial_number is a unique uint32 in Paperless; derive an in-range
+// value from the run timestamp so the CLI and Docker passes use distinct ASNs.
+const RUN_ASN = Date.now() % 4294967295;
 
 // Paperless rejects duplicate uploads by checksum. When the same suite runs
 // twice against one Paperless instance (e.g. CLI then Docker in one CI job),
@@ -43,6 +48,7 @@ const state: {
   correspondentId?: number;
   documentTypeId?: number;
   documentId?: number;
+  customFieldId?: number;
   mailAccountId?: number;
   mailRuleId?: number;
 } = {};
@@ -524,6 +530,145 @@ describe("Paperless MCP E2E scenario", () => {
     assert.ok(
       !removedTagIds.includes(state.tagId),
       `tag ${state.tagId} should be removed, got tags=${JSON.stringify(removedTagIds)}`
+    );
+  });
+
+  it("create_custom_field creates a string field used by the filter tests", async () => {
+    const result = (await client.callTool({
+      name: "create_custom_field",
+      arguments: { name: RUN_CUSTOM_FIELD, data_type: "string" },
+    })) as ToolResult;
+    assertOk(result, "create_custom_field");
+    const field = parseToolText(result) as { id: number; name: string };
+    assert.ok(typeof field.id === "number", `field.id should be a number, got ${JSON.stringify(field)}`);
+    assert.strictEqual(field.name, RUN_CUSTOM_FIELD);
+    state.customFieldId = field.id;
+  });
+
+  it("update_document sets archive_serial_number and the custom field value", async () => {
+    assert.ok(state.documentId && state.customFieldId, "document and custom field must exist");
+    const result = (await client.callTool({
+      name: "update_document",
+      arguments: {
+        id: state.documentId,
+        archive_serial_number: RUN_ASN,
+        custom_fields: [{ field: state.customFieldId, value: RUN_CUSTOM_FIELD_VALUE }],
+      },
+    })) as ToolResult;
+    assertOk(result, "update_document");
+  });
+
+  it("list_documents filters by exact archive_serial_number", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
+    const match = (await client.callTool({
+      name: "list_documents",
+      arguments: { archive_serial_number: RUN_ASN },
+    })) as ToolResult;
+    assertOk(match, "list_documents archive_serial_number");
+    const matchData = parseToolText(match) as { results: Array<{ id: number }> };
+    assert.ok(
+      matchData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} not found filtering by archive_serial_number=${RUN_ASN}`
+    );
+
+    // A different ASN must not return our document, proving the filter discriminates.
+    const otherAsn = RUN_ASN === 0 ? 1 : RUN_ASN - 1;
+    const miss = (await client.callTool({
+      name: "list_documents",
+      arguments: { archive_serial_number: otherAsn },
+    })) as ToolResult;
+    assertOk(miss, "list_documents archive_serial_number (other)");
+    const missData = parseToolText(miss) as { results: Array<{ id: number }> };
+    assert.ok(
+      !missData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} should not match archive_serial_number=${otherAsn}`
+    );
+  });
+
+  it("list_documents filters by archive_serial_number__isnull", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
+    // Our document now has an ASN, so it must be excluded when isnull=true...
+    const isnullTrue = (await client.callTool({
+      name: "list_documents",
+      arguments: { archive_serial_number__isnull: true, page_size: 100 },
+    })) as ToolResult;
+    assertOk(isnullTrue, "list_documents archive_serial_number__isnull=true");
+    const trueData = parseToolText(isnullTrue) as { results: Array<{ id: number }> };
+    assert.ok(
+      !trueData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} has an ASN and must not appear when archive_serial_number__isnull=true`
+    );
+
+    // ...and included when isnull=false.
+    const isnullFalse = (await client.callTool({
+      name: "list_documents",
+      arguments: { archive_serial_number__isnull: false, page_size: 100 },
+    })) as ToolResult;
+    assertOk(isnullFalse, "list_documents archive_serial_number__isnull=false");
+    const falseData = parseToolText(isnullFalse) as { results: Array<{ id: number }> };
+    assert.ok(
+      falseData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} has an ASN and must appear when archive_serial_number__isnull=false`
+    );
+  });
+
+  it("list_documents filters by custom_fields__icontains", async () => {
+    assert.ok(state.documentId, "document must be uploaded first");
+    const match = (await client.callTool({
+      name: "list_documents",
+      arguments: { custom_fields__icontains: RUN_CUSTOM_FIELD_VALUE },
+    })) as ToolResult;
+    assertOk(match, "list_documents custom_fields__icontains");
+    const matchData = parseToolText(match) as { results: Array<{ id: number }> };
+    assert.ok(
+      matchData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} not found filtering by custom_fields__icontains=${RUN_CUSTOM_FIELD_VALUE}`
+    );
+
+    const miss = (await client.callTool({
+      name: "list_documents",
+      arguments: { custom_fields__icontains: `no-such-${RUN_CUSTOM_FIELD_VALUE}` },
+    })) as ToolResult;
+    assertOk(miss, "list_documents custom_fields__icontains (no match)");
+    const missData = parseToolText(miss) as { results: Array<{ id: number }> };
+    assert.ok(
+      !missData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} should not match a custom_fields__icontains value it does not contain`
+    );
+  });
+
+  it("list_documents filters by custom_field_query", async () => {
+    assert.ok(state.documentId && state.customFieldId, "document and custom field must exist");
+    const query = JSON.stringify([
+      state.customFieldId,
+      "icontains",
+      RUN_CUSTOM_FIELD_VALUE,
+    ]);
+    const result = (await client.callTool({
+      name: "list_documents",
+      arguments: { custom_field_query: query },
+    })) as ToolResult;
+    assertOk(result, "list_documents custom_field_query");
+    const data = parseToolText(result) as { results: Array<{ id: number }> };
+    assert.ok(
+      data.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} not found filtering by custom_field_query=${query}`
+    );
+
+    const missQuery = JSON.stringify([
+      state.customFieldId,
+      "icontains",
+      `no-such-${RUN_CUSTOM_FIELD_VALUE}`,
+    ]);
+    const miss = (await client.callTool({
+      name: "list_documents",
+      arguments: { custom_field_query: missQuery },
+    })) as ToolResult;
+    assertOk(miss, "list_documents custom_field_query (no match)");
+    const missData = parseToolText(miss) as { results: Array<{ id: number }> };
+    assert.ok(
+      !missData.results.some((d) => d.id === state.documentId),
+      `document id=${state.documentId} should not match custom_field_query=${missQuery}`
     );
   });
 });

@@ -26,9 +26,9 @@ test("every registered tool declares MCP annotations", () => {
       `tool "${name}" is missing a readOnlyHint`
     );
     assert.equal(
-      typeof annotations.openWorldHint,
-      "boolean",
-      `tool "${name}" is missing an openWorldHint`
+      annotations.openWorldHint,
+      false,
+      `tool "${name}" must set openWorldHint to false`
     );
     if (annotations.readOnlyHint === false) {
       assert.equal(

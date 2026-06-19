@@ -1,9 +1,45 @@
 import assert from "node:assert/strict";
-import { test, describe, before, after } from "node:test";
-import { writeFileSync, mkdtempSync, rmSync, symlinkSync, truncateSync, realpathSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import {
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  truncateSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, before, describe, test } from "node:test";
 import { buildBulkEditParameters, validateFilePath } from "./documents";
+import {
+  buildDocumentQueryString,
+  customFieldQuerySchema,
+  CustomFieldQuery,
+  DOCUMENT_QUERY_PAPERLESS_FILTER_KEYS,
+} from "./utils/documentQuery";
+
+function getQueryParams(queryString: string) {
+  return new URLSearchParams(queryString.replace(/^\?/, ""));
+}
+
+function getDocumentQueryParamsFromOpenApi() {
+  const openApiPath = join(process.cwd(), "Paperless_ngx_REST_API.yaml");
+  const text = readFileSync(openApiPath, "utf8");
+  const start = text.indexOf("  /api/documents/:");
+  const end = text.indexOf("  /api/documents/{id}/:");
+  assert.ok(start >= 0, "OpenAPI docs marker '/api/documents/' not found");
+  assert.ok(
+    end > start,
+    "OpenAPI docs marker '/api/documents/{id}/' not found or out of order"
+  );
+  const section = text.slice(start, end);
+
+  return Array.from(
+    section.matchAll(/^\s*-?\s*name:\s+(.+)$/gm),
+    (match) => match[1]
+  ).sort();
+}
 
 // ALLOWED_UPLOAD_PATHS is read from the environment at module load, so the
 // allowlist can only be exercised by re-importing the module with the env set.
@@ -116,6 +152,166 @@ test("buildBulkEditParameters preserves supported custom field value types", () 
   });
 });
 
+test("paperless filter allowlist stays in sync with the document OpenAPI section", () => {
+  const documentedParams = getDocumentQueryParamsFromOpenApi();
+  const allowedParams = [...DOCUMENT_QUERY_PAPERLESS_FILTER_KEYS].sort();
+
+  assert.deepEqual(allowedParams, documentedParams);
+});
+
+test("serializes full-text query_documents arguments", () => {
+  const query = getQueryParams(
+    buildDocumentQueryString({
+      query: "invoice 2024",
+      search: "jan",
+      more_like_id: 42,
+    })
+  );
+
+  assert.equal(query.get("query"), "invoice 2024");
+  assert.equal(query.get("search"), "jan");
+  assert.equal(query.get("more_like_id"), "42");
+});
+
+test("serializes first-class document filters using Paperless parameter names", () => {
+  const query = getQueryParams(
+    buildDocumentQueryString({
+      page: 2,
+      page_size: 50,
+      ordering: "-created",
+      correspondent: 3,
+      document_type: 4,
+      tag: 5,
+      storage_path: 6,
+      created__date__gte: "2024-01-01",
+      created__date__lte: "2024-12-31",
+      archive_serial_number: 99,
+      archive_serial_number__isnull: false,
+      custom_fields__icontains: "invoice",
+    })
+  );
+
+  assert.equal(query.get("page"), "2");
+  assert.equal(query.get("page_size"), "50");
+  assert.equal(query.get("ordering"), "-created");
+  assert.equal(query.get("correspondent__id"), "3");
+  assert.equal(query.get("document_type__id"), "4");
+  assert.equal(query.get("tags__id"), "5");
+  assert.equal(query.get("storage_path__id"), "6");
+  assert.equal(query.get("created__date__gte"), "2024-01-01");
+  assert.equal(query.get("created__date__lte"), "2024-12-31");
+  assert.equal(query.get("archive_serial_number"), "99");
+  assert.equal(query.get("archive_serial_number__isnull"), "false");
+  assert.equal(query.get("custom_fields__icontains"), "invoice");
+});
+
+test("serializes paperless_filters arrays as comma-separated values", () => {
+  const query = getQueryParams(
+    buildDocumentQueryString({
+      paperless_filters: {
+        fields: ["title", "tags"],
+        id__in: [1, 2, 3],
+      },
+    })
+  );
+
+  assert.equal(query.get("fields"), "title,tags");
+  assert.equal(query.get("id__in"), "1,2,3");
+});
+
+test("serializes raw list custom_field_query strings without JSON encoding", () => {
+  const rawCustomFieldQuery = '[7, "icontains", "value"]';
+  const query = getQueryParams(
+    buildDocumentQueryString({
+      custom_field_query: rawCustomFieldQuery,
+    })
+  );
+
+  assert.equal(query.get("custom_field_query"), rawCustomFieldQuery);
+});
+
+test("serializes leaf custom_field_query values as JSON", () => {
+  const query = getQueryParams(
+    buildDocumentQueryString({
+      custom_field_query: ["Invoice Number", "exact", "12345"],
+    })
+  );
+
+  assert.equal(
+    query.get("custom_field_query"),
+    JSON.stringify(["Invoice Number", "exact", "12345"])
+  );
+});
+
+test("serializes numeric custom_field_query field IDs as JSON", () => {
+  const query = getQueryParams(
+    buildDocumentQueryString({
+      custom_field_query: [7, "exact", "12345"],
+    })
+  );
+
+  assert.equal(
+    query.get("custom_field_query"),
+    JSON.stringify([7, "exact", "12345"])
+  );
+});
+
+test("serializes grouped custom_field_query values as JSON", () => {
+  const groupedQuery: CustomFieldQuery = [
+    "OR",
+    [
+      ["Invoice Number", "isnull", true],
+      ["Invoice Number", "exact", ""],
+    ],
+  ];
+
+  const query = getQueryParams(
+    buildDocumentQueryString({
+      custom_field_query: groupedQuery,
+    })
+  );
+
+  assert.equal(query.get("custom_field_query"), JSON.stringify(groupedQuery));
+});
+
+test("rejects unsupported paperless_filters keys", () => {
+  assert.throws(
+    () =>
+      buildDocumentQueryString({
+        paperless_filters: {
+          not_a_real_filter: "value",
+        },
+      }),
+    /Unsupported paperless_filters key/
+  );
+});
+
+test("rejects duplicate first-class and paperless_filters definitions", () => {
+  assert.throws(
+    () =>
+      buildDocumentQueryString({
+        correspondent: 7,
+        paperless_filters: {
+          correspondent__id: 7,
+        },
+      }),
+    /Duplicate filter 'correspondent__id'/
+  );
+});
+
+test("rejects invalid custom_field_query shapes", () => {
+  assert.equal(customFieldQuerySchema.safeParse(["field", "exact"]).success, false);
+  assert.equal(customFieldQuerySchema.safeParse(["AND", []]).success, false);
+  assert.equal(
+    customFieldQuerySchema.safeParse(["AND", [["field"]]]).success,
+    false
+  );
+  assert.equal(
+    customFieldQuerySchema.safeParse(["AND", "iexact", "foo"]).success,
+    false
+  );
+});
+
 describe("validateFilePath", () => {
   let testDir: string;
   let testFile: string;
@@ -129,7 +325,11 @@ describe("validateFilePath", () => {
     emptyFile = join(testDir, "empty.pdf");
     writeFileSync(emptyFile, "");
     symlinkPath = join(testDir, "link.pdf");
-    try { symlinkSync(testFile, symlinkPath); } catch { /* skip if unsupported */ }
+    try {
+      symlinkSync(testFile, symlinkPath);
+    } catch {
+      // Skip if unsupported.
+    }
   });
 
   after(() => {
@@ -169,7 +369,7 @@ describe("validateFilePath", () => {
     try {
       await assert.doesNotReject(() => validateFilePath(symlinkPath));
     } catch {
-      // Skip on systems without symlink support
+      // Skip on systems without symlink support.
     }
   });
 

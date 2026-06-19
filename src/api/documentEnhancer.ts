@@ -33,21 +33,17 @@ export async function convertDocsWithNames(
   api: PaperlessAPI
 ): Promise<CallToolResult> {
   if ("results" in input) {
-    const enhancedResults = await enhanceDocumentsArray(
-      input.results || [],
-      api
-    );
+    const { all, results, ...paginationMeta } = input;
+    const enhancedResults = await enhanceDocumentsArray(results || [], api);
 
     return {
       content: [
         {
           type: "text",
-          text: enhancedResults?.length
-            ? JSON.stringify({
-                ...input,
-                results: enhancedResults,
-              })
-            : "No documents found",
+          text: JSON.stringify({
+            ...paginationMeta,
+            results: enhancedResults,
+          }),
         },
       ],
     };

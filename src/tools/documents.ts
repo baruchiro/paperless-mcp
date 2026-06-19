@@ -1,5 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
+import { readFile, access, stat, realpath } from "fs/promises";
+import { constants } from "fs";
+import { basename, isAbsolute } from "path";
 import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
@@ -13,6 +16,126 @@ import {
 import { withErrorHandling } from "./utils/middlewares";
 import { validateCustomFields } from "./utils/monetary";
 import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
+import {
+  buildDocumentResourceUri,
+  buildThumbnailResourceUri,
+} from "./utils/resourceUri";
+
+export type BulkCustomFieldValue = string | number | boolean | number[] | null;
+
+export type BulkCustomFieldUpdate = {
+  field: number;
+  value: BulkCustomFieldValue;
+};
+
+export type BulkCustomFieldParameters = {
+  add_custom_fields?: Record<string, BulkCustomFieldValue>;
+  remove_custom_fields?: number[];
+};
+
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+
+const ALLOWED_UPLOAD_PATHS = process.env.PAPERLESS_MCP_UPLOAD_PATHS
+  ? process.env.PAPERLESS_MCP_UPLOAD_PATHS.split(":")
+  : [];
+
+/** Validates that a file path is safe to read for document upload. */
+export async function validateFilePath(filePath: string): Promise<void> {
+  if (!isAbsolute(filePath)) {
+    throw new Error("file_path must be an absolute path");
+  }
+
+  // Resolve symlinks to get canonical path for allowlist checks
+  let realPath: string;
+  try {
+    realPath = await realpath(filePath);
+  } catch {
+    throw new Error("File not found");
+  }
+
+  if (ALLOWED_UPLOAD_PATHS.length > 0) {
+    const isAllowed = ALLOWED_UPLOAD_PATHS.some((allowedPath) => {
+      return realPath.startsWith(allowedPath + "/") || realPath === allowedPath;
+    });
+    if (!isAllowed) {
+      throw new Error(
+        "file_path is outside allowed upload directories. " +
+        "Configure PAPERLESS_MCP_UPLOAD_PATHS environment variable to specify allowed paths."
+      );
+    }
+  }
+
+  const stats = await stat(realPath);
+
+  if (!stats.isFile()) {
+    throw new Error("Path must point to a regular file");
+  }
+
+  if (stats.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error(
+      `File size (${Math.round(stats.size / 1024 / 1024)}MB) exceeds maximum allowed size (${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)`
+    );
+  }
+
+  if (stats.size === 0) {
+    throw new Error("File is empty");
+  }
+}
+
+/**
+ * Builds Paperless-NGX bulk edit parameters from base parameters plus optional
+ * custom field updates.
+ *
+ * Paperless-NGX expects custom field bulk updates as an `add_custom_fields`
+ * record keyed by custom field id. `addCustomFields` is accepted as an array for
+ * the MCP tool schema and transformed into that id-to-value record while
+ * preserving supported value types, including `number[]` document links and
+ * `null` resets. Passing an empty `addCustomFields` array intentionally produces
+ * an empty `add_custom_fields` record.
+ *
+ * When `includeCustomFieldDefaults` is true, the function also initializes
+ * `add_custom_fields` and `remove_custom_fields` with empty defaults using
+ * nullish coalescing (`??=`). This keeps the `modify_custom_fields` method's
+ * payload shape acceptable to Paperless even when no field values are supplied.
+ *
+ * @param parameters - Base bulk edit parameters to include in the result.
+ * @param addCustomFields - Optional custom field updates to map by field id.
+ * @param includeCustomFieldDefaults - Whether to include empty custom field
+ * defaults required by `modify_custom_fields`.
+ * @returns The merged API parameters with custom field updates transformed into
+ * Paperless-NGX's `add_custom_fields` record shape.
+ */
+export function buildBulkEditParameters<T extends Record<string, unknown>>(
+  parameters: T,
+  addCustomFields?: BulkCustomFieldUpdate[],
+  includeCustomFieldDefaults = false,
+  includeTagDefaults = false
+): T & BulkCustomFieldParameters {
+  const apiParameters: T & BulkCustomFieldParameters = {
+    ...parameters,
+  };
+
+  if (addCustomFields) {
+    apiParameters.add_custom_fields = Object.fromEntries(
+      addCustomFields.map((customField) => [
+        String(customField.field),
+        customField.value,
+      ])
+    );
+  }
+
+  if (includeCustomFieldDefaults) {
+    apiParameters.add_custom_fields ??= {};
+    apiParameters.remove_custom_fields ??= [];
+  }
+
+  if (includeTagDefaults) {
+    (apiParameters as Record<string, unknown>).add_tags ??= [];
+    (apiParameters as Record<string, unknown>).remove_tags ??= [];
+  }
+
+  return apiParameters;
+}
 
 async function executeDocumentQuery(
   api: PaperlessAPI,
@@ -110,19 +233,17 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
       validateCustomFields(add_custom_fields);
 
-      // Transform add_custom_fields into the two separate API parameters
-      const apiParameters = { ...parameters };
-      if (add_custom_fields && add_custom_fields.length > 0) {
-        apiParameters.assign_custom_fields = add_custom_fields.map(
-          (cf) => cf.field
-        );
-        apiParameters.assign_custom_fields_values = add_custom_fields;
-      }
-
       const response = await api.bulkEditDocuments(
         documents,
         method,
-        apiParameters
+        method === "delete"
+          ? {}
+          : buildBulkEditParameters(
+              parameters,
+              add_custom_fields,
+              method === "modify_custom_fields",
+              method === "modify_tags"
+            )
       );
       return {
         content: [
@@ -135,33 +256,121 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     })
   );
 
+  const postDocumentBaseSchema = z.object({
+    file: z.string().optional().describe("Base64-encoded file content. Either 'file' or 'file_path' must be provided."),
+    file_path: z.string().optional().describe("Absolute path to a file on the server's filesystem. Either 'file' or 'file_path' must be provided. The filename is derived from the path unless 'filename' is also specified. For security, configure PAPERLESS_MCP_UPLOAD_PATHS to restrict allowed directories."),
+    filename: z.string().optional().describe("Filename for the uploaded document. Required when using 'file', optional when using 'file_path' (defaults to the basename of the path)."),
+    title: z.string().optional(),
+    created: z.string().optional(),
+    correspondent: z.number().optional(),
+    document_type: z.number().optional(),
+    storage_path: z.number().optional(),
+    tags: z.array(z.number()).optional(),
+    archive_serial_number: z.number().optional(),
+    custom_fields: z.array(z.number()).optional(),
+  });
+
+  const postDocumentSchema = postDocumentBaseSchema.superRefine((data, ctx) => {
+    const hasFile = data.file !== undefined;
+    const hasFilePath = data.file_path !== undefined;
+
+    if (!hasFile && !hasFilePath) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Either 'file' (base64) or 'file_path' must be provided.",
+        path: ["file"],
+      });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Either 'file' (base64) or 'file_path' must be provided.",
+        path: ["file_path"],
+      });
+    }
+
+    if (hasFile && hasFilePath) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Only one of 'file' or 'file_path' should be provided, not both.",
+        path: ["file"],
+      });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Only one of 'file' or 'file_path' should be provided, not both.",
+        path: ["file_path"],
+      });
+    }
+
+    if (hasFile && !data.filename) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "'filename' is required when using 'file' (base64 mode).",
+        path: ["filename"],
+      });
+    }
+
+    if (hasFilePath && data.file_path && !isAbsolute(data.file_path)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "file_path must be an absolute path",
+        path: ["file_path"],
+      });
+    }
+  });
+
   server.tool(
     "post_document",
-    "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields.",
-    {
-      file: z.string(),
-      filename: z.string(),
-      title: z.string().optional(),
-      created: z.string().optional(),
-      correspondent: z.number().optional(),
-      document_type: z.number().optional(),
-      storage_path: z.number().optional(),
-      tags: z.array(z.number()).optional(),
-      archive_serial_number: z.number().optional(),
-      custom_fields: z.array(z.number()).optional(),
-    },
+    "Upload a new document to Paperless-NGX with optional metadata like title, correspondent, document type, tags, and custom fields. Provide either 'file' (base64-encoded content) or 'file_path' (absolute path to a file on the server's filesystem). Using file_path avoids base64 encoding overhead for large files. SECURITY: When using file_path, set PAPERLESS_MCP_UPLOAD_PATHS environment variable to restrict uploads to specific directories (colon-separated paths).",
+    postDocumentBaseSchema.shape,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
 
-      // Validate base64 input
-      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-      if (!base64Regex.test(args.file)) {
-        throw new Error(
-          "Invalid base64-encoded file data. Please provide a valid base64 string."
-        );
+      const validationResult = postDocumentSchema.safeParse(args);
+      if (!validationResult.success) {
+        throw new Error(validationResult.error.errors.map(e => e.message).join("; "));
       }
-      const { file, filename, ...metadata } = args;
-      const document = Buffer.from(file, "base64");
+
+      let document: Buffer;
+      let filename: string;
+
+      if (args.file_path) {
+        await validateFilePath(args.file_path);
+
+        try {
+          document = await readFile(args.file_path);
+        } catch (err) {
+          throw new Error("Failed to read file");
+        }
+
+        filename = args.filename || basename(args.file_path);
+        if (!filename) {
+          throw new Error("Could not derive filename from file_path");
+        }
+      } else if (args.file) {
+        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+        if (!base64Regex.test(args.file)) {
+          throw new Error(
+            "Invalid base64-encoded file data. Please provide a valid base64 string."
+          );
+        }
+
+        document = Buffer.from(args.file, "base64");
+
+        if (document.length > MAX_FILE_SIZE_BYTES) {
+          throw new Error(
+            `File size (${Math.round(document.length / 1024 / 1024)}MB) exceeds maximum allowed size (${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB)`
+          );
+        }
+        if (document.length === 0) {
+          throw new Error("File is empty");
+        }
+
+        filename = args.filename!;
+      } else {
+        // This should never happen due to schema validation, but TypeScript needs it
+        throw new Error("Either 'file' (base64) or 'file_path' must be provided.");
+      }
+
+      const { file, file_path, filename: _fn, ...metadata } = args;
 
       const response = await api.postDocument(document, filename, metadata);
       let result;
@@ -183,7 +392,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "list_documents",
-    "List documents with pagination and a small set of common filters. Use this for simple listing tasks. For full-text queries, custom field filtering, or advanced Paperless query parameters, use 'query_documents' instead. IMPORTANT: When filtering by tag, correspondent, document type, or storage path, first use the relevant lookup tool to find the correct ID. Note: Document content is excluded from results by default. Use 'get_document_content' when you need the document text.",
+    "List and filter documents with pagination and common Paperless filters such as title search, correspondent, document type, tag, storage path, creation date, archive serial number, and simple custom field filters. Use 'query_documents' for full-text query, structured custom field conditions, or advanced documented /api/documents/ query parameters. IMPORTANT: For queries like 'the last 3 contributions' or when searching by tag, correspondent, document type, or storage path, first use the relevant lookup tool to find the correct ID. Note: Document content is excluded from results by default. Use 'get_document_content' when you need the document text.",
     LIST_DOCUMENTS_ARGS_SHAPE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -193,7 +402,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "query_documents",
-    "Query documents using the full-text query engine plus structured Paperless filters. Use this for complex filtering, custom field conditions, or any documented /api/documents/ query parameters that are not exposed as first-class arguments. Prefer the dedicated top-level arguments where available. custom_field_query supports [field_name, operator, value] leaves or ['AND'|'OR', [clause1, clause2]] groups. Note: Document content is excluded from results by default. Use 'get_document_content' when you need the document text.",
+    "Query documents using the full-text query engine plus structured Paperless filters. Use this for complex filtering, custom field conditions, or any documented /api/documents/ query parameters that are not exposed as first-class arguments. Prefer the dedicated top-level arguments where available. custom_field_query supports [field_name_or_id, operator, value] leaves or ['AND'|'OR', [clause1, clause2]] groups. Note: Document content is excluded from results by default. Use 'get_document_content' when you need the document text.",
     QUERY_DOCUMENTS_ARGS_SHAPE,
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -250,29 +459,27 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "download_document",
-    "Download a document file by ID. Returns the document as a base64-encoded resource.",
+    "Download a document file by ID. Returns a paperless:// resource URI; read the resource to fetch the file content.",
     {
-      id: z.number(),
+      id: z.number().int().positive(),
       original: z.boolean().optional(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.downloadDocument(args.id, args.original);
-      const filename =
-        (typeof response.headers.get === "function"
-          ? response.headers.get("content-disposition")
-          : response.headers["content-disposition"]
-        )
-          ?.split("filename=")[1]
-          ?.replace(/"/g, "") || `document-${args.id}`;
+      const uri = buildDocumentResourceUri(args.id, {
+        original: args.original,
+      });
       return {
         content: [
           {
             type: "resource",
             resource: {
-              uri: filename,
-              blob: Buffer.from(response.data).toString("base64"),
-              mimeType: "application/pdf",
+              uri,
+              // MCP SDK 1.11 embedded resources require text or blob. Keep the
+              // existing resource-shaped tool result while making resources/read
+              // the canonical place for the large binary payload.
+              text: "",
+              mimeType: "application/octet-stream",
             },
           },
         ],
@@ -282,20 +489,21 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "get_document_thumbnail",
-    "Get a document thumbnail (image preview) by ID. Returns the thumbnail as a base64-encoded WebP image resource.",
+    "Get a document thumbnail (image preview) by ID. Returns a paperless:// resource URI; read the resource to fetch the image content.",
     {
-      id: z.number(),
+      id: z.number().int().positive(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
-      const response = await api.getThumbnail(args.id);
       return {
         content: [
           {
             type: "resource",
             resource: {
-              uri: `document-${args.id}-thumb.webp`,
-              blob: Buffer.from(response.data).toString("base64"),
+              uri: buildThumbnailResourceUri(args.id),
+              // See download_document above: the binary thumbnail is fetched
+              // lazily through resources/read instead of embedded here.
+              text: "",
               mimeType: "image/webp",
             },
           },

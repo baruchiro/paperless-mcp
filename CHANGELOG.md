@@ -1,5 +1,84 @@
 # @baruchiro/paperless-mcp
 
+## 1.0.0
+
+### Major Changes
+
+- 22a55f0: Add MCP `resources/list` and `resources/read` support for documents (issue #90).
+
+  **Breaking change**: `download_document` and `get_document_thumbnail` no
+  longer return the file/image bytes inline. They now return only a
+  resource reference (URI + mime type); clients fetch the actual content
+  via `resources/read`. Existing clients that consumed the inline base64
+  blob need to be updated to follow the resource URI.
+
+  Each Paperless document is now exposed as two MCP resources under the
+  `paperless://` scheme established by the resource-URI fix:
+
+  - `paperless://documents/{id}/download` — the document file
+  - `paperless://documents/{id}/thumb` — the document thumbnail
+
+  Clients that understand MCP resources can list them via `resources/list`
+  and lazy-fetch content via `resources/read`. This keeps large binary
+  payloads out of tool results — important for clients (e.g. n8n LangChain
+  agents) that accumulate full tool results in the conversation context.
+
+  The `download_document` and `get_document_thumbnail` tools now return a
+  resource reference (URI + mime type) instead of an inline base64 blob.
+  To fetch the actual bytes, call `resources/read` with the URI. The
+  `download_document` URI also supports an `?original=true` flag.
+
+  The resource `name` field carries the human-readable filename, so
+  filename info that previously had to be encoded in the URI is now
+  available via resource metadata.
+
+### Minor Changes
+
+- 9d677b2: Add E2E test suite that runs the compiled MCP server against a real Paperless-ngx instance in CI. Covers list/create for tags, correspondents, document types, list/get/search/download/thumbnail for documents, bulk_edit_documents, and post_document — all with deterministic tool calls and no LLM in the loop.
+
+## 0.5.1
+
+### Patch Changes
+
+- ad17c18: Fix MCP resource URI validation for `download_document` and `get_document_thumbnail`.
+
+  The two tools previously returned MCP resources whose `uri` was a raw
+  filename (e.g. `"2026-02-15 Vendor Co._Mobile.pdf"`) or an unscoped
+  string. Python MCP clients (the `mcp` package, pydantic-validated)
+  rejected these with `ValidationError: Input should be a valid URL,
+relative URL without a base`, making downloads and thumbnails
+  unusable from any Python MCP client.
+
+  Tools now return URIs under a custom `paperless://` scheme that mirrors
+  the Paperless REST API paths, so the same identifiers can later back
+  proper MCP resources (`resources/list` / `resources/read`):
+
+  - `download_document` → `paperless://documents/{id}/download?filename=<encoded>`
+  - `get_document_thumbnail` → `paperless://documents/{id}/thumb`
+
+  The original filename is preserved (URL-encoded) as a `filename` query
+  parameter on the download URI, so clients that need the human-readable
+  name can still recover it via standard URL parsing.
+
+## 0.5.0
+
+### Minor Changes
+
+- fef4c62: In HTTP mode, clients can now supply their own Paperless-NGX API token per-request via `Authorization: Bearer <token>`. The client-supplied token takes precedence over the server-configured `PAPERLESS_API_KEY`. If neither is available, the server responds with `401 Unauthorized`. This applies to both `/mcp` and `/sse` endpoints. stdio mode is unchanged.
+
+### Patch Changes
+
+- de661ae: Add `PAPERLESS_API_VERSION` environment variable to configure the Paperless-ngx REST API version (default: `5`). Set to `10` for Paperless-ngx v3+. On HTTP 406, a clear error message is shown directing users to set this variable.
+- 5927777: Fix bulk document custom field edits to send Paperless-NGX compatible `add_custom_fields` parameters and preserve intentionally empty custom field values.
+- 1c1ec60: Fix `bulk_edit_documents` with `method: "delete"` failing with HTTP 400 — MCP-only parameters (`confirm`, `delete_originals`) are no longer forwarded to the Paperless bulk-edit endpoint, which doesn't accept extra kwargs for the `delete` action.
+- 7b483a4: Switch update endpoints for tags, correspondents, document types, and custom fields from PUT to PATCH to support partial updates.
+
+## 0.4.5
+
+### Patch Changes
+
+- 47de91d: Omit the `all` pagination ID array from multi-document responses returned by document enhancement, reducing payload size for `list_documents` and `search_documents`.
+
 ## 0.4.4
 
 ### Patch Changes

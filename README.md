@@ -59,6 +59,16 @@ Add these to your MCP config file:
    - `your-api-token` with the token you just generated
    - `https://your-public-domain.com` with your public Paperless-NGX URL (optional, falls back to PAPERLESS_URL)
 
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `PAPERLESS_URL` | Yes | — | Base URL of your Paperless-NGX instance |
+| `PAPERLESS_API_KEY` | Yes | — | API token from your Paperless-NGX profile |
+| `PAPERLESS_PUBLIC_URL` | No | `PAPERLESS_URL` | Public-facing URL for document links |
+| `PAPERLESS_API_VERSION` | No | `5` | Paperless-ngx REST API version. Use `10` for Paperless-ngx v3+. If you see HTTP 406 errors, set this to `10`. |
+| `PAPERLESS_MCP_UPLOAD_PATHS` | No | — | Colon-separated list of allowed directories for `file_path` uploads. **Recommended for security.** Example: `/var/uploads:/tmp/scans` |
+
 That's it! Now you can ask Claude to help you manage your Paperless-NGX documents.
 
 ### Example Usage
@@ -77,7 +87,7 @@ Here are some things you can ask Claude to do:
 ### Document Operations
 
 #### list_documents
-Get a paginated list of documents with simple filters. Use this for straightforward listing tasks. For full-text queries, custom field filtering, or advanced Paperless filters, use `query_documents`.
+Get a paginated list of documents with simple filters. Use this for straightforward listing tasks. For full-text queries, structured custom field filtering, or advanced Paperless filters, use `query_documents`.
 
 Parameters:
 - page (optional): Page number
@@ -90,6 +100,10 @@ Parameters:
 - created__date__gte (optional): Created date on or after YYYY-MM-DD
 - created__date__lte (optional): Created date on or before YYYY-MM-DD
 - ordering (optional): Paperless ordering field
+- archive_serial_number (optional): Archive serial number
+- archive_serial_number__isnull (optional): Whether the archive serial number is empty
+- custom_field_query (optional): Raw JSON-encoded Paperless custom field query string
+- custom_fields__icontains (optional): Case-insensitive substring match across custom field values
 
 ```typescript
 list_documents({
@@ -114,7 +128,7 @@ Parameters:
 - storage_path (optional): Storage path ID
 - created__date__gte (optional): Created date on or after YYYY-MM-DD
 - created__date__lte (optional): Created date on or before YYYY-MM-DD
-- custom_field_query (optional): Structured Paperless custom field query using `[field_name, operator, value]` leaves or `["AND" | "OR", [clause1, clause2]]` groups
+- custom_field_query (optional): Structured Paperless custom field query using `[field_name_or_id, operator, value]` leaves or `["AND" | "OR", [clause1, clause2]]` groups
 - paperless_filters (optional): Additional documented `/api/documents/` Paperless query parameters, passed as key/value pairs
 
 ```typescript
@@ -287,18 +301,37 @@ bulk_edit_documents({
 bulk_edit_documents({
   documents: [12, 13],
   method: "modify_custom_fields",
-  add_custom_fields: {
-    "2": "שנה"
-  }
+  add_custom_fields: [
+    { field: 2, value: "year" }
+  ],
+  remove_custom_fields: []
+})
+
+// Set an empty custom field value, e.g. a date field used as a pending marker
+bulk_edit_documents({
+  documents: [14],
+  method: "modify_custom_fields",
+  add_custom_fields: [
+    { field: 9, value: "" }
+  ],
+  remove_custom_fields: []
 })
 ```
 
 #### post_document
 Upload a new document to Paperless-NGX.
 
+**Two upload modes:**
+
+1. **Base64 mode** (traditional): Provide `file` (base64-encoded content) + `filename`
+2. **Filesystem mode** (efficient): Provide `file_path` (absolute path on server)
+
+**Security Note:** When using `file_path`, set the `PAPERLESS_MCP_UPLOAD_PATHS` environment variable (colon-separated list of allowed directories) to restrict uploads to specific locations. Without this, any file on the server's filesystem could be uploaded.
+
 Parameters:
-- file: Base64 encoded file content
-- filename: Name of the file
+- file (optional): Base64 encoded file content. Either `file` or `file_path` required.
+- file_path (optional): Absolute path to file on server's filesystem. Either `file` or `file_path` required.
+- filename (optional): Name of the file. Required with `file`, optional with `file_path` (derives from path).
 - title (optional): Title for the document
 - created (optional): DateTime when the document was created (e.g. "2024-01-19" or "2024-01-19 06:15:00+02:00")
 - correspondent (optional): ID of a correspondent
@@ -308,7 +341,10 @@ Parameters:
 - archive_serial_number (optional): Archive serial number
 - custom_fields (optional): Array of custom field IDs
 
+**File size limit:** 100MB for both modes
+
 ```typescript
+// Base64 mode (traditional)
 post_document({
   file: "base64_encoded_content",
   filename: "invoice.pdf",
@@ -319,6 +355,15 @@ post_document({
   tags: [1, 3],
   archive_serial_number: "2024-001",
   custom_fields: [1, 2]
+})
+
+// Filesystem mode (more efficient for large files)
+post_document({
+  file_path: "/var/uploads/invoice.pdf",
+  title: "January Invoice",
+  correspondent: 1,
+  document_type: 2,
+  tags: [1, 3]
 })
 ```
 
@@ -499,6 +544,133 @@ bulk_edit_custom_fields({
 })
 ```
 
+### Mail Operations
+
+Tools for managing Paperless mail accounts and the mail rules that drive
+automatic email ingestion. Account passwords/tokens are never exposed: they are
+redacted from every tool response.
+
+#### list_mail_accounts
+List mail accounts so you can pick the account ID needed when creating a mail
+rule. Passwords are redacted.
+
+Parameters:
+- page (optional): Page number
+- page_size (optional): Number of results per page
+
+```typescript
+list_mail_accounts()
+```
+
+#### get_mail_account
+Get a single mail account by ID. Password/token fields are redacted.
+
+Parameters:
+- id: Mail account ID
+
+```typescript
+get_mail_account({
+  id: 1
+})
+```
+
+#### process_mail_account
+Manually trigger Paperless mail processing for one account. This can consume
+matching mails according to the account's enabled mail rules.
+
+Parameters:
+- id: Mail account ID
+
+```typescript
+process_mail_account({
+  id: 1
+})
+```
+
+#### list_mail_rules
+List mail rules with optional pagination.
+
+Parameters:
+- page (optional): Page number
+- page_size (optional): Number of results per page
+
+```typescript
+list_mail_rules()
+```
+
+#### get_mail_rule
+Get a single mail rule by ID.
+
+Parameters:
+- id: Mail rule ID
+
+```typescript
+get_mail_rule({
+  id: 1
+})
+```
+
+#### create_mail_rule
+Create a mail rule. Use `list_mail_accounts` first to choose the account.
+
+Required parameters:
+- name: Rule name
+- account: Mail account ID
+- folder: IMAP folder to scan (e.g. "INBOX")
+
+Common optional parameters:
+- enabled (default true): Whether the rule is active
+- filter_from / filter_to / filter_subject / filter_body: Match incoming mail
+- maximum_age: Only process mail newer than this many days
+- action: 1=Delete, 2=Move to folder, 3=Mark as read, 4=Flag, 5=Tag
+- action_parameter: Target folder/tag for the chosen action
+- assign_title_from: 1=Subject, 2=Attachment filename, 3=Do not assign
+- assign_tags / assign_correspondent / assign_document_type: Metadata to apply
+- assign_correspondent_from: 1=None, 2=Mail address, 3=Sender name, 4=Use assign_correspondent
+- attachment_type: 1=Attachments only, 2=All files incl. inline
+- consumption_scope: 1=Attachments only, 2=Full mail as .eml, 3=Both
+- pdf_layout: 0=System default, 1=Text+HTML, 2=HTML+text, 3=HTML only, 4=Text only
+
+```typescript
+create_mail_rule({
+  name: "Invoices",
+  account: 1,
+  folder: "INBOX",
+  filter_subject: "invoice",
+  action: 3,
+  attachment_type: 1
+})
+```
+
+#### update_mail_rule
+Patch an existing mail rule. Only the fields you supply are changed.
+
+Parameters:
+- id: Mail rule ID
+- ...any of the `create_mail_rule` fields to update
+
+```typescript
+update_mail_rule({
+  id: 1,
+  enabled: false
+})
+```
+
+#### delete_mail_rule
+Delete a mail rule. Requires an explicit confirmation flag. This changes future
+mail ingestion behavior but does not delete any existing documents.
+
+Parameters:
+- id: Mail rule ID
+- confirm: Must be `true` to confirm deletion
+
+```typescript
+delete_mail_rule({
+  id: 1,
+  confirm: true
+})
+```
+
 ## Error Handling
 
 The server will show clear error messages if:
@@ -506,6 +678,52 @@ The server will show clear error messages if:
 - The Paperless-NGX server is unreachable
 - The requested operation fails
 - The provided parameters are invalid
+
+## Testing
+
+### Unit tests
+
+Run the unit test suite (no external dependencies required):
+
+```bash
+npm test
+```
+
+### E2E tests
+
+The E2E suite boots an empty Paperless-ngx instance, runs the compiled MCP server, and drives a deterministic serial scenario through `tools/call` requests — creating a tag, correspondent, and document type, uploading a PDF, then exercising list / get / search / download / thumbnail / bulk-edit on the same document. No LLM and no Paperless REST client outside MCP.
+
+**Prerequisites:** Docker, Docker Compose, and `jq`.
+
+```bash
+# 1. Build the MCP server
+npm run build
+
+# 2. Start Paperless-ngx
+docker compose -f docker-compose.e2e.yml up -d
+
+# 3. Wait for Paperless to be ready, then get a token
+TOKEN=$(curl -s -X POST http://localhost:8000/api/token/ \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
+
+# 4. Start the MCP server
+node build/index.js --http --port 3001 \
+  --baseUrl http://localhost:8000 --token "$TOKEN" &
+MCP_PID=$!
+
+# 5. Run the E2E tests
+MCP_URL=http://localhost:3001/mcp \
+PAPERLESS_URL=http://localhost:8000 \
+PAPERLESS_TOKEN="$TOKEN" \
+npm run test:e2e
+
+# 6. Cleanup
+kill "$MCP_PID"
+docker compose -f docker-compose.e2e.yml down -v
+```
+
+E2E tests also run automatically in CI on every pull request and push to `main`, covering both the `build/index.js` CLI and the published Docker image.
 
 ## Development
 
@@ -554,6 +772,31 @@ npm run start -- <baseUrl> <token> --http --port 3000
 - The MCP API will be available at `POST /mcp` on the specified port.
 - Each request is handled statelessly, following the [StreamableHTTPServerTransport](https://github.com/modelcontextprotocol/typescript-sdk) pattern.
 - GET and DELETE requests to `/mcp` will return 405 Method Not Allowed.
+
+#### Per-request API token (HTTP/Docker mode)
+
+In HTTP mode, clients authenticate by supplying a Paperless-NGX API token via the standard `Authorization` header:
+
+```
+Authorization: Bearer <paperless-ngx-api-token>
+```
+
+The token is passed straight through to Paperless-NGX, so each client's own Paperless permissions are enforced end-to-end. This lets a single server instance serve multiple users, each with their own token. The same behaviour applies to both `/mcp` and `/sse` endpoints.
+
+> **⚠️ Breaking change in v2.0.0 — HTTP mode is now authenticated by default.**
+>
+> Previously, a request with no `Authorization` header silently fell back to the server-configured `PAPERLESS_API_KEY`, which left the HTTP endpoint open to anyone who could reach the port. As of v2.0.0, requests without a `Bearer` token are rejected with `401 Unauthorized`. The server token is **never** used for unauthenticated requests unless you explicitly opt in with `--no-auth`.
+
+| Scenario | `--no-auth` off (default) | `--no-auth` on |
+|---|---|---|
+| Client sends `Authorization: Bearer <tok>` | `<tok>` (client-supplied) | `<tok>` (client-supplied) |
+| No header, `PAPERLESS_API_KEY` / `--token` set | `401 Unauthorized` | server token |
+| No header, no server token | `401 Unauthorized` | `401 Unauthorized` |
+
+**Migrating from v1.x:** if you relied on the old fallback (a single shared `PAPERLESS_API_KEY` with clients that don't send a token), you have two options:
+
+1. **Recommended:** have each client send `Authorization: Bearer <paperless-token>`.
+2. **Restore the old behaviour** (trusted/local networks only): start the server with the `--no-auth` flag, e.g. append it to the Docker `command`/args or your CLI invocation. This requires a server token (`PAPERLESS_API_KEY` or `--token`) to be configured.
 
 <details>
 <summary>Docker Deployment</summary>

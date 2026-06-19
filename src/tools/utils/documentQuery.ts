@@ -22,7 +22,7 @@ export type CustomFieldQueryValue =
   | Array<string | number | boolean | null>;
 
 export type CustomFieldQuery =
-  | [fieldName: string, operator: string, value: CustomFieldQueryValue]
+  | [fieldNameOrId: string | number, operator: string, value: CustomFieldQueryValue]
   | [
       groupOperator: (typeof CUSTOM_FIELD_QUERY_GROUP_OPERATORS)[number],
       clauses: CustomFieldQuery[],
@@ -47,6 +47,17 @@ function isCustomFieldQueryValue(value: unknown): value is CustomFieldQueryValue
   );
 }
 
+function isCustomFieldQueryGroupOperator(
+  value: unknown
+): value is (typeof CUSTOM_FIELD_QUERY_GROUP_OPERATORS)[number] {
+  return (
+    typeof value === "string" &&
+    CUSTOM_FIELD_QUERY_GROUP_OPERATORS.includes(
+      value as (typeof CUSTOM_FIELD_QUERY_GROUP_OPERATORS)[number]
+    )
+  );
+}
+
 function isCustomFieldQuery(value: unknown): value is CustomFieldQuery {
   if (!Array.isArray(value)) {
     return false;
@@ -54,7 +65,8 @@ function isCustomFieldQuery(value: unknown): value is CustomFieldQuery {
 
   if (
     value.length === 3 &&
-    typeof value[0] === "string" &&
+    (typeof value[0] === "string" || typeof value[0] === "number") &&
+    !isCustomFieldQueryGroupOperator(value[0]) &&
     typeof value[1] === "string" &&
     isCustomFieldQueryValue(value[2])
   ) {
@@ -63,10 +75,7 @@ function isCustomFieldQuery(value: unknown): value is CustomFieldQuery {
 
   if (
     value.length === 2 &&
-    typeof value[0] === "string" &&
-    CUSTOM_FIELD_QUERY_GROUP_OPERATORS.includes(
-      value[0] as (typeof CUSTOM_FIELD_QUERY_GROUP_OPERATORS)[number]
-    ) &&
+    isCustomFieldQueryGroupOperator(value[0]) &&
     Array.isArray(value[1]) &&
     value[1].length >= 1
   ) {
@@ -83,7 +92,7 @@ export const customFieldQuerySchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          "Invalid custom_field_query. Use [field_name, operator, value] or ['AND'|'OR', [clause1, clause2]].",
+          "Invalid custom_field_query. Use [field_name_or_id, operator, value] or ['AND'|'OR', [clause1, clause2]].",
       });
     }
   }) as unknown as z.ZodType<CustomFieldQuery>;
@@ -101,7 +110,7 @@ export const paperlessFilterValueSchema = z.union([
 
 export const paperlessFiltersSchema = z.record(paperlessFilterValueSchema);
 
-export const LIST_DOCUMENTS_ARGS_SHAPE = {
+const DOCUMENT_QUERY_BASE_ARGS_SHAPE = {
   page: z.number().optional(),
   page_size: z.number().optional(),
   search: z.string().optional(),
@@ -112,16 +121,24 @@ export const LIST_DOCUMENTS_ARGS_SHAPE = {
   created__date__gte: z.string().optional(),
   created__date__lte: z.string().optional(),
   ordering: z.string().optional(),
+  archive_serial_number: z.number().optional(),
+  archive_serial_number__isnull: z.boolean().optional(),
+  custom_fields__icontains: z.string().min(1).optional(),
+};
+
+export const LIST_DOCUMENTS_ARGS_SHAPE = {
+  ...DOCUMENT_QUERY_BASE_ARGS_SHAPE,
+  custom_field_query: z.string().min(1).optional(),
 };
 
 export const QUERY_DOCUMENTS_ARGS_SHAPE = {
-  ...LIST_DOCUMENTS_ARGS_SHAPE,
+  ...DOCUMENT_QUERY_BASE_ARGS_SHAPE,
   query: z.string().optional(),
   more_like_id: z.number().optional(),
   custom_field_query: customFieldQuerySchema
     .optional()
     .describe(
-      "Paperless custom field query. Use [field_name, operator, value] for a single clause or ['AND'|'OR', [clause1, clause2]] for grouped clauses."
+      "Paperless custom field query. Use [field_name_or_id, operator, value] for a single clause or ['AND'|'OR', [clause1, clause2]] for grouped clauses."
     ),
   paperless_filters: paperlessFiltersSchema
     .optional()
@@ -134,10 +151,27 @@ export const SEARCH_DOCUMENTS_ARGS_SHAPE = {
   query: z.string(),
 };
 
-export const queryDocumentsArgsSchema = z.object(QUERY_DOCUMENTS_ARGS_SHAPE);
+export type PaperlessFilterValue = z.infer<typeof paperlessFilterValueSchema>;
 
-export type QueryDocumentsArgs = z.infer<typeof queryDocumentsArgsSchema>;
-export type BuildDocumentQueryArgs = Partial<QueryDocumentsArgs>;
+export type BuildDocumentQueryArgs = {
+  page?: number;
+  page_size?: number;
+  ordering?: string;
+  query?: string;
+  search?: string;
+  more_like_id?: number;
+  correspondent?: number;
+  document_type?: number;
+  tag?: number;
+  storage_path?: number;
+  created__date__gte?: string;
+  created__date__lte?: string;
+  archive_serial_number?: number;
+  archive_serial_number__isnull?: boolean;
+  custom_field_query?: string | CustomFieldQuery;
+  custom_fields__icontains?: string;
+  paperless_filters?: Record<string, PaperlessFilterValue>;
+};
 
 const FIRST_CLASS_QUERY_PARAM_MAP = {
   page: "page",
@@ -152,6 +186,9 @@ const FIRST_CLASS_QUERY_PARAM_MAP = {
   storage_path: "storage_path__id",
   created__date__gte: "created__date__gte",
   created__date__lte: "created__date__lte",
+  archive_serial_number: "archive_serial_number",
+  archive_serial_number__isnull: "archive_serial_number__isnull",
+  custom_fields__icontains: "custom_fields__icontains",
 } as const;
 
 type FirstClassQueryArg = keyof typeof FIRST_CLASS_QUERY_PARAM_MAP;
@@ -245,6 +282,7 @@ export const DOCUMENT_QUERY_PAPERLESS_FILTER_KEYS = [
   "owner__isnull",
   "page",
   "page_size",
+  "query",
   "search",
   "shared_by__id",
   "storage_path__id",
@@ -314,7 +352,12 @@ export function buildDocumentQueryString(args: BuildDocumentQueryArgs): string {
   }
 
   if (hasValue(args.custom_field_query)) {
-    setQueryParam(query, "custom_field_query", args.custom_field_query, true);
+    setQueryParam(
+      query,
+      "custom_field_query",
+      args.custom_field_query,
+      typeof args.custom_field_query !== "string"
+    );
     firstClassKeys.add("custom_field_query");
   }
 

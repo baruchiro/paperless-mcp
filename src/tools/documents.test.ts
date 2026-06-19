@@ -28,6 +28,11 @@ function getDocumentQueryParamsFromOpenApi() {
   const text = readFileSync(openApiPath, "utf8");
   const start = text.indexOf("  /api/documents/:");
   const end = text.indexOf("  /api/documents/{id}/:");
+  assert.ok(start >= 0, "OpenAPI docs marker '/api/documents/' not found");
+  assert.ok(
+    end > start,
+    "OpenAPI docs marker '/api/documents/{id}/' not found or out of order"
+  );
   const section = text.slice(start, end);
 
   return Array.from(

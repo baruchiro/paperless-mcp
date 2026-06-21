@@ -300,9 +300,9 @@ function createDocumentApi(fields: CustomField[]) {
 
 const LEGACY_SELECT_FIELD: CustomField = {
   id: 2,
-  name: "כמה זמן לשמור",
+  name: "Retention period",
   data_type: "select",
-  extra_data: { select_options: ["שנה", "7 שנים", "שנתיים"], default_currency: null },
+  extra_data: { select_options: ["1 year", "7 years", "2 years"], default_currency: null },
   document_count: 10,
 };
 
@@ -326,7 +326,7 @@ describe("select custom field value resolution in document handlers", () => {
     await withDocumentClient(api, async (client) => {
       const result = (await client.callTool({
         name: "update_document",
-        arguments: { id: 42, custom_fields: [{ field: 2, value: "שנה" }] },
+        arguments: { id: 42, custom_fields: [{ field: 2, value: "1 year" }] },
       })) as CallToolResult;
       assert.ok(!result.isError, parseToolText(result)?.error);
     });
@@ -360,7 +360,7 @@ describe("select custom field value resolution in document handlers", () => {
         arguments: {
           documents: [1, 2],
           method: "modify_custom_fields",
-          add_custom_fields: [{ field: 2, value: "7 שנים" }],
+          add_custom_fields: [{ field: 2, value: "7 years" }],
         },
       })) as CallToolResult;
       assert.ok(!result.isError, parseToolText(result)?.error);
@@ -404,7 +404,7 @@ describe("select custom field value resolution in document handlers", () => {
       assert.ok(result.isError, "expected an error for an unknown select option");
       const message = parseToolText(result)?.error ?? "";
       assert.match(message, /forever/);
-      assert.match(message, /שנה/);
+      assert.match(message, /1 year/);
     });
 
     assert.equal(

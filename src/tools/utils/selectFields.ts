@@ -6,24 +6,15 @@ import {
 } from "../../api/types";
 
 /**
- * The two encodings Paperless-NGX expects for a `select` value depending on the
- * write path (both verified against Paperless v2.20.15, API version 5):
- *
- * - `"index"` — the document endpoint (`PATCH /documents/{id}/`, used by
- *   `update_document`). Its serializer converts the submitted zero-based index
- *   into the stored option id, and converts back to the index on read.
- * - `"stored"` — the bulk endpoint (`POST /documents/bulk_edit/` →
- *   `modify_custom_fields`). It writes the submitted value straight into
- *   `value_select`, which must already be the stored form: the option id on
- *   2.17+ (`{id,label}` options) or the index on pre-2.17 (plain-string options).
+ * Encoding Paperless expects for a select value: `update_document` takes the
+ * option index; `bulk_edit` writes `value_select` directly so it needs the
+ * stored form (option id on 2.17+, index on pre-2.17 string options).
  */
 export type SelectValueEncoding = "index" | "stored";
 
 interface NormalizedSelectOption {
   index: number;
   label: string;
-  // Present on Paperless 2.17+ where options are {id, label}; absent on pre-2.17
-  // instances where options are plain strings (the index is the stored form).
   id?: string;
 }
 
@@ -56,8 +47,7 @@ function findSelectOption(
     const byLabel = options.find((option) => option.label === value);
     const byId = options.find((option) => option.id === value);
     if (byLabel && byId && byLabel.index !== byId.index) {
-      // The value is one option's label and a different option's id; we cannot
-      // tell which was intended, so reject rather than silently mis-encode it.
+      // One option's label equals another's id — intent is ambiguous, so reject.
       throw new Error(
         `Ambiguous select value ${JSON.stringify(value)}: it matches one ` +
           `option's label and a different option's id.`
@@ -72,17 +62,9 @@ function findSelectOption(
 }
 
 /**
- * Translates a `select` custom field value into the encoding Paperless-NGX
- * expects for the given write path (see {@link SelectValueEncoding}).
- *
- * Agents only ever see option labels (from `get_custom_field` /
- * `list_custom_fields`), and Paperless rejects the label outright. The supplied
- * value is matched against the field's `select_options` by label, then by option
- * id, then by index — so a label, a stored id read back from a document, or an
- * already-correct index all resolve. The matched option is then returned in the
- * requested encoding. Non-select fields and `null` (which clears the field) are
- * returned unchanged. An unmatched value throws an actionable error listing the
- * valid options instead of letting Paperless fail with a 400/500.
+ * Translates a select value (matched by label, option id, or index) into the
+ * `encoding` Paperless expects. Non-select fields and `null` pass through; an
+ * unmatched value throws an error listing the valid options.
  */
 export function resolveSelectCustomFieldValue(
   field: CustomField,
@@ -110,19 +92,13 @@ export function resolveSelectCustomFieldValue(
     );
   }
 
-  if (encoding === "stored") {
-    return option.id ?? option.index;
-  }
-  return option.index;
+  return encoding === "stored" ? option.id ?? option.index : option.index;
 }
 
 /**
- * Resolves `select` custom field values to their Paperless-NGX encoding before a
- * document write. `encoding` selects the form required by the target endpoint
- * (see {@link SelectValueEncoding}). Each referenced field definition is fetched
- * once to detect select fields; values for other field types are left untouched.
- * If a field definition cannot be fetched, its value is passed through so
- * Paperless validates it as before.
+ * Applies resolveSelectCustomFieldValue to select fields before a document
+ * write, fetching each referenced field definition once. A field whose
+ * definition can't be fetched is left untouched for Paperless to validate.
  */
 export async function resolveSelectCustomFieldValues(
   api: PaperlessAPI,
@@ -140,8 +116,7 @@ export async function resolveSelectCustomFieldValues(
       try {
         definitions.set(id, await api.getCustomField(id));
       } catch {
-        // Field definition unavailable: leave the value untouched and let
-        // Paperless validate it as before.
+        // Definition unavailable; leave the value for Paperless to validate.
       }
     })
   );

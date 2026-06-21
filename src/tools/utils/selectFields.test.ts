@@ -9,9 +9,9 @@ import {
 
 const LEGACY_SELECT_FIELD: CustomField = {
   id: 2,
-  name: "כמה זמן לשמור",
+  name: "Retention period",
   data_type: "select",
-  extra_data: { select_options: ["שנה", "7 שנים", "שנתיים"], default_currency: null },
+  extra_data: { select_options: ["1 year", "7 years", "2 years"], default_currency: null },
   document_count: 10,
 };
 
@@ -37,9 +37,9 @@ const STRING_FIELD: CustomField = {
 
 describe("resolveSelectCustomFieldValue", () => {
   test("translates a label to its zero-based index (pre-2.17 string options)", () => {
-    assert.equal(resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "שנה"), 0);
-    assert.equal(resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "7 שנים"), 1);
-    assert.equal(resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "שנתיים"), 2);
+    assert.equal(resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "1 year"), 0);
+    assert.equal(resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "7 years"), 1);
+    assert.equal(resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "2 years"), 2);
   });
 
   test("translates a label to its zero-based index (2.17+ object options)", () => {
@@ -69,7 +69,7 @@ describe("resolveSelectCustomFieldValue", () => {
   });
 
   test("leaves non-select field values untouched", () => {
-    assert.equal(resolveSelectCustomFieldValue(STRING_FIELD, "שנה"), "שנה");
+    assert.equal(resolveSelectCustomFieldValue(STRING_FIELD, "1 year"), "1 year");
   });
 
   test("throws an actionable error listing valid options for an unknown value", () => {
@@ -77,9 +77,9 @@ describe("resolveSelectCustomFieldValue", () => {
       () => resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "forever"),
       (err: Error) => {
         assert.match(err.message, /forever/);
-        assert.match(err.message, /כמה זמן לשמור/);
-        assert.match(err.message, /שנה/);
-        assert.match(err.message, /7 שנים/);
+        assert.match(err.message, /Retention period/);
+        assert.match(err.message, /1 year/);
+        assert.match(err.message, /7 years/);
         return true;
       }
     );
@@ -123,7 +123,7 @@ describe("resolveSelectCustomFieldValue with stored encoding (bulk_edit path)", 
 
   test("translates a label to the index on pre-2.17 string options (no id to store)", () => {
     assert.equal(
-      resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "7 שנים", "stored"),
+      resolveSelectCustomFieldValue(LEGACY_SELECT_FIELD, "7 years", "stored"),
       1
     );
   });
@@ -169,7 +169,7 @@ describe("resolveSelectCustomFieldValues", () => {
     const { api } = apiReturning([LEGACY_SELECT_FIELD, STRING_FIELD]);
 
     const resolved = await resolveSelectCustomFieldValues(api, [
-      { field: 2, value: "שנתיים" },
+      { field: 2, value: "2 years" },
       { field: 4, value: "INV-001" },
     ]);
 
@@ -195,8 +195,8 @@ describe("resolveSelectCustomFieldValues", () => {
     const { api, requestedIds } = apiReturning([LEGACY_SELECT_FIELD]);
 
     await resolveSelectCustomFieldValues(api, [
-      { field: 2, value: "שנה" },
-      { field: 2, value: "7 שנים" },
+      { field: 2, value: "1 year" },
+      { field: 2, value: "7 years" },
     ]);
 
     assert.deepEqual(requestedIds, [2]);

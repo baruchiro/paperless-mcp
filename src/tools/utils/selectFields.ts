@@ -47,7 +47,6 @@ function findSelectOption(
     const byLabel = options.find((option) => option.label === value);
     const byId = options.find((option) => option.id === value);
     if (byLabel && byId && byLabel.index !== byId.index) {
-      // One option's label equals another's id — intent is ambiguous, so reject.
       throw new Error(
         `Ambiguous select value ${JSON.stringify(value)}: it matches one ` +
           `option's label and a different option's id.`
@@ -61,11 +60,7 @@ function findSelectOption(
   return undefined;
 }
 
-/**
- * Translates a select value (matched by label, option id, or index) into the
- * `encoding` Paperless expects. Non-select fields and `null` pass through; an
- * unmatched value throws an error listing the valid options.
- */
+/** Translates a select value (label, option id, or index) to the `encoding` Paperless expects; throws on no match. */
 export function resolveSelectCustomFieldValue(
   field: CustomField,
   value: CustomFieldValue,
@@ -95,11 +90,6 @@ export function resolveSelectCustomFieldValue(
   return encoding === "stored" ? option.id ?? option.index : option.index;
 }
 
-/**
- * Applies resolveSelectCustomFieldValue to select fields before a document
- * write, fetching each referenced field definition once. A field whose
- * definition can't be fetched is left untouched for Paperless to validate.
- */
 export async function resolveSelectCustomFieldValues(
   api: PaperlessAPI,
   customFields: CustomFieldInstanceRequest[] | undefined,

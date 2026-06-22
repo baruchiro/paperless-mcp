@@ -52,14 +52,10 @@ describe("resolveSelectCustomFieldValue", () => {
   });
 
   test("maps an option id back to its zero-based index (2.17+ round-trip)", () => {
-    // A value read from a document comes back as the stored option id; it must
-    // resolve to the index Paperless expects on the next write.
     assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "def456"), 1);
   });
 
   test("resolves both the label and the option id to the same index", () => {
-    // Paperless indexes select_options by the submitted value, so the input is
-    // always the index regardless of whether the agent passed a label or an id.
     assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "Low"), 0);
     assert.equal(resolveSelectCustomFieldValue(OBJECT_SELECT_FIELD, "abc123"), 0);
   });

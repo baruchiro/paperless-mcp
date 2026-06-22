@@ -368,7 +368,6 @@ describe("select custom field value resolution in document handlers", () => {
 
     assert.equal(calls.bulkEditDocuments.length, 1);
     const [, , parameters] = calls.bulkEditDocuments[0];
-    // pre-2.17 string options have no id, so the stored form is the index.
     assert.deepEqual(parameters.add_custom_fields, { "2": 1 });
   });
 
@@ -388,8 +387,6 @@ describe("select custom field value resolution in document handlers", () => {
     });
 
     const [, , parameters] = calls.bulkEditDocuments[0];
-    // bulk_edit writes value_select directly, so it needs the option id, unlike
-    // update_document which takes the index.
     assert.deepEqual(parameters.add_custom_fields, { "3": "def456" });
   });
 

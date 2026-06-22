@@ -693,10 +693,6 @@ describe("Paperless MCP E2E scenario", () => {
   });
 
   it("create_custom_field creates a select field, then reads back its options", async () => {
-    // Create options with explicit ids: that is how the Paperless UI stores
-    // 2.17+ select fields (each option is {id,label} and the stored value is the
-    // id). Providing them up front avoids depending on whether a given Paperless
-    // version auto-generates ids for label-only options.
     const result = (await client.callTool({
       name: "create_custom_field",
       arguments: {
@@ -719,11 +715,6 @@ describe("Paperless MCP E2E scenario", () => {
     assert.strictEqual(created.data_type, "select");
     state.selectFieldId = created.id;
 
-    // Read the field back so the scenario uses the exact options Paperless
-    // persisted — the same definition the MCP resolver fetches when translating
-    // a label. This keeps the test version-agnostic: options may be plain
-    // strings (pre-2.17, stored by index) or {id,label} objects (2.17+, stored
-    // by id), and Paperless may normalise the ids we supplied.
     const getResult = (await client.callTool({
       name: "get_custom_field",
       arguments: { id: created.id },
@@ -738,10 +729,7 @@ describe("Paperless MCP E2E scenario", () => {
     const labelOf = (opt: string | { label?: string } | undefined) =>
       typeof opt === "string" ? opt : opt?.label;
     state.selectOptionLabel = labelOf(options[0]);
-    // At API version 5, get_document returns a select value as the option's
-    // zero-based index: update_document submits the index and Paperless stores
-    // the option id, converting back to the index on read. options[] preserves
-    // creation order, so "Keep" is index 0.
+    // get_document returns the option's zero-based index at API version 5.
     state.selectOptionValue = 0;
     assert.ok(
       state.selectOptionLabel && options.length >= 2,
@@ -754,8 +742,6 @@ describe("Paperless MCP E2E scenario", () => {
       state.documentId && state.selectFieldId && state.selectOptionLabel,
       "document and select field must exist"
     );
-    // Before the fix the label string was forwarded verbatim and Paperless
-    // rejected it with an HTTP 500.
     const result = (await client.callTool({
       name: "update_document",
       arguments: {
@@ -779,18 +765,13 @@ describe("Paperless MCP E2E scenario", () => {
       (c) => c.field === state.selectFieldId
     );
     assert.ok(cf, `select field ${state.selectFieldId} should be set on the document`);
-    // The label must have been translated to the exact stored encoding
-    // (option id on 2.17+, zero-based index on pre-2.17), not the raw label.
     assert.strictEqual(cf.value, state.selectOptionValue);
   });
 
-  // bulk_edit_documents → modify_custom_fields is intentionally not asserted for
-  // select here. The resolver sends the correct stored value for the bulk path
-  // (covered by the handler unit tests in src/tools/documents.test.ts), but
-  // Paperless v2.20.15 rejects a select value set via bulk_edit with an opaque
-  // HTTP 400 regardless of encoding (option id or index) — even though the
-  // equivalent update_document write of the same stored value succeeds. That is
-  // an upstream bulk_edit limitation, not an MCP encoding issue.
+  // bulk_edit select isn't asserted here: Paperless v2.20.15 rejects a select
+  // value set via bulk_edit (any encoding) with an opaque 400 while
+  // update_document succeeds — an upstream limitation. The resolver still sends
+  // the correct value (covered by the handler unit tests).
 
   it("update_document rejects an unknown select option without a Paperless 500", async () => {
     assert.ok(

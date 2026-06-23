@@ -1,5 +1,29 @@
 # @baruchiro/paperless-mcp
 
+## 2.0.0
+
+### Major Changes
+
+- 18d49ce: Secure HTTP mode by default and stop leaking the API token in logs.
+
+  **BREAKING CHANGE:** In HTTP mode, requests without an `Authorization: Bearer <token>` header are now rejected with `401 Unauthorized`. Previously they silently fell back to the server-configured `PAPERLESS_API_KEY`, which left the endpoint unauthenticated for anyone able to reach the port. To restore the old fallback behaviour (trusted/local networks only), start the server with the new `--no-auth` flag; it requires a server token to be configured. Client-supplied Bearer tokens and stdio mode are unchanged.
+
+  Also stops logging the raw request `options` (which included the request body) on API errors; only `url`, `method`, and `status` are logged now.
+
+### Minor Changes
+
+- 36e0255: Add `archive_serial_number`, `archive_serial_number__isnull`, `custom_field_query`, and `custom_fields__icontains` filters to the `list_documents` tool.
+- c55da21: Add MCP tools for Paperless mail accounts and mail rules.
+
+### Patch Changes
+
+- 0d236aa: Stop pre-enumerating Paperless documents in MCP `resources/list`. Documents remain available on demand via tools and `resources/read` on `paperless://documents/{id}/{resource}`.
+
+  Fixes #112.
+
+- 62e5b06: Fix setting `select` custom field values failing against Paperless (#119). The MCP forwarded the option label, which Paperless rejects. The server now fetches the field definition and translates the label to the encoding each write path expects: `update_document` (the document endpoint) takes the option's zero-based index, while `bulk_edit_documents` → `modify_custom_fields` writes the stored form directly and takes the option id on 2.17+ (or the index on pre-2.17 string options). A label, an already-encoded value, or an option id read back from a document all resolve correctly, and unknown options are rejected with an actionable error listing the valid choices.
+- 6f8aada: Allow `post_document` to upload from an absolute server-side `file_path` instead of base64 `file`, avoiding base64 overhead for large files. Reads are validated (absolute path, regular file, 100MB limit, non-empty) and can be confined to allowed directories via the `PAPERLESS_MCP_UPLOAD_PATHS` environment variable.
+
 ## 1.0.0
 
 ### Major Changes

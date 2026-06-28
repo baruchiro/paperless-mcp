@@ -27,6 +27,7 @@ export function createMcpServer({
     { name: "paperless-ngx", version },
     { instructions: buildInstructions(publicUrl) }
   );
+
   registerDocumentTools(server, api);
   registerDocumentResources(server, api);
   registerTagTools(server, api);

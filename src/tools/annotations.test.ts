@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { createMcpServer } from "../server";
+
+test("every registered tool declares MCP annotations", () => {
+  const server = createMcpServer({
+    baseUrl: "http://localhost",
+    token: "test-token",
+    version: "0.0.0-test",
+    publicUrl: "http://localhost",
+  });
+
+  const registered = (server as unknown as {
+    _registeredTools: Record<string, { annotations?: Record<string, unknown> }>;
+  })._registeredTools;
+
+  const names = Object.keys(registered);
+  assert.ok(names.length > 0, "expected at least one registered tool");
+
+  for (const [name, tool] of Object.entries(registered)) {
+    const annotations = tool.annotations;
+    assert.ok(annotations, `tool "${name}" is missing annotations`);
+    assert.equal(
+      typeof annotations.readOnlyHint,
+      "boolean",
+      `tool "${name}" is missing a readOnlyHint`
+    );
+    assert.equal(
+      annotations.openWorldHint,
+      false,
+      `tool "${name}" must set openWorldHint to false`
+    );
+    if (annotations.readOnlyHint === false) {
+      assert.equal(
+        typeof annotations.destructiveHint,
+        "boolean",
+        `writable tool "${name}" is missing a destructiveHint`
+      );
+    }
+  }
+});

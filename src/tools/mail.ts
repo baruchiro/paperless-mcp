@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
+import { READ_ONLY, WRITE, DESTRUCTIVE } from "./utils/annotations";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -88,6 +89,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
       page: z.number().optional(),
       page_size: z.number().optional(),
     },
+    READ_ONLY,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
@@ -111,6 +113,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
     "get_mail_account",
     "Get one Paperless mail account by ID. Password/token fields are redacted if the server returns them.",
     { id: z.number().int() },
+    READ_ONLY,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const { password, ...account } = await api.getMailAccount(args.id);
@@ -124,6 +127,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
     "process_mail_account",
     "Manually run Paperless mail processing for one account. This can consume matching mails according to enabled Paperless mail rules.",
     { id: z.number().int() },
+    WRITE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       await api.processMailAccount(args.id);
@@ -142,6 +146,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
       page: z.number().optional(),
       page_size: z.number().optional(),
     },
+    READ_ONLY,
     withErrorHandling(async (args = {}) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
@@ -156,6 +161,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
     "get_mail_rule",
     "Get one Paperless mail rule by ID.",
     { id: z.number().int() },
+    READ_ONLY,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.getMailRule(args.id);
@@ -174,6 +180,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
       account: z.number().int(),
       folder: z.string(),
     },
+    WRITE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const response = await api.createMailRule(args);
@@ -190,6 +197,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
       id: z.number().int(),
       ...mailRuleFields,
     },
+    WRITE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const { id, ...data } = args;
@@ -209,6 +217,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
         .boolean()
         .describe("Must be true to confirm deleting the rule"),
     },
+    DESTRUCTIVE,
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       if (!args.confirm) {

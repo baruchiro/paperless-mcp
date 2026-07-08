@@ -222,10 +222,22 @@ export class PaperlessAPI {
   }
 
   // Document note operations
+
+  /**
+   * Retrieve all notes attached to a document.
+   * @param id - The document ID.
+   * @returns The document's notes.
+   */
   async getDocumentNotes(id: number): Promise<Note[]> {
     return this.request<Note[]>(`/documents/${id}/notes/`);
   }
 
+  /**
+   * Create a note on a document.
+   * @param id - The document ID.
+   * @param note - The note text to add.
+   * @returns The document's full notes list after creation.
+   */
   async createDocumentNote(id: number, note: string): Promise<Note[]> {
     return this.request<Note[]>(`/documents/${id}/notes/`, {
       method: "POST",
@@ -233,6 +245,12 @@ export class PaperlessAPI {
     });
   }
 
+  /**
+   * Delete a note from a document by its note ID.
+   * @param id - The document ID.
+   * @param noteId - The ID of the note to delete.
+   * @returns The document's remaining notes after deletion.
+   */
   async deleteDocumentNote(id: number, noteId: number): Promise<Note[]> {
     return this.request<Note[]>(`/documents/${id}/notes/?id=${noteId}`, {
       method: "DELETE",

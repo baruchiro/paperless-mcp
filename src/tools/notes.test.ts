@@ -136,13 +136,13 @@ describe("document note tools", () => {
     assert.deepEqual(calls.getDocumentNotes, [42]);
   });
 
-  test("delete_document_note removes a note by its note ID", async () => {
+  test("delete_document_note removes a note by its note ID when confirmed", async () => {
     const { api, calls } = createNoteApi([]);
 
     await withNoteClient(api, async (client) => {
       const result = (await client.callTool({
         name: "delete_document_note",
-        arguments: { id: 42, note_id: 5 },
+        arguments: { id: 42, note_id: 5, confirm: true },
       })) as CallToolResult;
       assert.ok(!result.isError, parseToolText(result)?.error);
     });
@@ -150,16 +150,46 @@ describe("document note tools", () => {
     assert.deepEqual(calls.deleteDocumentNote, [[42, 5]]);
   });
 
+  test("delete_document_note refuses to delete without confirmation", async () => {
+    const { api, calls } = createNoteApi([]);
+
+    await withNoteClient(api, async (client) => {
+      const result = (await client.callTool({
+        name: "delete_document_note",
+        arguments: { id: 42, note_id: 5, confirm: false },
+      })) as CallToolResult;
+      assert.ok(result.isError, "expected an error when confirm is false");
+      assert.match(parseToolText(result)?.error ?? "", /confirm/i);
+    });
+
+    assert.equal(
+      calls.deleteDocumentNote.length,
+      0,
+      "no delete should be sent without confirmation"
+    );
+  });
+
   test("create_document_note rejects an empty note", async () => {
     const { api, calls } = createNoteApi(sampleNotes);
 
     await withNoteClient(api, async (client) => {
-      await assert.rejects(
-        client.callTool({
+      // Depending on the installed MCP SDK version, an input-schema (zod)
+      // violation either rejects with a protocol error (-32602) or resolves
+      // with a CallToolResult carrying isError: true. Accept both so the test
+      // stays correct across SDK versions.
+      let rejected = false;
+      let result: CallToolResult | undefined;
+      try {
+        result = (await client.callTool({
           name: "create_document_note",
           arguments: { id: 1, note: "" },
-        }),
-        "expected a validation error for an empty note"
+        })) as CallToolResult;
+      } catch {
+        rejected = true;
+      }
+      assert.ok(
+        rejected || result?.isError,
+        "expected an empty note to be rejected"
       );
     });
 

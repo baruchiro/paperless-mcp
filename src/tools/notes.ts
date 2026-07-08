@@ -1,7 +1,19 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
+import { Note } from "../api/types";
 import { withErrorHandling } from "./utils/middlewares";
+
+function notesResult(notes: Note[]) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: JSON.stringify(notes),
+      },
+    ],
+  };
+}
 
 export function registerNoteTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
@@ -12,15 +24,7 @@ export function registerNoteTools(server: McpServer, api: PaperlessAPI) {
     },
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
-      const notes = await api.getDocumentNotes(args.id);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(notes),
-          },
-        ],
-      };
+      return notesResult(await api.getDocumentNotes(args.id));
     })
   );
 
@@ -33,36 +37,28 @@ export function registerNoteTools(server: McpServer, api: PaperlessAPI) {
     },
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
-      const notes = await api.createDocumentNote(args.id, args.note);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(notes),
-          },
-        ],
-      };
+      return notesResult(await api.createDocumentNote(args.id, args.note));
     })
   );
 
   server.tool(
     "delete_document_note",
-    "Delete a single note from a document by its note ID. Returns the document's remaining notes.",
+    "⚠️ DESTRUCTIVE: Permanently delete a single note from a document by its note ID. This operation is irreversible. Returns the document's remaining notes.",
     {
       id: z.number().describe("The document ID"),
       note_id: z.number().describe("The ID of the note to delete"),
+      confirm: z
+        .boolean()
+        .describe("Must be true to confirm this destructive operation"),
     },
     withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
-      const notes = await api.deleteDocumentNote(args.id, args.note_id);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(notes),
-          },
-        ],
-      };
+      if (!args.confirm) {
+        throw new Error(
+          "Confirmation required for destructive operation. Set confirm: true to proceed."
+        );
+      }
+      return notesResult(await api.deleteDocumentNote(args.id, args.note_id));
     })
   );
 }

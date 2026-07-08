@@ -320,16 +320,18 @@ create_document_note({
 ```
 
 #### delete_document_note
-Delete a single note from a document by its note ID.
+⚠️ Delete a single note from a document by its note ID. This operation is irreversible.
 
 Parameters:
 - id: Document ID
 - note_id: The ID of the note to delete
+- confirm: Must be `true` to confirm this destructive operation
 
 ```typescript
 delete_document_note({
   id: 123,
-  note_id: 5
+  note_id: 5,
+  confirm: true
 })
 ```
 

@@ -225,21 +225,21 @@ export class PaperlessAPI {
 
   /**
    * Retrieve all notes attached to a document.
-   * @param id - The document ID.
+   * @param documentId - The document ID.
    * @returns The document's notes.
    */
-  async getDocumentNotes(id: number): Promise<Note[]> {
-    return this.request<Note[]>(`/documents/${id}/notes/`);
+  async getDocumentNotes(documentId: number): Promise<Note[]> {
+    return this.request<Note[]>(`/documents/${documentId}/notes/`);
   }
 
   /**
    * Create a note on a document.
-   * @param id - The document ID.
+   * @param documentId - The document ID.
    * @param note - The note text to add.
    * @returns The document's full notes list after creation.
    */
-  async createDocumentNote(id: number, note: string): Promise<Note[]> {
-    return this.request<Note[]>(`/documents/${id}/notes/`, {
+  async createDocumentNote(documentId: number, note: string): Promise<Note[]> {
+    return this.request<Note[]>(`/documents/${documentId}/notes/`, {
       method: "POST",
       body: JSON.stringify({ note }),
     });
@@ -247,12 +247,12 @@ export class PaperlessAPI {
 
   /**
    * Delete a note from a document by its note ID.
-   * @param id - The document ID.
+   * @param documentId - The document ID.
    * @param noteId - The ID of the note to delete.
    * @returns The document's remaining notes after deletion.
    */
-  async deleteDocumentNote(id: number, noteId: number): Promise<Note[]> {
-    return this.request<Note[]>(`/documents/${id}/notes/?id=${noteId}`, {
+  async deleteDocumentNote(documentId: number, noteId: number): Promise<Note[]> {
+    return this.request<Note[]>(`/documents/${documentId}/notes/?id=${noteId}`, {
       method: "DELETE",
     });
   }

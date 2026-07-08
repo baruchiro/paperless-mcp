@@ -16,6 +16,7 @@ import {
   MailAccount,
   MailRule,
   GetTagsResponse,
+  Note,
   Tag,
 } from "./types";
 import { headersToObject } from "./utils";
@@ -218,6 +219,24 @@ export class PaperlessAPI {
       }
     );
     return response;
+  }
+
+  // Document note operations
+  async getDocumentNotes(id: number): Promise<Note[]> {
+    return this.request<Note[]>(`/documents/${id}/notes/`);
+  }
+
+  async createDocumentNote(id: number, note: string): Promise<Note[]> {
+    return this.request<Note[]>(`/documents/${id}/notes/`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    });
+  }
+
+  async deleteDocumentNote(id: number, noteId: number): Promise<Note[]> {
+    return this.request<Note[]>(`/documents/${id}/notes/?id=${noteId}`, {
+      method: "DELETE",
+    });
   }
 
   // Tag operations

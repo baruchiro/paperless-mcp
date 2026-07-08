@@ -291,6 +291,48 @@ post_document({
 })
 ```
 
+### Document Notes
+
+#### list_document_notes
+List all notes attached to a document.
+
+Parameters:
+- id: Document ID
+
+```typescript
+list_document_notes({
+  id: 123
+})
+```
+
+#### create_document_note
+Add a note to a document. Returns the document's full list of notes.
+
+Parameters:
+- id: Document ID
+- note: The note text to add
+
+```typescript
+create_document_note({
+  id: 123,
+  note: "Invoice paid on 2026-06-30 from Commerzbank account."
+})
+```
+
+#### delete_document_note
+Delete a single note from a document by its note ID.
+
+Parameters:
+- id: Document ID
+- note_id: The ID of the note to delete
+
+```typescript
+delete_document_note({
+  id: 123,
+  note_id: 5
+})
+```
+
 ### Tag Operations
 
 #### list_tags

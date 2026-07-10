@@ -16,6 +16,7 @@ import {
   MailAccount,
   MailRule,
   GetTagsResponse,
+  Note,
   Tag,
 } from "./types";
 import { headersToObject } from "./utils";
@@ -218,6 +219,42 @@ export class PaperlessAPI {
       }
     );
     return response;
+  }
+
+  // Document note operations
+
+  /**
+   * Retrieve all notes attached to a document.
+   * @param documentId - The document ID.
+   * @returns The document's notes.
+   */
+  async getDocumentNotes(documentId: number): Promise<Note[]> {
+    return this.request<Note[]>(`/documents/${documentId}/notes/`);
+  }
+
+  /**
+   * Create a note on a document.
+   * @param documentId - The document ID.
+   * @param note - The note text to add.
+   * @returns The document's full notes list after creation.
+   */
+  async createDocumentNote(documentId: number, note: string): Promise<Note[]> {
+    return this.request<Note[]>(`/documents/${documentId}/notes/`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    });
+  }
+
+  /**
+   * Delete a note from a document by its note ID.
+   * @param documentId - The document ID.
+   * @param noteId - The ID of the note to delete.
+   * @returns The document's remaining notes after deletion.
+   */
+  async deleteDocumentNote(documentId: number, noteId: number): Promise<Note[]> {
+    return this.request<Note[]>(`/documents/${documentId}/notes/?id=${noteId}`, {
+      method: "DELETE",
+    });
   }
 
   // Tag operations

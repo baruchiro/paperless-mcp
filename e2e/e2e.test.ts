@@ -13,6 +13,7 @@ const RUN_TAG = `e2e-tag-${Date.now()}`;
 const RUN_CORRESPONDENT = `E2E Corp ${Date.now()}`;
 const RUN_DOCUMENT_TYPE = `E2E Type ${Date.now()}`;
 const RUN_DOCUMENT_TITLE = `E2E Document ${Date.now()}`;
+const RUN_SELECT_FIELD = `E2E Select ${Date.now()}`;
 const RUN_CUSTOM_FIELD = `e2e_cf_${Date.now()}`;
 const RUN_CUSTOM_FIELD_VALUE = `cf-value-${Date.now()}`;
 // archive_serial_number is a unique uint32 in Paperless; derive an in-range
@@ -49,6 +50,9 @@ const state: {
   documentTypeId?: number;
   documentId?: number;
   customFieldId?: number;
+  selectFieldId?: number;
+  selectOptionLabel?: string;
+  selectOptionValue?: string | number;
   mailAccountId?: number;
   mailRuleId?: number;
 } = {};
@@ -86,6 +90,13 @@ async function createMailAccount(name: string): Promise<number> {
 
 async function deleteMailAccount(id: number): Promise<void> {
   await fetch(`${PAPERLESS_URL}/api/mail_accounts/${id}/`, {
+    method: "DELETE",
+    headers: { Authorization: `Token ${PAPERLESS_TOKEN}` },
+  });
+}
+
+async function deleteCustomFieldDirect(id: number): Promise<void> {
+  await fetch(`${PAPERLESS_URL}/api/custom_fields/${id}/`, {
     method: "DELETE",
     headers: { Authorization: `Token ${PAPERLESS_TOKEN}` },
   });
@@ -161,6 +172,15 @@ after(async () => {
       await deleteMailAccount(state.mailAccountId);
     } catch (err) {
       console.error("Failed to clean up mail account:", err);
+    }
+  }
+  for (const fieldId of [state.customFieldId, state.selectFieldId]) {
+    if (fieldId !== undefined) {
+      try {
+        await deleteCustomFieldDirect(fieldId);
+      } catch (err) {
+        console.error("Failed to clean up custom field:", err);
+      }
     }
   }
   await client?.close?.();
@@ -670,6 +690,118 @@ describe("Paperless MCP E2E scenario", () => {
       !missData.results.some((d) => d.id === state.documentId),
       `document id=${state.documentId} should not match custom_field_query=${missQuery}`
     );
+  });
+
+  it("create_custom_field creates a select field, then reads back its options", async () => {
+    const result = (await client.callTool({
+      name: "create_custom_field",
+      arguments: {
+        name: RUN_SELECT_FIELD,
+        data_type: "select",
+        extra_data: {
+          select_options: [
+            { id: "keep", label: "Keep" },
+            { id: "discard", label: "Discard" },
+          ],
+        },
+      },
+    })) as ToolResult;
+    assertOk(result, "create_custom_field (select)");
+    const created = parseToolText(result) as { id: number; data_type: string };
+    assert.ok(
+      typeof created.id === "number",
+      `field.id should be a number, got ${JSON.stringify(created)}`
+    );
+    assert.strictEqual(created.data_type, "select");
+    state.selectFieldId = created.id;
+
+    const getResult = (await client.callTool({
+      name: "get_custom_field",
+      arguments: { id: created.id },
+    })) as ToolResult;
+    assertOk(getResult, "get_custom_field (select)");
+    const field = parseToolText(getResult) as {
+      extra_data?: {
+        select_options?: Array<string | { id?: string; label?: string }>;
+      };
+    };
+    const options = field.extra_data?.select_options ?? [];
+    const labelOf = (opt: string | { label?: string } | undefined) =>
+      typeof opt === "string" ? opt : opt?.label;
+    state.selectOptionLabel = labelOf(options[0]);
+    // get_document returns the option's zero-based index at API version 5.
+    state.selectOptionValue = 0;
+    assert.ok(
+      state.selectOptionLabel && options.length >= 2,
+      `expected the created select options, got ${JSON.stringify(options)}`
+    );
+  });
+
+  it("update_document sets a select field by its option label (regression #119)", async () => {
+    assert.ok(
+      state.documentId && state.selectFieldId && state.selectOptionLabel,
+      "document and select field must exist"
+    );
+    const result = (await client.callTool({
+      name: "update_document",
+      arguments: {
+        id: state.documentId,
+        custom_fields: [
+          { field: state.selectFieldId, value: state.selectOptionLabel },
+        ],
+      },
+    })) as ToolResult;
+    assertOk(result, "update_document select by label");
+
+    const docResult = (await client.callTool({
+      name: "get_document",
+      arguments: { id: state.documentId },
+    })) as ToolResult;
+    assertOk(docResult, "get_document after select update");
+    const doc = parseToolText(docResult) as {
+      custom_fields: Array<{ field: number; value: unknown }>;
+    };
+    const cf = (doc.custom_fields ?? []).find(
+      (c) => c.field === state.selectFieldId
+    );
+    assert.ok(cf, `select field ${state.selectFieldId} should be set on the document`);
+    assert.strictEqual(cf.value, state.selectOptionValue);
+  });
+
+  // bulk_edit select isn't asserted here: Paperless v2.20.15 rejects a select
+  // value set via bulk_edit (any encoding) with an opaque 400 while
+  // update_document succeeds — an upstream limitation. The resolver still sends
+  // the correct value (covered by the handler unit tests).
+
+  it("update_document rejects an unknown select option without a Paperless 500", async () => {
+    assert.ok(
+      state.documentId && state.selectFieldId,
+      "document and select field must exist"
+    );
+    const result = (await client.callTool({
+      name: "update_document",
+      arguments: {
+        id: state.documentId,
+        custom_fields: [
+          { field: state.selectFieldId, value: "definitely-not-an-option" },
+        ],
+      },
+    })) as ToolResult;
+    assert.ok(
+      result.isError,
+      "an unknown select option should be rejected by the MCP before reaching Paperless"
+    );
+    assert.match(errorText(result), /definitely-not-an-option/);
+  });
+
+  it("delete_custom_field removes the select field when confirmed", async () => {
+    assert.ok(state.selectFieldId, "select field must exist");
+    const result = (await client.callTool({
+      name: "delete_custom_field",
+      arguments: { id: state.selectFieldId, confirm: true },
+    })) as ToolResult;
+    assertOk(result, "delete_custom_field");
+    state.selectFieldId = undefined;
   });
 });
 

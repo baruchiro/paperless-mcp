@@ -15,6 +15,7 @@ import {
 } from "./utils/documentQuery";
 import { withErrorHandling } from "./utils/middlewares";
 import { validateCustomFields } from "./utils/monetary";
+import { resolveSelectCustomFieldValues } from "./utils/selectFields";
 import { CUSTOM_FIELD_VALUE_DESCRIPTION } from "./utils/descriptions";
 import {
   buildDocumentResourceUri,
@@ -232,6 +233,11 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const { documents, method, add_custom_fields, confirm, ...parameters } = args;
 
       validateCustomFields(add_custom_fields);
+      const resolvedCustomFields = await resolveSelectCustomFieldValues(
+        api,
+        add_custom_fields,
+        "stored"
+      );
 
       const response = await api.bulkEditDocuments(
         documents,
@@ -240,7 +246,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           ? {}
           : buildBulkEditParameters(
               parameters,
-              add_custom_fields,
+              resolvedCustomFields,
               method === "modify_custom_fields",
               method === "modify_tags"
             )
@@ -581,6 +587,11 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const { id, ...updateData } = args;
 
       validateCustomFields(updateData.custom_fields);
+      updateData.custom_fields = await resolveSelectCustomFieldValues(
+        api,
+        updateData.custom_fields,
+        "index"
+      );
 
       const response = await api.updateDocument(id, updateData);
 

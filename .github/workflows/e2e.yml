@@ -23,12 +23,32 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+      # Paperless defaults to SQLite, which serializes writes and intermittently
+      # raises "database is locked" when the consumer and a bulk-edit task write
+      # concurrently. Back it with PostgreSQL to match production and remove the
+      # flake.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: paperless
+          POSTGRES_USER: paperless
+          POSTGRES_PASSWORD: paperless
+        options: >-
+          --health-cmd "pg_isready -U paperless"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
       paperless:
         # Track upstream stable. Paperless-ngx publishes the latest stable
         # release under :latest; the weekly schedule catches drift.
         image: ghcr.io/paperless-ngx/paperless-ngx:latest
         env:
           PAPERLESS_REDIS: redis://redis:6379
+          PAPERLESS_DBHOST: postgres
+          PAPERLESS_DBNAME: paperless
+          PAPERLESS_DBUSER: paperless
+          PAPERLESS_DBPASS: paperless
           PAPERLESS_ADMIN_USER: admin
           PAPERLESS_ADMIN_PASSWORD: admin123
           PAPERLESS_ADMIN_MAIL: admin@test.local

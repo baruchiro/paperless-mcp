@@ -87,16 +87,92 @@ Here are some things you can ask Claude to do:
 ### Document Operations
 
 #### list_documents
-Get a paginated list of all documents.
+Get a paginated list of documents with simple filters. Use this for straightforward listing tasks. For full-text queries, structured custom field filtering, or advanced Paperless filters, use `query_documents`.
 
 Parameters:
 - page (optional): Page number
 - page_size (optional): Number of documents per page
+- search (optional): Simple Paperless search term
+- correspondent (optional): Correspondent ID
+- document_type (optional): Document type ID
+- tag (optional): Tag ID
+- storage_path (optional): Storage path ID
+- created__date__gte (optional): Created date on or after YYYY-MM-DD
+- created__date__lte (optional): Created date on or before YYYY-MM-DD
+- ordering (optional): Paperless ordering field
+- archive_serial_number (optional): Archive serial number
+- archive_serial_number__isnull (optional): Whether the archive serial number is empty
+- custom_field_query (optional): Raw JSON-encoded Paperless custom field query string
+- custom_fields__icontains (optional): Case-insensitive substring match across custom field values
 
 ```typescript
 list_documents({
   page: 1,
   page_size: 25
+})
+```
+
+#### query_documents
+Canonical document query tool. Supports full-text querying, simple Paperless search, custom field filters, and documented `/api/documents/` Paperless query parameters.
+
+Parameters:
+- page (optional): Page number
+- page_size (optional): Number of documents per page
+- ordering (optional): Paperless ordering field
+- query (optional): Full-text query string
+- search (optional): Simple Paperless search term
+- more_like_id (optional): Find documents similar to this document ID
+- correspondent (optional): Correspondent ID
+- document_type (optional): Document type ID
+- tag (optional): Tag ID
+- storage_path (optional): Storage path ID
+- created__date__gte (optional): Created date on or after YYYY-MM-DD
+- created__date__lte (optional): Created date on or before YYYY-MM-DD
+- custom_field_query (optional): Structured Paperless custom field query using `[field_name_or_id, operator, value]` leaves or `["AND" | "OR", [clause1, clause2]]` groups
+- paperless_filters (optional): Additional documented `/api/documents/` Paperless query parameters, passed as key/value pairs
+
+```typescript
+// Full-text query
+query_documents({
+  query: "invoice 2024"
+})
+
+// Simple search term
+query_documents({
+  search: "acme"
+})
+
+// Custom field exact match
+query_documents({
+  custom_field_query: ["Invoice Number", "exact", "12345"]
+})
+
+// Custom field empty
+query_documents({
+  custom_field_query: ["OR", [
+    ["Invoice Number", "isnull", true],
+    ["Invoice Number", "exact", ""]
+  ]]
+})
+
+// Custom field missing
+query_documents({
+  custom_field_query: ["Invoice Number", "exists", false]
+})
+
+// Combined filters
+query_documents({
+  query: "invoice",
+  tag: 5,
+  created__date__gte: "2024-01-01",
+  custom_field_query: ["Invoice Number", "exists", true]
+})
+
+// One documented Paperless filter that is not a first-class argument
+query_documents({
+  paperless_filters: {
+    id__in: [101, 202, 303]
+  }
 })
 ```
 
@@ -113,7 +189,7 @@ get_document({
 ```
 
 #### search_documents
-Full-text search across documents.
+Deprecated compatibility wrapper for full-text search. Prefer `query_documents({ query: ... })` for new integrations.
 
 Parameters:
 - query: Search query string

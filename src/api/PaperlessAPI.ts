@@ -184,13 +184,6 @@ export class PaperlessAPI {
     });
   }
 
-  async searchDocuments(query: string): Promise<DocumentsResponse> {
-    const response = await this.request<DocumentsResponse>(
-      `/documents/?query=${encodeURIComponent(query)}`
-    );
-    return response;
-  }
-
   async downloadDocument(
     id: number,
     asOriginal = false

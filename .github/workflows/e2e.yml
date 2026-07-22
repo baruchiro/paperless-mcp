@@ -12,7 +12,21 @@ on:
 
 jobs:
   e2e:
+    name: e2e (Paperless ${{ matrix.series }})
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Latest maintained 2.x line. Guards against regressing support for
+          # users still on Paperless-ngx v2.
+          - series: "2.x"
+            paperless_image: ghcr.io/paperless-ngx/paperless-ngx:2.20
+          # Upstream stable (currently v3.x). The weekly schedule catches drift
+          # when a new :latest is published.
+          - series: "3.x (latest)"
+            paperless_image: ghcr.io/paperless-ngx/paperless-ngx:latest
 
     services:
       redis:
@@ -40,9 +54,7 @@ jobs:
           --health-retries 10
 
       paperless:
-        # Track upstream stable. Paperless-ngx publishes the latest stable
-        # release under :latest; the weekly schedule catches drift.
-        image: ghcr.io/paperless-ngx/paperless-ngx:latest
+        image: ${{ matrix.paperless_image }}
         env:
           PAPERLESS_REDIS: redis://redis:6379
           PAPERLESS_DBHOST: postgres

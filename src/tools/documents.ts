@@ -520,7 +520,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
   server.tool(
     "update_document",
-    "Update a specific document with new values. This tool allows you to modify any document field including title, correspondent, document type, storage path, tags, custom fields, and more. Only the fields you specify will be updated.",
+    "Update a specific document with new values (title, correspondent, document type, storage path, tags, custom fields, and more). Top-level fields you omit are left unchanged. IMPORTANT: custom_fields is the exception — see its parameter description; it replaces the document's entire custom-field set.",
     {
       id: z.number().describe("The ID of the document to update"),
       title: z
@@ -580,7 +580,9 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           })
         )
         .optional()
-        .describe("Array of custom field values to assign"),
+        .describe(
+          "Custom field values for the document. ⚠️ REPLACES the document's entire custom-field set — any field not included here will be CLEARED. To update or add a single field without losing the others, first call get_document to read the existing custom_fields, then pass the full merged array. To add/set fields additively without fetching, use bulk_edit_documents with method 'modify_custom_fields' instead."
+        ),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");

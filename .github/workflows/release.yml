@@ -54,11 +54,11 @@ jobs:
       - name: Extract version from publishedPackages
         id: version
         run: |
-          echo "VERSION=$(echo '${{ steps.changesets.outputs.publishedPackages }}' | jq -r '.[0].version')" >> $GITHUB_OUTPUT
+          echo "VERSION=$(echo '${{ steps.changesets.outputs.publishedPackages || '[]' }}' | jq -r '.[0].version // empty')" >> "$GITHUB_OUTPUT"
 
   docker-publish:
     needs: release
-    if: needs.release.outputs.hasChangesets == 'false'
+    if: needs.release.outputs.hasChangesets == 'false' && needs.release.outputs.versionTag != ''
     permissions:
       contents: read
       packages: write

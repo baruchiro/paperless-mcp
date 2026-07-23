@@ -66,7 +66,7 @@ Add these to your MCP config file:
 | `PAPERLESS_URL` | Yes | — | Base URL of your Paperless-NGX instance |
 | `PAPERLESS_API_KEY` | Yes | — | API token from your Paperless-NGX profile |
 | `PAPERLESS_PUBLIC_URL` | No | `PAPERLESS_URL` | Public-facing URL for document links |
-| `PAPERLESS_API_VERSION` | No | `5` | Paperless-ngx REST API version. Use `10` for Paperless-ngx v3+. If you see HTTP 406 errors, set this to `10`. |
+| `PAPERLESS_API_VERSION` | No | `9` | Paperless-ngx REST API version. `9` works on Paperless-ngx v2.x (recent) and v3.x. Paperless-ngx v3.0.0 dropped support for versions below `9`, so older defaults now return HTTP 406. If you see HTTP 406 errors, set this to a version your server supports. |
 | `PAPERLESS_MCP_UPLOAD_PATHS` | No | — | Colon-separated list of allowed directories for `file_path` uploads. **Recommended for security.** Example: `/var/uploads:/tmp/scans` |
 
 That's it! Now you can ask Claude to help you manage your Paperless-NGX documents.

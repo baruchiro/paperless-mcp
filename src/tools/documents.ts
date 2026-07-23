@@ -590,7 +590,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       updateData.custom_fields = await resolveSelectCustomFieldValues(
         api,
         updateData.custom_fields,
-        "index"
+        "stored"
       );
 
       const response = await api.updateDocument(id, updateData);

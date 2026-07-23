@@ -730,11 +730,14 @@ describe("Paperless MCP E2E scenario", () => {
     const options = field.extra_data?.select_options ?? [];
     const labelOf = (opt: string | { label?: string } | undefined) =>
       typeof opt === "string" ? opt : opt?.label;
+    const idOf = (opt: string | { id?: string } | undefined) =>
+      typeof opt === "string" ? undefined : opt?.id;
     state.selectOptionLabel = labelOf(options[0]);
-    // get_document returns the option's zero-based index at API version 5.
-    state.selectOptionValue = 0;
+    // Paperless API v9+ stores and returns the select option's id (e.g. "keep"),
+    // not the zero-based index that API v5 used.
+    state.selectOptionValue = idOf(options[0]);
     assert.ok(
-      state.selectOptionLabel && options.length >= 2,
+      state.selectOptionLabel && state.selectOptionValue && options.length >= 2,
       `expected the created select options, got ${JSON.stringify(options)}`
     );
   });

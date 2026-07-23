@@ -43,8 +43,14 @@ jobs:
         uses: changesets/action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # changeset publish -> npm publish reads provenance from this env var.
+          NPM_CONFIG_PROVENANCE: true
         with:
-          publish: npm publish --provenance --access public
+          # `changeset publish` only publishes versions not already on the
+          # registry, so a push to main with no pending changeset is a no-op
+          # instead of failing with "cannot publish over 2.0.1" (raw
+          # `npm publish` republishes the current version and errors).
+          publish: npx changeset publish
       - name: Extract version from publishedPackages
         id: version
         run: |

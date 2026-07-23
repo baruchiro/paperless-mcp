@@ -6,9 +6,11 @@ import {
 } from "../../api/types";
 
 /**
- * Encoding Paperless expects for a select value: `update_document` takes the
- * option index; `bulk_edit` writes `value_select` directly so it needs the
- * stored form (option id on 2.17+, index on pre-2.17 string options).
+ * Encoding Paperless expects for a select value. On the supported API versions
+ * (v9+) both `update_document` and `bulk_edit` take the option's stored form:
+ * the option id on 2.17+ fields, or the index on pre-2.17 string-option fields.
+ * The bare `index` form is retained for older API versions whose document
+ * endpoint accepted the option index directly.
  */
 export type SelectValueEncoding = "index" | "stored";
 

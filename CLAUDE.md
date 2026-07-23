@@ -296,7 +296,7 @@ The `src/api/PaperlessAPI.ts` class implements all API operations:
 - **Base URL**: Always use `/api` prefix for all endpoints
 - **Authentication**: Include `Authorization: Token ${token}` header
 - **Content-Type**: Use `application/json` for JSON requests
-- **Version**: Include `Accept: application/json; version=5` header
+- **Version**: Include `Accept: application/json; version=9` header (default; overridable via `PAPERLESS_API_VERSION`)
 - **File Uploads**: Use `FormData` for multipart requests
 - Use generic types for all API calls; return typed responses matching defined interfaces
 - Check HTTP status codes and handle errors gracefully

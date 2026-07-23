@@ -30,7 +30,7 @@ export class PaperlessAPI {
   ) {
     this.baseUrl = baseUrl;
     this.token = token;
-    this.apiVersion = process.env.PAPERLESS_API_VERSION || "5";
+    this.apiVersion = process.env.PAPERLESS_API_VERSION || "9";
   }
 
   async request<T = any>(path: string, options: RequestInit = {}) {
@@ -75,7 +75,7 @@ export class PaperlessAPI {
       if (axios.isAxiosError(error) && error.response?.status === 406) {
         throw new Error(
           `HTTP 406: Paperless-ngx rejected API version ${this.apiVersion}. ` +
-            `Set the PAPERLESS_API_VERSION environment variable to match your server's API version (e.g., "10" for Paperless-ngx v3+).`
+            `Set the PAPERLESS_API_VERSION environment variable to a version your server supports (e.g., "9" or "10" for Paperless-ngx v3+, or a lower value for older servers).`
         );
       }
       console.error({
@@ -162,7 +162,7 @@ export class PaperlessAPI {
       if (axios.isAxiosError(error) && error.response?.status === 406) {
         throw new Error(
           `HTTP 406: Paperless-ngx rejected API version ${this.apiVersion}. ` +
-            `Set the PAPERLESS_API_VERSION environment variable to match your server's API version (e.g., "10" for Paperless-ngx v3+).`
+            `Set the PAPERLESS_API_VERSION environment variable to a version your server supports (e.g., "9" or "10" for Paperless-ngx v3+, or a lower value for older servers).`
         );
       }
       throw error;

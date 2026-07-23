@@ -18,6 +18,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx

@@ -50,11 +50,14 @@ jobs:
           # registry, so a push to main with no pending changeset is a no-op
           # instead of failing with "cannot publish over 2.0.1" (raw
           # `npm publish` republishes the current version and errors).
-          publish: npx changeset publish
+          publish: npx --no-install changeset publish
       - name: Extract version from publishedPackages
         id: version
+        env:
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages || '[]' }}
         run: |
-          echo "VERSION=$(echo '${{ steps.changesets.outputs.publishedPackages || '[]' }}' | jq -r '.[0].version // empty')" >> "$GITHUB_OUTPUT"
+          version="$(printf '%s' "$PUBLISHED_PACKAGES" | jq -r '.[0].version // empty')"
+          printf 'VERSION=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
   docker-publish:
     needs: release

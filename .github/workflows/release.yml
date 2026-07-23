@@ -20,7 +20,7 @@ jobs:
       hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
       versionTag: ${{ steps.version.outputs.VERSION }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:

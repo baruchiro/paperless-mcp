@@ -16,9 +16,11 @@ const RUN_DOCUMENT_TITLE = `E2E Document ${Date.now()}`;
 const RUN_SELECT_FIELD = `E2E Select ${Date.now()}`;
 const RUN_CUSTOM_FIELD = `e2e_cf_${Date.now()}`;
 const RUN_CUSTOM_FIELD_VALUE = `cf-value-${Date.now()}`;
-// archive_serial_number is a unique uint32 in Paperless; derive an in-range
-// value from the run timestamp so the CLI and Docker passes use distinct ASNs.
-const RUN_ASN = Date.now() % 4294967295;
+// archive_serial_number is a Paperless PositiveIntegerField, stored as a signed
+// 32-bit PostgreSQL integer (max 2147483647). Derive an in-range value from the
+// run timestamp so the CLI and Docker passes use distinct ASNs; modulo by the
+// int4 max keeps it from overflowing the column.
+const RUN_ASN = Date.now() % 2147483647;
 
 // Paperless rejects duplicate uploads by checksum. When the same suite runs
 // twice against one Paperless instance (e.g. CLI then Docker in one CI job),

@@ -29,6 +29,9 @@ const resolvedToken = token || process.env.PAPERLESS_API_KEY;
 const resolvedPublicUrl =
   publicUrl || process.env.PAPERLESS_PUBLIC_URL || resolvedBaseUrl;
 const resolvedPort = port ? parseInt(port, 10) : 3000;
+// HTTP-Bind-Adresse: Default loopback-only (lokaler Shared-Dienst, keine
+// Netz-Exposition). Fuer Container/Remote-Setups via Env uebersteuerbar.
+const resolvedHost = process.env.PAPERLESS_MCP_HTTP_HOST || "127.0.0.1";
 
 if (!resolvedBaseUrl) {
   console.error(
@@ -64,10 +67,38 @@ async function main() {
     const app = express();
     app.use(express.json());
 
+    // Monitoring-Endpunkt (systemd/Kuma) — bewusst ohne Token-Pflicht und vor
+    // dem Host-Guard, damit Health-Checks ohne Header-Kosmetik funktionieren.
+    app.get("/healthz", (_req, res) => {
+      res.status(200).type("text/plain").send("ok\n");
+    });
+
+    // Host-Header-Guard gegen DNS-Rebinding (Muster: imap-mini-mcp/src/http.ts).
+    // Erlaubt nur die Bind-Adresse selbst sowie localhost/127.0.0.1.
+    app.use((req, res, next) => {
+      const host = (req.headers.host ?? "").split(":")[0];
+      if (
+        host === resolvedHost ||
+        host === "localhost" ||
+        host === "127.0.0.1"
+      ) {
+        next();
+        return;
+      }
+      res.status(403).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Forbidden: invalid Host header" },
+        id: null,
+      });
+    });
+
     // Store transports for each session
     const sseTransports: Record<string, SSEServerTransport> = {};
 
     app.post("/mcp", async (req, res) => {
+      // Auth: Bearer-Header des Clients gewinnt; ohne Header faellt
+      // getBearerToken auf das Env-Token (PAPERLESS_API_KEY) zurueck —
+      // so bleibt die Client-Config im localhost-Betrieb token-frei.
       const requestToken = getBearerToken(req, resolvedToken);
       if (!requestToken) {
         sendUnauthorized(res);
@@ -165,9 +196,9 @@ async function main() {
       }
     });
 
-    app.listen(resolvedPort, () => {
+    app.listen(resolvedPort, resolvedHost, () => {
       console.log(
-        `MCP Stateless Streamable HTTP Server listening on port ${resolvedPort}`
+        `MCP Stateless Streamable HTTP Server listening on http://${resolvedHost}:${resolvedPort}`
       );
     });
     // await new Promise((resolve) => setTimeout(resolve, 1000000));

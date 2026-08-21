@@ -477,6 +477,9 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       });
       return {
         content: [
+          // Clients that only surface content[].text drop resource blocks
+          // entirely, so the URI is repeated here to stay reachable (issue #134).
+          { type: "text", text: uri },
           {
             type: "resource",
             resource: {
@@ -501,12 +504,16 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
+      const uri = buildThumbnailResourceUri(args.id);
       return {
         content: [
+          // See download_document above: the URI is repeated as text for clients
+          // that drop resource blocks.
+          { type: "text", text: uri },
           {
             type: "resource",
             resource: {
-              uri: buildThumbnailResourceUri(args.id),
+              uri,
               // See download_document above: the binary thumbnail is fetched
               // lazily through resources/read instead of embedded here.
               text: "",

@@ -618,3 +618,75 @@ describe("select custom field value resolution in document handlers", () => {
     );
   });
 });
+
+describe("document resource reference tools", () => {
+  async function callResourceTool(
+    name: string,
+    args: Record<string, unknown>
+  ): Promise<CallToolResult> {
+    const { api } = createDocumentApi([]);
+    let result: CallToolResult | undefined;
+    await withDocumentClient(api, async (client) => {
+      result = (await client.callTool({
+        name,
+        arguments: args,
+      })) as CallToolResult;
+    });
+    assert.ok(result, `${name} returned no result`);
+    // parseToolText assumes a JSON payload; these tools return a bare URI.
+    assert.ok(!result.isError, `${name} failed`);
+    return result;
+  }
+
+  function assertUriBlocks(
+    result: CallToolResult,
+    expectedUri: string,
+    expectedMimeType: string
+  ) {
+    const [text, embedded] = result.content;
+
+    assert.equal(text.type, "text");
+    assert.equal(
+      text.text,
+      expectedUri,
+      "the text block must carry the bare URI so clients that drop resource blocks still see it"
+    );
+
+    assert.equal(embedded.type, "resource");
+    assert.equal(
+      (embedded as { resource: { uri: string } }).resource.uri,
+      expectedUri,
+      "both blocks must reference the same URI"
+    );
+    assert.equal(
+      (embedded as { resource: { mimeType: string } }).resource.mimeType,
+      expectedMimeType
+    );
+  }
+
+  test("download_document exposes the URI as text alongside the resource", async () => {
+    const result = await callResourceTool("download_document", { id: 4 });
+    assertUriBlocks(
+      result,
+      "paperless://documents/4/download",
+      "application/octet-stream"
+    );
+  });
+
+  test("download_document keeps the original flag in the text URI", async () => {
+    const result = await callResourceTool("download_document", {
+      id: 4,
+      original: true,
+    });
+    assertUriBlocks(
+      result,
+      "paperless://documents/4/download?original=true",
+      "application/octet-stream"
+    );
+  });
+
+  test("get_document_thumbnail exposes the URI as text alongside the resource", async () => {
+    const result = await callResourceTool("get_document_thumbnail", { id: 123 });
+    assertUriBlocks(result, "paperless://documents/123/thumb", "image/webp");
+  });
+});

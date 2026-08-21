@@ -509,7 +509,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       });
       return {
         content: [
-          // Clients that only surface content[].text drop resource blocks
+          // Legacy clients surface only content[].text and drop resource blocks
           // entirely, so the URI is repeated here to stay reachable (issue #134).
           { type: "text", text: uri },
           {
@@ -539,8 +539,8 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
       const uri = buildThumbnailResourceUri(args.id);
       return {
         content: [
-          // See download_document above: the URI is repeated as text for clients
-          // that drop resource blocks.
+          // See download_document above: the URI is repeated as text for legacy
+          // clients that drop resource blocks.
           { type: "text", text: uri },
           {
             type: "resource",

@@ -252,7 +252,9 @@ Parameters:
   - tag: ID for add_tag/remove_tag
   - add_tags: Array of tag IDs for modify_tags
   - remove_tags: Array of tag IDs for modify_tags
-  - permissions: Object for set_permissions with owner, permissions, merge flag
+  - set_permissions: Object for set_permissions with view/change users and groups (`{"view": {"users": [], "groups": []}, "change": {...}}`). Omitted actions/lists are left untouched
+  - owner: User ID (or null to remove) for set_permissions. Unless merge is true, omitting owner clears the current owner
+  - merge: Boolean for set_permissions — true adds to existing permissions and keeps the owner; false (default) replaces the listed users/groups
   - metadata_document_id: ID for merge to specify metadata source
   - delete_originals: Boolean for merge/split
   - pages: String for split "[1,2-3,4,5-7]" or delete_pages "[2,3,4]"

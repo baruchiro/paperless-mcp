@@ -5,7 +5,7 @@ import { constants } from "fs";
 import { basename, isAbsolute } from "path";
 import { convertDocsWithNames } from "../api/documentEnhancer";
 import { PaperlessAPI } from "../api/PaperlessAPI";
-import { arrayNotEmpty, objectNotEmpty } from "./utils/empty";
+import { arrayNotEmpty } from "./utils/empty";
 import {
   BuildDocumentQueryArgs,
   buildDocumentQueryString,
@@ -193,25 +193,43 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         .array(z.number())
         .optional()
         .transform(arrayNotEmpty),
-      permissions: z
+      set_permissions: z
         .object({
-          owner: z.number().nullable().optional(),
-          set_permissions: z
+          view: z
             .object({
-              view: z.object({
-                users: z.array(z.number()),
-                groups: z.array(z.number()),
-              }),
-              change: z.object({
-                users: z.array(z.number()),
-                groups: z.array(z.number()),
-              }),
+              users: z.array(z.number()).optional(),
+              groups: z.array(z.number()).optional(),
             })
+            .strict()
             .optional(),
-          merge: z.boolean().optional(),
+          change: z
+            .object({
+              users: z.array(z.number()).optional(),
+              groups: z.array(z.number()).optional(),
+            })
+            .strict()
+            .optional(),
         })
+        // strict: a misspelled action ("read") must not silently collapse
+        // into {} and clear permissions/ownership.
+        .strict()
         .optional()
-        .transform(objectNotEmpty),
+        .describe(
+          "For set_permissions: view/change permissions to apply. Omitted actions (view/change) and omitted users/groups lists are left untouched; an empty list [] removes all (unless merge is true). Omit entirely for owner-only changes."
+        ),
+      owner: z
+        .number()
+        .nullable()
+        .optional()
+        .describe(
+          "For set_permissions: new owner user ID, or null to remove the owner. Unless merge is true, omitting owner also clears the current owner."
+        ),
+      merge: z
+        .boolean()
+        .optional()
+        .describe(
+          "For set_permissions: true adds to existing permissions and keeps the current owner; false (default) replaces the listed users/groups"
+        ),
       metadata_document_id: z.number().optional(),
       delete_originals: z.boolean().optional(),
       pages: z.string().optional(),
@@ -230,7 +248,21 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
           "Confirmation required for destructive operation. Set confirm: true to proceed."
         );
       }
+      if (
+        args.method === "set_permissions" &&
+        !args.set_permissions &&
+        args.owner === undefined
+      ) {
+        throw new Error(
+          "Method 'set_permissions' requires set_permissions and/or owner."
+        );
+      }
       const { documents, method, add_custom_fields, confirm, ...parameters } = args;
+      if (method === "set_permissions") {
+        // Paperless rejects (Paperless <= 3.0.5: crashes with a 500 on) a missing
+        // set_permissions key even for owner-only changes.
+        parameters.set_permissions ??= {};
+      }
 
       validateCustomFields(add_custom_fields);
       const resolvedCustomFields = await resolveSelectCustomFieldValues(

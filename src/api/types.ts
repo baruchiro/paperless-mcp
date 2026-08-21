@@ -214,12 +214,10 @@ export interface BulkEditParameters {
   document_type?: number;
   storage_path?: number;
   tag?: number;
-  permissions?: {
-    owner?: number | null;
-    set_permissions?: {
-      view: { users: number[]; groups: number[] };
-      change: { users: number[]; groups: number[] };
-    };
-    merge?: boolean;
+  set_permissions?: {
+    view?: { users?: number[]; groups?: number[] };
+    change?: { users?: number[]; groups?: number[] };
   };
+  owner?: number | null;
+  merge?: boolean;
 }

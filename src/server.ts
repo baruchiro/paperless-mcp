@@ -9,6 +9,7 @@ import { registerDocumentTypeTools } from "./tools/documentTypes";
 import { registerMailTools } from "./tools/mail";
 import { registerNoteTools } from "./tools/notes";
 import { registerTagTools } from "./tools/tags";
+import { sanitizeToolSchemas } from "./tools/utils/nullableSchema";
 
 export interface CreateMcpServerOptions {
   baseUrl: string;
@@ -36,6 +37,9 @@ export function createMcpServer({
   registerDocumentTypeTools(server, api);
   registerCustomFieldTools(server, api);
   registerMailTools(server, api);
+  // Collapse `.nullable()` union types (`type: ["T","null"]`) in the advertised
+  // tool schemas to scalar types for strict MCP clients. See issue #138.
+  sanitizeToolSchemas(server);
   return server;
 }
 

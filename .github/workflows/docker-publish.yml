@@ -45,17 +45,37 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set semver and latest tags if release
         id: tagmeta
+        env:
+          VERSION_TAG: ${{ inputs.versionTag }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_call" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "LATEST=type=raw,value=latest" >> $GITHUB_OUTPUT
+            echo "LATEST=type=raw,value=latest" >> "$GITHUB_OUTPUT"
           else
-            echo "LATEST=" >> $GITHUB_OUTPUT
+            echo "LATEST=" >> "$GITHUB_OUTPUT"
           fi
 
-          if [ "${{ github.event_name }}" = "workflow_call" ]; then
-            echo "SEMVER=type=semver,pattern=${{ inputs.versionTag }}" >> $GITHUB_OUTPUT
+          # Emit immutable semver tags from the published version.
+          # type=semver derives its version from a git tag ref, which
+          # this changesets-on-main flow never creates, so emit the
+          # tags as type=raw. A prerelease (contains '-') gets only its
+          # exact tag; the floating major / major.minor tags are never
+          # moved to a prerelease.
+          if [ "${{ github.event_name }}" = "workflow_call" ] &&
+             [ -n "$VERSION_TAG" ]; then
+            {
+              echo "SEMVER<<SEMVER_EOF"
+              echo "type=raw,value=${VERSION_TAG}"
+              case "$VERSION_TAG" in
+                *-*) ;;  # prerelease: exact tag only
+                *)
+                  echo "type=raw,value=${VERSION_TAG%.*}"
+                  echo "type=raw,value=${VERSION_TAG%%.*}"
+                  ;;
+              esac
+              echo "SEMVER_EOF"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "SEMVER=" >> $GITHUB_OUTPUT
+            echo "SEMVER=" >> "$GITHUB_OUTPUT"
           fi
       - name: Extract Docker metadata
         id: meta

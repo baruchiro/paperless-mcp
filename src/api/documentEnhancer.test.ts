@@ -76,3 +76,75 @@ test("convertDocsWithNames returns paginated JSON for empty multi-document resul
     results: [],
   });
 });
+
+test("convertDocsWithNames resolves correspondent and tag names that fall beyond the first API page", async () => {
+  const correspondents = Array.from({ length: 40 }, (_, index) => ({
+    id: index + 1,
+    name: `First page correspondent ${index}`,
+  }));
+  // Deliberately outside the default 25-row first page, mirroring the live
+  // instance where correspondent 246 ("Brown") came back named "246".
+  correspondents.push({ id: 246, name: "Brown" });
+
+  const tags = Array.from({ length: 30 }, (_, index) => ({
+    id: index + 1,
+    name: `first-page-tag-${index}`,
+  }));
+  tags.push({ id: 49, name: "paperless-gpt-failed" });
+
+  const api = createPaperlessApiMock({ correspondents, tags });
+  const docsResponse: DocumentsResponse = {
+    count: 1,
+    next: null,
+    previous: null,
+    all: [1],
+    results: [createDocument({ id: 1, correspondent: 246, tags: [49] })],
+  };
+
+  const result = await convertDocsWithNames(docsResponse, api);
+  const parsed = JSON.parse(getTextContent(result));
+
+  assert.equal(parsed.results[0].correspondent.name, "Brown");
+  assert.equal(parsed.results[0].tags[0].name, "paperless-gpt-failed");
+});
+
+test("convertDocsWithNames widens the lookup page size to the reported count", async () => {
+  const correspondents = Array.from({ length: 60 }, (_, index) => ({
+    id: index + 1,
+    name: `Correspondent ${index}`,
+  }));
+  const api = createPaperlessApiMock({ correspondents });
+  const docsResponse: DocumentsResponse = {
+    count: 1,
+    next: null,
+    previous: null,
+    all: [1],
+    results: [createDocument({ id: 1, correspondent: 55 })],
+  };
+
+  const result = await convertDocsWithNames(docsResponse, api);
+  const parsed = JSON.parse(getTextContent(result));
+
+  assert.equal(parsed.results[0].correspondent.name, "Correspondent 54");
+  // First call probes the default page; the second widens page_size to `count`.
+  assert.deepEqual(api.__requests.correspondents, ["", "page_size=60"]);
+});
+
+test("convertDocsWithNames makes a single lookup call when every row fits on the first page", async () => {
+  const api = createPaperlessApiMock({
+    correspondents: [{ id: 7, name: "Solo" }],
+  });
+  const docsResponse: DocumentsResponse = {
+    count: 1,
+    next: null,
+    previous: null,
+    all: [1],
+    results: [createDocument({ id: 1, correspondent: 7 })],
+  };
+
+  const result = await convertDocsWithNames(docsResponse, api);
+  const parsed = JSON.parse(getTextContent(result));
+
+  assert.equal(parsed.results[0].correspondent.name, "Solo");
+  assert.deepEqual(api.__requests.correspondents, [""]);
+});

@@ -16,6 +16,11 @@ export interface PaperlessApiMockSeed {
    * Mirrors paperless-ngx's StandardPagination.page_size (25).
    */
   defaultPageSize?: number;
+  /**
+   * Upper bound the fake server enforces on a requested `page_size`.
+   * Mirrors paperless-ngx's StandardPagination.max_page_size (100000).
+   */
+  maxPageSize?: number;
 }
 
 type RequestLog = {
@@ -27,28 +32,19 @@ type RequestLog = {
 
 export type PaperlessApiMock = PaperlessAPI & { __requests: RequestLog };
 
-function readPageSize(
-  queryString: string | undefined,
-  fallback: number
-): number {
-  if (!queryString) return fallback;
-  const raw = new URLSearchParams(queryString).get("page_size");
-  const parsed = raw == null ? NaN : Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 /**
  * Minimal PaperlessAPI stand-in for document-enrichment tests.
  *
  * With no seed it behaves like an empty instance. Given seed data it paginates
- * the way paperless-ngx does: the first page returns `defaultPageSize` rows and
- * the full set is only returned once the caller asks for a large enough
- * `page_size`. Every lookup query string is recorded on `__requests`.
+ * the way paperless-ngx does: `page`/`page_size` query params are honoured,
+ * `page_size` is clamped to `maxPageSize`, and every lookup query string is
+ * recorded on `__requests`.
  */
 export function createPaperlessApiMock(
   seed: PaperlessApiMockSeed = {}
 ): PaperlessApiMock {
   const defaultPageSize = seed.defaultPageSize ?? 25;
+  const maxPageSize = seed.maxPageSize ?? 100000;
   const requests: RequestLog = {
     correspondents: [],
     documentTypes: [],
@@ -62,13 +58,22 @@ export function createPaperlessApiMock(
     bucket: keyof RequestLog
   ) => {
     requests[bucket].push(queryString ?? "");
-    const pageSize = readPageSize(queryString, defaultPageSize);
+    const params = new URLSearchParams(queryString ?? "");
+    const requestedSize = Number(params.get("page_size"));
+    const pageSize = Math.min(
+      Number.isFinite(requestedSize) && requestedSize > 0
+        ? requestedSize
+        : defaultPageSize,
+      maxPageSize
+    );
+    const page = Math.max(1, Number(params.get("page")) || 1);
+    const start = (page - 1) * pageSize;
     return {
       count: items.length,
-      next: items.length > pageSize ? "http://mock.local/next" : null,
-      previous: null,
+      next: start + pageSize < items.length ? "http://mock.local/next" : null,
+      previous: page > 1 ? "http://mock.local/prev" : null,
       all: items.map((item) => item.id),
-      results: items.slice(0, pageSize),
+      results: items.slice(start, start + pageSize),
     };
   };
 

@@ -3,10 +3,9 @@ import { PaperlessAPI } from "./PaperlessAPI";
 import { Document, DocumentsResponse, PaginationResponse } from "./types";
 import { NamedItem } from "./utils";
 
-// paperless-ngx's StandardPagination caps page_size at this value (larger
-// requests are clamped, not rejected). It is also the most rows paperless will
-// ever return in a single response, so it doubles as the upper bound for the
-// id->name lookups below.
+// paperless-ngx's StandardPagination clamps page_size to this value (it does not
+// reject a larger request). A single page this size covers any realistic
+// instance; beyond it, fetchAllRows walks the remaining pages.
 const PAPERLESS_MAX_PAGE_SIZE = 100000;
 
 /**
@@ -16,7 +15,8 @@ const PAPERLESS_MAX_PAGE_SIZE = 100000;
  * list call only covers the first 25 rows (ordered by name) and every other id
  * silently falls back to its stringified number. This probes the first page,
  * reads the reported `count`, and—only when there is more than one page—refetches
- * the full set in a single widened request.
+ * every row: one widened request in the common case, walking further pages if
+ * the count somehow exceeds the server's page_size ceiling.
  */
 async function fetchAllRows<T>(
   fetchPage: (queryString?: string) => Promise<PaginationResponse<T>>
@@ -30,8 +30,16 @@ async function fetchAllRows<T>(
   }
 
   const pageSize = Math.min(total, PAPERLESS_MAX_PAGE_SIZE);
-  const fullPage = await fetchPage(`page_size=${pageSize}`);
-  return fullPage.results || firstRows;
+  const rows: T[] = [];
+  for (let page = 1; rows.length < total; page++) {
+    const { results } = await fetchPage(`page=${page}&page_size=${pageSize}`);
+    if (!results?.length) {
+      break;
+    }
+    rows.push(...results);
+  }
+
+  return rows.length ? rows : firstRows;
 }
 
 interface CustomField {

@@ -56,11 +56,8 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
-          # docker-publish.yml is invoked via workflow_call from a push to main,
-          # so github.ref here is refs/heads/main, never a tag ref - type=semver's
-          # own git-tag detection never sees a version. Pass the published version
-          # explicitly via `value=` instead (metadata-action's documented override
-          # for non-tag-ref contexts) rather than relying on pattern to parse it.
+          # value= is required: this job runs via workflow_call, so github.ref is
+          # never a tag ref for type=semver's built-in git-tag detection to find.
           tags: |
             type=ref,event=pr
             type=sha

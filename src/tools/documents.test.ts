@@ -31,6 +31,10 @@ import {
   CustomFieldQuery,
   DOCUMENT_QUERY_PAPERLESS_FILTER_KEYS,
 } from "./utils/documentQuery";
+import {
+  buildDocumentResourceUri,
+  buildThumbnailResourceUri,
+} from "./utils/resourceUri";
 
 function getQueryParams(queryString: string) {
   return new URLSearchParams(queryString.replace(/^\?/, ""));
@@ -617,6 +621,59 @@ describe("select custom field value resolution in document handlers", () => {
       "no document update should be sent when the option is invalid"
     );
   });
+});
+
+describe("document resource reference tools", () => {
+  // Expected URIs come from the builders rather than literals: their exact
+  // format is already pinned by utils/resourceUri.test.ts, and what matters
+  // here is that the handler surfaces that URI in both content blocks.
+  const cases = [
+    {
+      tool: "download_document",
+      args: { id: 4 },
+      uri: buildDocumentResourceUri(4),
+      mimeType: "application/octet-stream",
+    },
+    {
+      tool: "download_document",
+      args: { id: 4, original: true },
+      uri: buildDocumentResourceUri(4, { original: true }),
+      mimeType: "application/octet-stream",
+    },
+    {
+      tool: "get_document_thumbnail",
+      args: { id: 123 },
+      uri: buildThumbnailResourceUri(123),
+      mimeType: "image/webp",
+    },
+  ];
+
+  for (const { tool, args, uri, mimeType } of cases) {
+    test(`${tool} ${JSON.stringify(args)} returns the URI as text beside the resource`, async () => {
+      const { api } = createDocumentApi([]);
+      let result: CallToolResult | undefined;
+      await withDocumentClient(api, async (client) => {
+        result = (await client.callTool({
+          name: tool,
+          arguments: args,
+        })) as CallToolResult;
+      });
+
+      assert.ok(result && !result.isError, `${tool} failed`);
+      const [text, embedded] = result.content;
+
+      // Legacy clients read only content[].text (issue #134).
+      assert.equal(text.type, "text");
+      assert.equal(text.text, uri);
+
+      assert.equal(embedded.type, "resource");
+      const { resource } = embedded as {
+        resource: { uri: string; mimeType: string };
+      };
+      assert.equal(resource.uri, uri, "both blocks must reference the same URI");
+      assert.equal(resource.mimeType, mimeType);
+    });
+  }
 });
 
 describe("bulk_edit_documents set_permissions", () => {

@@ -19,7 +19,8 @@
       "args": ["${__dirname}/build/index.js"],
       "env": {
         "PAPERLESS_URL": "${user_config.url}",
-        "PAPERLESS_API_KEY": "${user_config.api_key}"
+        "PAPERLESS_API_KEY": "${user_config.api_key}",
+        "PAPERLESS_EXTRA_HEADERS": "${user_config.extra_headers}"
       }
     }
   },
@@ -91,6 +92,14 @@
       "description": "Your Paperless-NGX API key",
       "required": true,
       "sensitive": true
+    },
+    "extra_headers": {
+      "type": "string",
+      "title": "Extra Request Headers",
+      "description": "Optional JSON object of headers sent with every request, for an instance behind an authenticating proxy, e.g. {\"CF-Access-Client-Id\":\"<id>\",\"CF-Access-Client-Secret\":\"<secret>\"}",
+      "required": false,
+      "sensitive": true,
+      "default": "{}"
     }
   },
   "keywords": [

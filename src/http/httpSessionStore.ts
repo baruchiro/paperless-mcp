@@ -18,6 +18,8 @@ export interface HttpSessionStoreOptions {
   sweepIntervalMs?: number;
   /** Injectable clock, for tests. */
   now?: () => number;
+  /** Called when a transport's close() rejects during an idle sweep. Defaults to console.error. */
+  onSweepError?: (error: unknown) => void;
 }
 
 interface SessionEntry<T> {
@@ -44,6 +46,7 @@ export class HttpSessionStore<
   private readonly idleTimeoutMs: number;
   private readonly sweepIntervalMs: number;
   private readonly now: () => number;
+  private readonly onSweepError: (error: unknown) => void;
   private timer?: ReturnType<typeof setInterval>;
 
   constructor(options: HttpSessionStoreOptions = {}) {
@@ -52,6 +55,10 @@ export class HttpSessionStore<
     this.sweepIntervalMs =
       options.sweepIntervalMs ?? Math.min(this.idleTimeoutMs, 60 * 1000);
     this.now = options.now ?? Date.now;
+    this.onSweepError =
+      options.onSweepError ??
+      ((error) =>
+        console.error("[paperless-mcp] error closing idle session", error));
   }
 
   get size(): number {
@@ -63,9 +70,20 @@ export class HttpSessionStore<
     return this.entries.size < this.maxSessions;
   }
 
-  /** Register a freshly-initialized session, stamping it active now. */
-  register(sessionId: string, transport: T): void {
+  /**
+   * Register a freshly-initialized session, stamping it active now. Returns
+   * false (and stores nothing) when the cap is already reached by *other*
+   * sessions — this is the authoritative, synchronous cap gate that closes the
+   * race between {@link canCreate} and the SDK's async session-initialized
+   * callback. Re-registering an existing session id is always allowed (it is an
+   * update, not growth).
+   */
+  register(sessionId: string, transport: T): boolean {
+    if (!this.entries.has(sessionId) && this.entries.size >= this.maxSessions) {
+      return false;
+    }
     this.entries.set(sessionId, { transport, lastActivity: this.now() });
+    return true;
   }
 
   /**
@@ -98,7 +116,12 @@ export class HttpSessionStore<
     for (const sessionId of stale) {
       const entry = this.entries.get(sessionId);
       this.entries.delete(sessionId);
-      void entry?.transport.close();
+      if (!entry) continue;
+      // Defer the call so a synchronous throw also surfaces as a rejection, and
+      // route any failure to onSweepError rather than leaving it unhandled.
+      void Promise.resolve()
+        .then(() => entry.transport.close())
+        .catch((error) => this.onSweepError(error));
     }
     return stale;
   }

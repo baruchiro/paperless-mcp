@@ -181,7 +181,12 @@ async function main() {
           const newTransport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (sid) => {
-              sessions.register(sid, newTransport);
+              // register() is the authoritative cap gate; the canCreate() check
+              // above is only a fast reject. If a concurrent initialize claimed
+              // the last slot in between, tear this excess session back down.
+              if (!sessions.register(sid, newTransport)) {
+                void newTransport.close();
+              }
             },
           });
           newTransport.onclose = () => {

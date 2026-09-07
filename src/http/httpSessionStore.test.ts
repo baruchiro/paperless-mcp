@@ -56,7 +56,7 @@ test("get returns undefined for an unknown session", () => {
   assert.equal(store.get("missing"), undefined);
 });
 
-test("sweepIdle closes and evicts only sessions past the timeout", () => {
+test("sweepIdle closes and evicts only sessions past the timeout", async () => {
   const clock = fakeClock();
   const store = new HttpSessionStore<FakeTransport>({ idleTimeoutMs: 100, now: clock.now });
   const stale = fakeTransport();
@@ -68,10 +68,12 @@ test("sweepIdle closes and evicts only sessions past the timeout", () => {
 
   const evicted = store.sweepIdle(); // cutoff = 150 - 100 = 50
   assert.deepEqual(evicted, ["stale"]);
+  assert.equal(store.size, 1, "eviction from the map is synchronous");
+  assert.equal(store.get("stale"), undefined, "stale session evicted");
+
+  await new Promise((resolve) => setImmediate(resolve)); // close() is deferred
   assert.equal(stale.closed, 1, "stale transport was closed");
   assert.equal(fresh.closed, 0, "fresh transport untouched");
-  assert.equal(store.size, 1);
-  assert.equal(store.get("stale"), undefined, "stale session evicted");
 });
 
 test("delete is a no-op for an unknown session", () => {
@@ -81,11 +83,53 @@ test("delete is a no-op for an unknown session", () => {
   assert.equal(store.size, 1);
 });
 
-test("startSweeper is idempotent and stopSweeper clears it", () => {
-  const store = new HttpSessionStore<FakeTransport>({ sweepIntervalMs: 10_000 });
+test("register rejects a new session at the cap and retains nothing", () => {
+  const store = new HttpSessionStore<FakeTransport>({ maxSessions: 1 });
+  assert.equal(store.register("a", fakeTransport()), true);
+
+  const rejected = fakeTransport();
+  assert.equal(store.register("b", rejected), false, "new id rejected at cap");
+  assert.equal(store.size, 1);
+  assert.equal(store.get("b"), undefined, "rejected session not stored");
+
+  // Re-registering an existing id is an update, allowed even at the cap.
+  assert.equal(store.register("a", fakeTransport()), true);
+  assert.equal(store.size, 1);
+});
+
+test("sweepIdle routes a rejecting close() to onSweepError, no unhandled rejection", async () => {
+  const clock = fakeClock();
+  const errors: unknown[] = [];
+  const store = new HttpSessionStore<ClosableTransport>({
+    idleTimeoutMs: 10,
+    now: clock.now,
+    onSweepError: (e) => errors.push(e),
+  });
+  store.register("a", { close: () => Promise.reject(new Error("boom")) });
+
+  clock.advance(20);
+  assert.deepEqual(store.sweepIdle(), ["a"], "evicted despite failing close");
+  assert.equal(store.size, 0);
+
+  await new Promise((resolve) => setImmediate(resolve)); // let the rejection settle
+  assert.equal(errors.length, 1, "close rejection captured");
+  assert.match(String((errors[0] as Error).message), /boom/);
+});
+
+test("startSweeper schedules one recurring sweep; stopSweeper halts it", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const store = new HttpSessionStore<FakeTransport>({ sweepIntervalMs: 1000 });
+  const sweep = t.mock.method(store, "sweepIdle");
+
   store.startSweeper();
-  store.startSweeper(); // must not throw or double-schedule
+  store.startSweeper(); // idempotent: must not schedule a second interval
+
+  t.mock.timers.tick(1000);
+  assert.equal(sweep.mock.callCount(), 1, "one sweep per interval despite double start");
+  t.mock.timers.tick(1000);
+  assert.equal(sweep.mock.callCount(), 2);
+
   store.stopSweeper();
-  store.stopSweeper(); // safe to call when already stopped
-  assert.ok(true);
+  t.mock.timers.tick(5000);
+  assert.equal(sweep.mock.callCount(), 2, "no sweeps after stop");
 });

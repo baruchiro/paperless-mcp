@@ -803,3 +803,42 @@ describe("bulk_edit_documents set_permissions", () => {
     assert.equal(calls.bulkEditDocuments.length, 0);
   });
 });
+
+describe("spec constraints on nullable foreign keys (#138)", () => {
+  test("update_document forwards an explicit null so a foreign key can be cleared", async () => {
+    const { api, calls } = createDocumentApi([]);
+
+    await withDocumentClient(api, async (client) => {
+      const result = (await client.callTool({
+        name: "update_document",
+        arguments: { id: 42, correspondent: null, owner: null },
+      })) as CallToolResult;
+      assert.ok(!result.isError, parseToolText(result)?.error);
+    });
+
+    assert.equal(calls.updateDocument.length, 1);
+    const [, data] = calls.updateDocument[0];
+    assert.equal(data.correspondent, null);
+    assert.equal(data.owner, null);
+  });
+
+  test("update_document rejects a non-integer foreign key", async () => {
+    const { api, calls } = createDocumentApi([]);
+
+    await withDocumentClient(api, async (client) => {
+      let rejected = false;
+      let result: CallToolResult | undefined;
+      try {
+        result = (await client.callTool({
+          name: "update_document",
+          arguments: { id: 42, correspondent: 7.5 },
+        })) as CallToolResult;
+      } catch {
+        rejected = true;
+      }
+      assert.ok(rejected || result?.isError, "expected 7.5 to be rejected");
+    });
+
+    assert.equal(calls.updateDocument.length, 0);
+  });
+});

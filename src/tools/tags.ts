@@ -1,11 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
-import { MATCHING_ALGORITHM_DESCRIPTION } from "../api/types";
 import {
   enhanceMatchingAlgorithm,
   enhanceMatchingAlgorithmArray,
 } from "../api/utils";
+import { matchingAlgorithmSchema } from "./utils/matchingAlgorithm";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
@@ -22,7 +22,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
       name__istartswith: z.string().optional(),
       ordering: z.string().optional(),
     },
-    withErrorHandling(async (args = {}) => {
+    withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const tagsResponse = await api.request(
@@ -55,13 +55,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .regex(/^#[0-9A-Fa-f]{6}$/)
         .optional(),
       match: z.string().optional(),
-      matching_algorithm: z
-        .number()
-        .int()
-        .min(0)
-        .max(6)
-        .optional()
-        .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      matching_algorithm: matchingAlgorithmSchema.optional(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");
@@ -89,13 +83,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
         .regex(/^#[0-9A-Fa-f]{6}$/)
         .optional(),
       match: z.string().optional(),
-      matching_algorithm: z
-        .number()
-        .int()
-        .min(0)
-        .max(6)
-        .optional()
-        .describe(MATCHING_ALGORITHM_DESCRIPTION),
+      matching_algorithm: matchingAlgorithmSchema.optional(),
     },
     withErrorHandling(async (args, extra) => {
       if (!api) throw new Error("Please configure API connection first");

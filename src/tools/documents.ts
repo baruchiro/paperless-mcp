@@ -365,7 +365,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
 
       const validationResult = postDocumentSchema.safeParse(args);
       if (!validationResult.success) {
-        throw new Error(validationResult.error.errors.map(e => e.message).join("; "));
+        throw new Error(validationResult.error.issues.map(e => e.message).join("; "));
       }
 
       let document: Buffer;

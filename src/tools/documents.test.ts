@@ -803,3 +803,23 @@ describe("bulk_edit_documents set_permissions", () => {
     assert.equal(calls.bulkEditDocuments.length, 0);
   });
 });
+
+describe("nullable foreign keys can still be cleared (#138)", () => {
+  test("update_document forwards an explicit null so a foreign key can be cleared", async () => {
+    const { api, calls } = createDocumentApi([]);
+
+    await withDocumentClient(api, async (client) => {
+      const result = (await client.callTool({
+        name: "update_document",
+        arguments: { id: 42, correspondent: null, owner: null },
+      })) as CallToolResult;
+      assert.ok(!result.isError, parseToolText(result)?.error);
+    });
+
+    assert.equal(calls.updateDocument.length, 1);
+    const [, data] = calls.updateDocument[0];
+    assert.equal(data.correspondent, null);
+    assert.equal(data.owner, null);
+  });
+
+});

@@ -10,7 +10,7 @@ They came from `zod-to-json-schema`, which the MCP SDK uses for Zod v3 shapes an
 
 Alongside the bump:
 
-- `matching_algorithm` on tags, correspondents and document types is now advertised as the integer enum the OpenAPI spec declares (`enum: [0, 1, 2, 3, 4, 5, 6]`) instead of a 0-6 range, and is built from the shared option map so the two cannot drift.
+- `matching_algorithm` on tags, correspondents and document types is declared once and narrows to `MatchingAlgorithm` after its range check, so the API request types take it without a cast. The advertised schema is unchanged.
 - `Document.storage_path` and `Document.archive_serial_number` are typed `number | null`, matching the spec, which declares both as nullable integers. They were typed `string | null`.
 - Tool schemas no longer carry `additionalProperties: false` at the top level. It was never enforced — unknown properties were stripped, not rejected — so the schemas now describe what the server actually does. Nested objects declared `.strict()`, such as `bulk_edit_documents`' `set_permissions`, still advertise and enforce it.
 

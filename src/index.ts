@@ -11,7 +11,15 @@ import {
   getBearerToken,
   sendUnauthorized,
 } from "./server";
+import { HttpSessionStore } from "./http/httpSessionStore";
 const { version } = require("../package.json") as { version: string };
+
+/** Parse a positive integer from a CLI/env string, falling back on anything invalid. */
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 const {
   values: {
@@ -22,6 +30,8 @@ const {
     publicUrl,
     "no-auth": noAuth,
     stateful,
+    "max-sessions": maxSessionsArg,
+    "session-timeout": sessionTimeoutArg,
   },
 } = parseArgs({
   options: {
@@ -32,6 +42,8 @@ const {
     publicUrl: { type: "string", default: "" },
     "no-auth": { type: "boolean", default: false },
     stateful: { type: "boolean", default: false },
+    "max-sessions": { type: "string" },
+    "session-timeout": { type: "string" },
   },
   allowPositionals: true,
 });
@@ -41,10 +53,20 @@ const resolvedToken = token || process.env.PAPERLESS_API_KEY;
 const resolvedPublicUrl =
   publicUrl || process.env.PAPERLESS_PUBLIC_URL || resolvedBaseUrl;
 const resolvedPort = port ? parseInt(port, 10) : 3000;
+// Bounds for --stateful session tracking (CLI flag > env > default).
+const resolvedMaxSessions = parsePositiveInt(
+  maxSessionsArg ?? process.env.PAPERLESS_MCP_MAX_SESSIONS,
+  256
+);
+const resolvedSessionTimeoutMs =
+  parsePositiveInt(
+    sessionTimeoutArg ?? process.env.PAPERLESS_MCP_SESSION_TIMEOUT,
+    30 * 60
+  ) * 1000;
 
 if (!resolvedBaseUrl) {
   console.error(
-    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth] [--stateful]"
+    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth] [--stateful] [--max-sessions <n>] [--session-timeout <seconds>]"
   );
   console.error(
     "Or set PAPERLESS_URL and PAPERLESS_API_KEY environment variables."
@@ -54,7 +76,7 @@ if (!resolvedBaseUrl) {
 
 if (!useHttp && !resolvedToken) {
   console.error(
-    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth] [--stateful]"
+    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth] [--stateful] [--max-sessions <n>] [--session-timeout <seconds>]"
   );
   console.error(
     "Or set PAPERLESS_URL and PAPERLESS_API_KEY environment variables."
@@ -108,11 +130,17 @@ async function main() {
       // 2025-11-25 protocol — require a real session plus a server->client
       // notification stream, and drop a server that answers GET /mcp with 405.
       // Opt in with --stateful; the default remains the stateless handler below.
-      const httpTransports: Record<string, StreamableHTTPServerTransport> = {};
+      // The store caps concurrent sessions and reaps idle ones so an abandoned
+      // session (no DELETE /mcp) can't leak its transport for the process life.
+      const sessions = new HttpSessionStore({
+        maxSessions: resolvedMaxSessions,
+        idleTimeoutMs: resolvedSessionTimeoutMs,
+      });
+      sessions.startSweeper();
 
       app.post("/mcp", async (req, res) => {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;
-        let transport = sessionId ? httpTransports[sessionId] : undefined;
+        let transport = sessionId ? sessions.get(sessionId) : undefined;
 
         if (!transport) {
           if (sessionId || !isInitializeRequest(req.body)) {
@@ -137,15 +165,28 @@ async function main() {
             return;
           }
 
+          if (!sessions.canCreate()) {
+            // At the concurrent-session cap: refuse rather than grow unbounded.
+            res.status(503).json({
+              jsonrpc: "2.0",
+              error: {
+                code: -32000,
+                message: "Server busy: too many active sessions",
+              },
+              id: null,
+            });
+            return;
+          }
+
           const newTransport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (sid) => {
-              httpTransports[sid] = newTransport;
+              sessions.register(sid, newTransport);
             },
           });
           newTransport.onclose = () => {
             if (newTransport.sessionId) {
-              delete httpTransports[newTransport.sessionId];
+              sessions.delete(newTransport.sessionId);
             }
           };
           const server = buildServer(requestToken);
@@ -177,7 +218,7 @@ async function main() {
         res: express.Response
       ) => {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;
-        const transport = sessionId ? httpTransports[sessionId] : undefined;
+        const transport = sessionId ? sessions.get(sessionId) : undefined;
         if (!transport) {
           res.status(400).send("Invalid or missing session ID");
           return;
@@ -299,6 +340,12 @@ async function main() {
           stateful ? "Stateful" : "Stateless"
         } Streamable HTTP Server listening on port ${resolvedPort}`
       );
+      if (stateful) {
+        console.log(
+          `[paperless-mcp] session bounds: max ${resolvedMaxSessions}, ` +
+            `idle timeout ${resolvedSessionTimeoutMs / 1000}s`
+        );
+      }
     });
     // await new Promise((resolve) => setTimeout(resolve, 1000000));
   } else {

@@ -4,27 +4,24 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createMcpServer } from "../server";
 
-// zod-to-json-schema collapses a nullable primitive that carries no checks into
-// `type: ["T","null"]`. That is valid JSON Schema, but strict MCP clients and
-// gateways reject an array-valued `type` and silently drop the entire tool (#138).
-// The `.int()` / `.max(256)` constraints on the fields below come from
-// Paperless_ngx_REST_API.yaml, and carrying them keeps the emitted `type` scalar.
-
-async function listTools() {
-  const server = createMcpServer({
-    baseUrl: "http://paperless.test",
-    token: "test-token",
-    version: "0.0.0-test",
-    publicUrl: "http://paperless.test",
-  });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "schema-compat-test", version: "1.0.0" });
-  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-  const { tools } = await client.listTools();
-  await client.close();
-  await server.close();
-  return new Map(tools.map((tool) => [tool.name, tool]));
-}
+// Strict MCP clients and gateways reject an array-valued `type` and silently drop
+// the whole tool (#138). zod-to-json-schema emits that form for any union of
+// unchecked primitives, so a new `z.string().nullable()` on any tool brings the
+// bug back with no visible symptom. This walks every advertised schema instead of
+// a field list, so a new occurrence anywhere fails the build.
+//
+// The entries below are the occurrences still outstanding, waiting on the Zod v4
+// migration. The assertion is an exact match, so fixing one fails here too: the
+// list may only shrink, and reaches zero when that migration lands.
+const KNOWN_ARRAY_FORM_TYPES = [
+  'create_mail_rule .properties.action_parameter.type = ["string","null"]',
+  'create_mail_rule .properties.filter_attachment_filename_exclude.type = ["string","null"]',
+  'create_mail_rule .properties.filter_attachment_filename_include.type = ["string","null"]',
+  'query_documents .properties.paperless_filters.additionalProperties.anyOf[0].type = ["string","number","boolean"]',
+  'update_mail_rule .properties.action_parameter.type = ["string","null"]',
+  'update_mail_rule .properties.filter_attachment_filename_exclude.type = ["string","null"]',
+  'update_mail_rule .properties.filter_attachment_filename_include.type = ["string","null"]',
+];
 
 function arrayFormTypes(node: unknown, path = ""): string[] {
   if (Array.isArray(node)) {
@@ -40,39 +37,28 @@ function arrayFormTypes(node: unknown, path = ""): string[] {
   );
 }
 
-test("update_document advertises no array-form types (#138)", async () => {
-  const tools = await listTools();
-  const tool = tools.get("update_document");
-  assert.ok(tool, "expected update_document to be registered");
-  assert.deepEqual(arrayFormTypes(tool.inputSchema), []);
-});
+test("no tool advertises an array-form `type` beyond the known-outstanding set (#138)", async () => {
+  const server = createMcpServer({
+    baseUrl: "http://paperless.test",
+    token: "test-token",
+    version: "0.0.0-test",
+    publicUrl: "http://paperless.test",
+  });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "schema-compat-test", version: "1.0.0" });
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
-test("bulk_edit_documents advertises no array-form types (#138)", async () => {
-  const tools = await listTools();
-  const tool = tools.get("bulk_edit_documents");
-  assert.ok(tool, "expected bulk_edit_documents to be registered");
-  assert.deepEqual(arrayFormTypes(tool.inputSchema), []);
-});
+  try {
+    const { tools } = await client.listTools();
+    const found = tools
+      .flatMap((tool) =>
+        arrayFormTypes(tool.inputSchema).map((hit) => `${tool.name} ${hit}`)
+      )
+      .sort();
 
-test("spec-constrained mail rule filters advertise no array-form type (#138)", async () => {
-  const tools = await listTools();
-  for (const name of ["create_mail_rule", "update_mail_rule"]) {
-    const tool = tools.get(name);
-    assert.ok(tool, `expected ${name} to be registered`);
-    const properties = (tool.inputSchema as {
-      properties: Record<string, unknown>;
-    }).properties;
-    for (const field of [
-      "filter_from",
-      "filter_to",
-      "filter_subject",
-      "filter_body",
-    ]) {
-      assert.deepEqual(
-        arrayFormTypes(properties[field]),
-        [],
-        `${name}.${field} must not advertise an array-form type`
-      );
-    }
+    assert.deepEqual(found, [...KNOWN_ARRAY_FORM_TYPES].sort());
+  } finally {
+    await client.close();
+    await server.close();
   }
 });

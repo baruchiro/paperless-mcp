@@ -219,6 +219,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         ),
       owner: z
         .number()
+        .int()
         .nullable()
         .optional()
         .describe(
@@ -569,16 +570,19 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         .describe("The new title for the document (max 128 characters)"),
       correspondent: z
         .number()
+        .int()
         .nullable()
         .optional()
         .describe("The ID of the correspondent to assign"),
       document_type: z
         .number()
+        .int()
         .nullable()
         .optional()
         .describe("The ID of the document type to assign"),
       storage_path: z
         .number()
+        .int()
         .nullable()
         .optional()
         .describe("The ID of the storage path to assign"),
@@ -600,6 +604,7 @@ export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
         .describe("The archive serial number (0-4294967295)"),
       owner: z
         .number()
+        .int()
         .nullable()
         .optional()
         .describe("The ID of the user who owns the document"),

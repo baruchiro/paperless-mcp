@@ -84,7 +84,7 @@ export interface Document {
   id: number;
   correspondent: number | null;
   document_type: number | null;
-  storage_path: string | null;
+  storage_path: number | null;
   title: string;
   content: string | null;
   tags: number[];
@@ -93,7 +93,7 @@ export interface Document {
   modified: string;
   added: string;
   deleted_at: string | null;
-  archive_serial_number: string | null;
+  archive_serial_number: number | null;
   original_file_name: string;
   archived_file_name: string;
   owner: number | null;

@@ -108,7 +108,7 @@ export const paperlessFilterValueSchema = z.union([
   z.array(paperlessFilterScalarSchema),
 ]);
 
-export const paperlessFiltersSchema = z.record(paperlessFilterValueSchema);
+export const paperlessFiltersSchema = z.record(z.string(), paperlessFilterValueSchema);
 
 const DOCUMENT_QUERY_BASE_ARGS_SHAPE = {
   page: z.number().optional(),

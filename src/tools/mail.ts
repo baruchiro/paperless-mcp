@@ -88,7 +88,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
       page: z.number().optional(),
       page_size: z.number().optional(),
     },
-    withErrorHandling(async (args = {}) => {
+    withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const response = await api.getMailAccounts(queryString);
@@ -142,7 +142,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
       page: z.number().optional(),
       page_size: z.number().optional(),
     },
-    withErrorHandling(async (args = {}) => {
+    withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const response = await api.getMailRules(queryString);

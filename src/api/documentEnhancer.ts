@@ -4,8 +4,9 @@ import { Document, DocumentsResponse, PaginationResponse } from "./types";
 import { NamedItem } from "./utils";
 
 // paperless-ngx's StandardPagination clamps page_size to this value (it does not
-// reject a larger request). A single page this size covers any realistic
-// instance; beyond it, fetchAllRows walks the remaining pages.
+// reject a larger request), and it is the most rows paperless returns in one
+// page. One request this size covers any realistic instance; beyond it,
+// fetchAllRows walks the remaining pages.
 const PAPERLESS_MAX_PAGE_SIZE = 100000;
 
 /**
@@ -13,33 +14,28 @@ const PAPERLESS_MAX_PAGE_SIZE = 100000;
  *
  * The default Paperless page size is 25, so building an id->name map from a bare
  * list call only covers the first 25 rows (ordered by name) and every other id
- * silently falls back to its stringified number. This probes the first page,
- * reads the reported `count`, and—only when there is more than one page—refetches
- * every row: one widened request in the common case, walking further pages if
- * the count somehow exceeds the server's page_size ceiling.
+ * silently falls back to its stringified number. Request the whole set in one
+ * page, then walk further pages only if the reported `count` somehow exceeds the
+ * server's page_size ceiling.
  */
 async function fetchAllRows<T>(
   fetchPage: (queryString?: string) => Promise<PaginationResponse<T>>
 ): Promise<T[]> {
-  const firstPage = await fetchPage();
-  const firstRows = firstPage.results || [];
-  const total = firstPage.count ?? firstRows.length;
+  const firstPage = await fetchPage(`page_size=${PAPERLESS_MAX_PAGE_SIZE}`);
+  const rows = firstPage.results ? [...firstPage.results] : [];
+  const total = firstPage.count ?? rows.length;
 
-  if (firstRows.length >= total) {
-    return firstRows;
-  }
-
-  const pageSize = Math.min(total, PAPERLESS_MAX_PAGE_SIZE);
-  const rows: T[] = [];
-  for (let page = 1; rows.length < total; page++) {
-    const { results } = await fetchPage(`page=${page}&page_size=${pageSize}`);
+  for (let page = 2; rows.length < total; page++) {
+    const { results } = await fetchPage(
+      `page=${page}&page_size=${PAPERLESS_MAX_PAGE_SIZE}`
+    );
     if (!results?.length) {
       break;
     }
     rows.push(...results);
   }
 
-  return rows.length ? rows : firstRows;
+  return rows;
 }
 
 interface CustomField {

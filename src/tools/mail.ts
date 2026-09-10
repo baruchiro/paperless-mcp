@@ -22,10 +22,10 @@ const mailRuleFields = {
   account: z.number().int().optional(),
   enabled: z.boolean().optional(),
   folder: z.string().optional(),
-  filter_from: z.string().nullable().optional(),
-  filter_to: z.string().nullable().optional(),
-  filter_subject: z.string().nullable().optional(),
-  filter_body: z.string().nullable().optional(),
+  filter_from: z.string().max(256).nullable().optional(),
+  filter_to: z.string().max(256).nullable().optional(),
+  filter_subject: z.string().max(256).nullable().optional(),
+  filter_body: z.string().max(256).nullable().optional(),
   filter_attachment_filename_include: z.string().nullable().optional(),
   filter_attachment_filename_exclude: z.string().nullable().optional(),
   maximum_age: z.number().int().min(0).optional(),
@@ -88,7 +88,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
       page: z.number().optional(),
       page_size: z.number().optional(),
     },
-    withErrorHandling(async (args = {}) => {
+    withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const response = await api.getMailAccounts(queryString);
@@ -142,7 +142,7 @@ export function registerMailTools(server: McpServer, api: PaperlessAPI) {
       page: z.number().optional(),
       page_size: z.number().optional(),
     },
-    withErrorHandling(async (args = {}) => {
+    withErrorHandling(async (args) => {
       if (!api) throw new Error("Please configure API connection first");
       const queryString = buildQueryString(args);
       const response = await api.getMailRules(queryString);

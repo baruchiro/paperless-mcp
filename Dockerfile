@@ -6,11 +6,6 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# The production stage copies node_modules from here. Without pruning, the
-# devDependencies ship with it -- typescript, ts-node and their tree: 277
-# installed packages instead of the 108 the compiled entrypoint needs.
-# (Counted as package.json files directly under a node_modules directory,
-# cross-checked against `npm ls --omit=dev --all`.)
 RUN npm prune --omit=dev
 
 # Production stage

@@ -43,7 +43,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set semver and latest tags if release
+      - name: Set latest tag if release
         id: tagmeta
         run: |
           if [ "${{ github.event_name }}" = "workflow_call" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
@@ -51,21 +51,19 @@ jobs:
           else
             echo "LATEST=" >> $GITHUB_OUTPUT
           fi
-
-          if [ "${{ github.event_name }}" = "workflow_call" ]; then
-            echo "SEMVER=type=semver,pattern=${{ inputs.versionTag }}" >> $GITHUB_OUTPUT
-          else
-            echo "SEMVER=" >> $GITHUB_OUTPUT
-          fi
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # value= is required: this job runs via workflow_call, so github.ref is
+          # never a tag ref for type=semver's built-in git-tag detection to find.
           tags: |
             type=ref,event=pr
             type=sha
-            ${{ steps.tagmeta.outputs.SEMVER }}
+            type=semver,pattern={{version}},value=${{ inputs.versionTag }},enable=${{ inputs.versionTag != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.versionTag }},enable=${{ inputs.versionTag != '' }}
+            type=semver,pattern={{major}},value=${{ inputs.versionTag }},enable=${{ inputs.versionTag != '' }}
             ${{ steps.tagmeta.outputs.LATEST }}
       - name: Build (linux/amd64) for smoke test
         uses: docker/build-push-action@v7

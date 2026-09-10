@@ -179,12 +179,12 @@ When creating or modifying tools, clearly distinguish:
 ## Dependencies
 
 ### Production Dependencies
-- `@modelcontextprotocol/sdk` (^1.11.1) - MCP server implementation
+- `@modelcontextprotocol/sdk` (^1.30.0) - MCP server implementation. 1.23.0 is the minimum that reads `zod/v4` shapes; below it they are silently dropped from the advertised `inputSchema`.
 - `axios` (^1.9.0) - HTTP client for API requests
 - `express` (^5.1.0) - HTTP server for HTTP transport mode
 - `form-data` (^4.0.2) - Multipart form data for file uploads
 - `typescript` (^5.8.3) - TypeScript compiler (Note: Listed as production dependency in this project)
-- `zod` (^3.24.1) - Schema validation
+- `zod` (~4.4.3) - Schema validation. **The pin is deliberate, do not widen it.** On the v4 path the SDK converts schemas with zod's own `toJSONSchema`, which emits `anyOf` for a nullable or union field; from 4.5.0 on it went back to collapsing unchecked ones into `"type": ["string", "null"]`, which strict MCP clients reject by dropping the whole tool (#138). `src/tools/schemaCompat.test.ts` fails if that form reappears.
 
 ### Development Dependencies
 - `@anthropic-ai/dxt` (^0.2.6) - Distribution packaging

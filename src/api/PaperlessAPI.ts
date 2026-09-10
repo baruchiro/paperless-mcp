@@ -109,7 +109,7 @@ export class PaperlessAPI {
   async postDocument(
     document: Buffer,
     filename: string,
-    metadata: Record<string, string | string[] | number | number[]> = {}
+    metadata: Record<string, string | string[] | number | number[] | undefined> = {}
   ): Promise<string> {
     const formData = new FormData();
     formData.append("document", document, { filename });

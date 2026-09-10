@@ -1,5 +1,51 @@
 # @baruchiro/paperless-mcp
 
+## 2.2.0
+
+### Minor Changes
+
+- a199f80: fix(schema): finish #138 by moving to Zod v4, so no tool advertises an array-valued `type`
+
+  Strict MCP clients and gateways reject an array-valued `type` (`"type": ["string", "null"]`) and silently drop the whole tool. The remaining occurrences after the previous fix were the mail-rule fields the API declares with no constraint to carry — `filter_attachment_filename_include`, `filter_attachment_filename_exclude`, `action_parameter` — and `query_documents`' `paperless_filters`, none of which could be fixed by declaring constraints.
+
+  They came from `zod-to-json-schema`, which the MCP SDK uses for Zod v3 shapes and which collapses any union of unchecked primitives into that form. No SDK release changes this: 1.11.1 through 1.30.0 emit byte-identical schemas for a v3 shape. The SDK does convert `zod/v4` shapes with Zod's own `toJSONSchema`, which emits `anyOf` instead, so the server now uses Zod v4 with `@modelcontextprotocol/sdk` at ^1.30.0 (1.23.0 is the first release that reads v4 shapes; earlier ones drop them from the advertised schema). `zod` is pinned to `~4.4.3` because 4.5.0 reintroduced the collapse.
+
+  Alongside the bump:
+
+  - `matching_algorithm` on tags, correspondents and document types is declared once and narrows to `MatchingAlgorithm` after its range check, so the API request types take it without a cast. The advertised schema is unchanged.
+  - `Document.storage_path` and `Document.archive_serial_number` are typed `number | null`, matching the spec, which declares both as nullable integers. They were typed `string | null`.
+  - Tool schemas no longer carry `additionalProperties: false` at the top level. It was never enforced — unknown properties were stripped, not rejected — so the schemas now describe what the server actually does. Nested objects declared `.strict()`, such as `bulk_edit_documents`' `set_permissions`, still advertise and enforce it.
+
+  This also fixes a `tsc` out-of-memory crash: SDK 1.23.0 and later paired with Zod 3.25.x hits an unbounded type instantiation (modelcontextprotocol/typescript-sdk#1180) that exhausts the heap even at 8GB, which is why the SDK could not be upgraded on its own.
+
+### Patch Changes
+
+- ccd454d: fix(schema): declare the OpenAPI constraints on nullable document and mail-rule fields, which also stops `update_document` and `bulk_edit_documents` from being dropped by strict MCP clients
+
+  `Paperless_ngx_REST_API.yaml` declares the document foreign keys as `type: integer` and the mail-rule text filters as `maxLength: 256`, but the tool schemas declared them as unconstrained `z.number()` / `z.string()`. They now carry `.int()` and `.max(256)`.
+
+  This also fixes part of #138. `zod-to-json-schema` collapses a nullable primitive that carries no checks into `"type": ["number","null"]`; strict MCP clients and gateways reject an array-valued `type` and silently drop the whole tool. Because the collapse only applies to check-less primitives, declaring the constraints the API already mandates makes the emitted schema `{"anyOf":[{"type":"integer"},{"type":"null"}]}` instead. `null` is still accepted at call time, so clearing a correspondent, document type, storage path or owner keeps working.
+
+  `update_document` and `bulk_edit_documents` no longer advertise any array-form `type`. `create_mail_rule` and `update_mail_rule` are fixed for the four spec-bounded filters; their `filter_attachment_filename_include`, `filter_attachment_filename_exclude` and `action_parameter` fields, and `query_documents`' `paperless_filters`, are unchanged because the spec declares no constraint to carry there.
+
+## 2.1.0
+
+### Minor Changes
+
+- f5953cc: Surface the resource URI as text in `download_document` and `get_document_thumbnail` (#134).
+
+  Both tools returned a single `resource` content block, so MCP clients that read
+  only `content[].text` and drop resource blocks (Hermes Agent, older Claude
+  Desktop) saw an empty result and never learned the URI. Each tool now also
+  returns the bare `paperless://` URI in a leading `text` block. The resource block
+  is unchanged, so clients that already follow it keep working.
+
+  Thanks to @zbingos for the report and diagnosis.
+
+### Patch Changes
+
+- 031bde9: fix(documents): `bulk_edit_documents` with `method: "set_permissions"` always failed with HTTP 500. The tool nested `set_permissions`/`owner`/`merge` under an extra `permissions` key, but Paperless reads them directly from `parameters`. The tool now takes `set_permissions`, `owner` and `merge` as top-level arguments matching the Paperless API, supports owner-only changes (sends the empty `set_permissions` object Paperless requires), and rejects a call with neither `set_permissions` nor `owner` instead of forwarding a request that would crash the server or silently clear ownership.
+
 ## 2.0.1
 
 ### Patch Changes

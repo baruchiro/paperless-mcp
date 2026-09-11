@@ -1,6 +1,8 @@
 # Paperless-NGX MCP Server - Claude Instructions
 
 > These are the project's AI instructions, read automatically by Claude Code as `CLAUDE.md`. They are the single source of truth for how to work in this repo - they previously lived in `.github/copilot-instructions.md` and `.cursor/rules/*.mdc`, which have been consolidated here.
+>
+> `AGENTS.md` restates the contribution and scope rules for agents that do not read this file, and `CONTRIBUTING.md` states them for human contributors. When you change a rule that appears in more than one of the three, update all of them.
 
 ## Project Overview
 
@@ -260,8 +262,15 @@ When reviewing a pull request in this repository, enforce everything above. The 
 6. **Blocking I/O** - Synchronous `fs` calls (`readFileSync`, `existsSync`, `statSync`) in async handlers. Require the `fs/promises` equivalents.
 7. **Path / security boundaries** - File-path inputs that are not validated as absolute, not confined to an allowlist, and not symlink-resolved with `fs.promises.realpath` before the allowlist check (`path.resolve` alone does NOT dereference symlinks).
 8. **Placeholder tests** - Tests that `assert.ok(true)` or re-check local strings instead of driving the real handler/helper. Require assertions against actual thrown errors and actual arguments passed to the API.
+9. **Scope creep beyond the stated goal** - Anything in the diff the PR's title and linked issue did not ask for: a second feature, unrelated hardening, an opportunistic refactor. Name the parts that belong in their own PR and ask for them to be dropped from this one.
+10. **Unrequested public surface** - New CLI flags, environment variables, `manifest.json` config fields, or HTTP endpoints that no linked issue asked for. Each is permanent and has to be supported forever; ask where it was agreed.
+11. **Changed defaults** - A modified default (bind address, timeout, API version, page size) breaks existing setups. Flag it even when the new value is safer, and require it be split into its own PR.
+12. **Disproportionate implementation** - Hundreds of lines of validation, guards, or abstraction around a change whose core is a few lines. Also: the same rule enforced at two layers, options or injection points with a single caller, and error paths for states that cannot occur. Ask for the smallest version that solves the stated problem.
+13. **Justification comments** - Multi-line comments arguing the case for the change, often citing a third-party library's internals or version numbers to pre-empt a reviewer. That reasoning belongs in the PR description, not the source. (Distinct from item 3: these are not redundant, they are load-bearing arguments in the wrong place.)
+14. **Out-of-context leftovers** - Comments or identifiers not in English, references to another repository or to the contributor's own deployment, config that only makes sense in one environment. These indicate code carried in from elsewhere without review. Deliberate attribution in this project's own documentation is not this.
 
 ### Review Style
+- **Start from the PR's stated goal.** Identify the few lines that actually implement it, then judge everything else in the diff against that: is it needed for this change, or is it a separate concern that arrived along for the ride? Correct code that nobody asked for is still a finding.
 - Be specific and actionable: name the file/line and state the concrete change you want.
 - Prefer the smallest correct fix. Do not request large refactors for a focused PR; if the change is architecturally significant, say so and defer to the maintainer.
 - Verify each finding against the current code before raising it - do not flag issues that were already addressed in a later commit.

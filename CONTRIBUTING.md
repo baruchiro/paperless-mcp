@@ -30,6 +30,8 @@ AI-assisted contributions are welcome. They must be coordinated, scoped, and ver
 
 The scope rules above matter most here. A large, plausible-looking diff is cheap to generate, and the cost of reading it lands on someone else.
 
+This section follows the approach taken by [huggingface/transformers](https://github.com/huggingface/transformers/blob/main/CONTRIBUTING.md#agentic-contributions), whose contribution guide asks that AI-assisted work be "coordinated, scoped, and verified to keep review load manageable."
+
 ## Reporting Issues
 - Please use GitHub Issues for bug reports and feature requests
 - Include as much detail as possible

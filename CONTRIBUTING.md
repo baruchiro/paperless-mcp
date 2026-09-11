@@ -25,7 +25,7 @@ AI-assisted contributions are welcome. They must be coordinated, scoped, and ver
 - **You are the author.** You are accountable for every line, whether or not a tool wrote it — for its correctness, its licensing, and the fact that someone has to maintain it.
 - **You must be able to explain the change in your own words.** If you cannot say why a line is there, delete it and submit the part you can explain.
 - **Read every changed line before opening the pull request.** Remove what the tool added that the change did not need: comments restating the code, comments arguing the case for the change, tests that assert nothing, abstractions with a single caller, and code paths for states that cannot occur.
-- **Verify it against a real Paperless-NGX instance** and say in the description what you ran and what you saw.
+- **Verify runtime changes against a real Paperless-NGX instance** and say in the description what you ran and what you saw. A documentation-only change does not need this.
 - **Disclose the assistance in the description,** together with a link to the issue where the change was agreed.
 
 The scope rules above matter most here. A large, plausible-looking diff is cheap to generate, and the cost of reading it lands on someone else.

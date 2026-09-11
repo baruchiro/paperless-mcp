@@ -22,12 +22,12 @@ Write none by default. A comment must carry what the code cannot: a hidden const
 
 Keep comments and identifiers in English.
 
-## Required in every change
+## Required
 
-- A changeset: run `npx changeset` and commit the generated `.changeset/*.md`.
+- A changeset for every **code** change: run `npx changeset` and commit the generated `.changeset/*.md`. Documentation-only changes do not take one — a changeset triggers a release.
 - No scratch, planning, or summary files (`NOTES.md`, `PLAN.md`, `REVIEW_SUMMARY.md`, and the like). No build artifacts, `node_modules`, or `.env` files.
 - No new top-level documentation or governance files unless you were asked for them.
-- No references to another repository, or to the setup of whoever is running you.
+- In code, comments, and config: no references to another repository, or to the setup of whoever is running you. Deliberate attribution in this project's own documentation is fine.
 
 ## Accountability
 

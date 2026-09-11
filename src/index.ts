@@ -144,7 +144,6 @@ async function main() {
 
         if (!transport) {
           if (sessionId || !isInitializeRequest(req.body)) {
-            // A non-initialize request must carry a known session id.
             res.status(400).json({
               jsonrpc: "2.0",
               error: {

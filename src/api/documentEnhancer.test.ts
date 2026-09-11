@@ -16,6 +16,17 @@ function getTextContent(result: CallToolResult): string {
   return item.text;
 }
 
+interface EnhancedResults {
+  results: Array<{
+    correspondent: { id: number; name: string } | null;
+    tags: Array<{ id: number; name: string }>;
+  }>;
+}
+
+function parseEnhancedResults(result: CallToolResult): EnhancedResults {
+  return JSON.parse(getTextContent(result)) as EnhancedResults;
+}
+
 test("convertDocsWithNames omits `all` and keeps paginated JSON shape", async () => {
   const docsResponse: DocumentsResponse = {
     count: 2,
@@ -75,4 +86,85 @@ test("convertDocsWithNames returns paginated JSON for empty multi-document resul
     previous: null,
     results: [],
   });
+});
+
+test("convertDocsWithNames resolves correspondent and tag names that fall beyond the first API page", async () => {
+  const correspondents = Array.from({ length: 40 }, (_, index) => ({
+    id: index + 1,
+    name: `First page correspondent ${index}`,
+  }));
+  // Deliberately outside the default 25-row first page, mirroring the live
+  // instance where correspondent 246 ("Brown") came back named "246".
+  correspondents.push({ id: 246, name: "Brown" });
+
+  const tags = Array.from({ length: 30 }, (_, index) => ({
+    id: index + 1,
+    name: `first-page-tag-${index}`,
+  }));
+  tags.push({ id: 49, name: "paperless-gpt-failed" });
+
+  const api = createPaperlessApiMock({ correspondents, tags });
+  const docsResponse: DocumentsResponse = {
+    count: 1,
+    next: null,
+    previous: null,
+    all: [1],
+    results: [createDocument({ id: 1, correspondent: 246, tags: [49] })],
+  };
+
+  const result = await convertDocsWithNames(docsResponse, api);
+  const parsed = parseEnhancedResults(result);
+
+  assert.equal(parsed.results[0].correspondent?.name, "Brown");
+  assert.equal(parsed.results[0].tags[0].name, "paperless-gpt-failed");
+});
+
+test("convertDocsWithNames fetches every lookup row in a single widened request", async () => {
+  const correspondents = Array.from({ length: 60 }, (_, index) => ({
+    id: index + 1,
+    name: `Correspondent ${index}`,
+  }));
+  const api = createPaperlessApiMock({ correspondents });
+  const docsResponse: DocumentsResponse = {
+    count: 1,
+    next: null,
+    previous: null,
+    all: [1],
+    results: [createDocument({ id: 1, correspondent: 55 })],
+  };
+
+  const result = await convertDocsWithNames(docsResponse, api);
+  const parsed = parseEnhancedResults(result);
+
+  // id 55 is past the default 25-row page; one page_size=max request covers it.
+  assert.equal(parsed.results[0].correspondent?.name, "Correspondent 54");
+  assert.deepEqual(api.__requests.correspondents, ["page_size=100000"]);
+});
+
+test("convertDocsWithNames walks further pages when the row count exceeds the server page_size ceiling", async () => {
+  const correspondents = Array.from({ length: 30 }, (_, index) => ({
+    id: index + 1,
+    name: `Correspondent ${index}`,
+  }));
+  // maxPageSize forces the fake server to cap page_size below `count`, so the
+  // first widened request cannot return every row.
+  const api = createPaperlessApiMock({ correspondents, maxPageSize: 10 });
+  const docsResponse: DocumentsResponse = {
+    count: 1,
+    next: null,
+    previous: null,
+    all: [1],
+    results: [createDocument({ id: 1, correspondent: 28 })],
+  };
+
+  const result = await convertDocsWithNames(docsResponse, api);
+  const parsed = parseEnhancedResults(result);
+
+  // id 28 sits on the final page; without the page walk it resolves to "28".
+  assert.equal(parsed.results[0].correspondent?.name, "Correspondent 27");
+  assert.deepEqual(api.__requests.correspondents, [
+    "page_size=100000",
+    "page=2&page_size=100000",
+    "page=3&page_size=100000",
+  ]);
 });

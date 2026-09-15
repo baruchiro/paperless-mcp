@@ -983,3 +983,61 @@ describe("Paperless MCP mail rule E2E scenario", () => {
     state.mailRuleId = undefined;
   });
 });
+
+describe("Paperless MCP enrichment pagination regression", () => {
+  // convertDocsWithNames built its id->name maps from a bare list call, which
+  // Paperless serves 25 rows at a time ordered by name. Any correspondent past
+  // page 1 was missing from the map and its `name` silently became the
+  // stringified id. Create enough correspondents to push one onto page 2, then
+  // confirm a document referencing it still resolves the real name.
+  const PARTITION_COUNT = 30;
+  const runMarker = `zzz-e2e-page-${Date.now()}`;
+  let farCorrespondentId: number | undefined;
+  let farCorrespondentName: string | undefined;
+
+  it("creates enough correspondents to fill more than one API page", async () => {
+    for (let i = 0; i < PARTITION_COUNT; i++) {
+      const name = `${runMarker}-${String(i).padStart(3, "0")}`;
+      const res = (await client.callTool({
+        name: "create_correspondent",
+        arguments: { name },
+      })) as ToolResult;
+      assertOk(res, `create_correspondent ${name}`);
+      const created = parseToolText(res) as { id: number };
+      farCorrespondentId = created.id;
+      farCorrespondentName = name;
+    }
+    assert.ok(farCorrespondentId, "expected to create correspondents");
+  });
+
+  it("get_document resolves a correspondent name that only exists beyond page 1", async () => {
+    assert.ok(
+      state.documentId && farCorrespondentId && farCorrespondentName,
+      "document and far-page correspondent must exist"
+    );
+
+    const updateResult = (await client.callTool({
+      name: "update_document",
+      arguments: { id: state.documentId, correspondent: farCorrespondentId },
+    })) as ToolResult;
+    assertOk(updateResult, "update_document set far-page correspondent");
+
+    const docResult = (await client.callTool({
+      name: "get_document",
+      arguments: { id: state.documentId },
+    })) as ToolResult;
+    assertOk(docResult, "get_document after far-page correspondent");
+    const doc = parseToolText(docResult) as {
+      correspondent: { id: number; name: string } | null;
+    };
+
+    assert.ok(doc.correspondent, "document should have a correspondent");
+    assert.strictEqual(doc.correspondent.id, farCorrespondentId);
+    assert.strictEqual(
+      doc.correspondent.name,
+      farCorrespondentName,
+      `correspondent past page 1 should resolve to its real name, not the ` +
+        `stringified id (got "${doc.correspondent.name}")`
+    );
+  });
+});

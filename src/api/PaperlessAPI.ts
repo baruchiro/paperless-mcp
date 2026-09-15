@@ -1,4 +1,4 @@
-import axios, { AxiosResponse } from "axios";
+import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 import FormData from "form-data";
 import {
   BulkEditDocumentsResult,
@@ -19,17 +19,104 @@ import {
   Note,
   Tag,
 } from "./types";
-import { headersToObject } from "./utils";
+import {
+  canSendCredentials,
+  headersToObject,
+  isLoopbackUrl,
+  omitHeaders,
+  reservedHeaderNames,
+} from "./utils";
+
+type CredentialGuard = Pick<AxiosRequestConfig, "beforeRedirect" | "proxy">;
+
+/**
+ * The origin a redirect is about to be sent to. When an HTTP proxy from the
+ * environment is in use, axios rewrites `host` and `protocol` to the proxy's
+ * before this callback runs and keeps the real target in `href` — the field
+ * axios itself reads to re-apply the proxy — so `href` is consulted first.
+ */
+function redirectOrigin(options: Record<string, unknown>): string {
+  const { href, protocol, host } = options as {
+    href?: string;
+    protocol?: string;
+    host?: string;
+  };
+  if (typeof href === "string") {
+    try {
+      return new URL(href).origin;
+    } catch {
+      // Fall through to the host fields.
+    }
+  }
+  return `${protocol}//${host}`;
+}
+
+/**
+ * Configured headers usually carry proxy credentials, and follow-redirects only
+ * strips `Authorization` and cookies when a redirect leaves the host — its
+ * `sensitiveHeaders` option arrived in 1.16.0, while axios 1.9 pins 1.15. A
+ * redirect off the configured origin would therefore hand the credentials to
+ * whatever answered, so those redirects are refused. A loopback base URL also
+ * bypasses any proxy configured in the environment, since the exemption that
+ * allows cleartext there rests on the request never leaving the machine.
+ */
+function createCredentialGuard(
+  baseUrl: string,
+  extraHeaders: Record<string, string>
+): CredentialGuard {
+  if (Object.keys(extraHeaders).length === 0) {
+    return {};
+  }
+
+  let origin: string;
+  try {
+    origin = new URL(baseUrl).origin;
+  } catch {
+    return {};
+  }
+
+  const guard: CredentialGuard = {
+    beforeRedirect: (options) => {
+      const target = redirectOrigin(options);
+      if (target !== origin) {
+        throw new Error(
+          `Refusing to follow a redirect from ${origin} to ${target}: the configured extra headers would be sent to it.`
+        );
+      }
+    },
+  };
+
+  if (isLoopbackUrl(baseUrl)) {
+    guard.proxy = false;
+  }
+
+  return guard;
+}
 
 export class PaperlessAPI {
   private readonly apiVersion: string;
+  private readonly extraHeaders: Record<string, string>;
+  private readonly credentialGuard: CredentialGuard;
 
   constructor(
     private readonly baseUrl: string,
-    private readonly token: string
+    private readonly token: string,
+    extraHeaders: Record<string, string> = {}
   ) {
     this.baseUrl = baseUrl;
     this.token = token;
+    this.extraHeaders = omitHeaders(extraHeaders, reservedHeaderNames);
+    if (
+      Object.keys(this.extraHeaders).length > 0 &&
+      !canSendCredentials(baseUrl)
+    ) {
+      // The CLI checks this at startup with a friendlier message; this is the
+      // safety net for library callers, who reach the constructor directly.
+      throw new Error(
+        "Refusing to send configured headers to a cleartext HTTP base URL: they usually carry credentials, so the base URL must use https:// (loopback addresses are exempt)."
+      );
+    }
+    this.credentialGuard = createCredentialGuard(baseUrl, this.extraHeaders);
     this.apiVersion = process.env.PAPERLESS_API_VERSION || "9";
   }
 
@@ -38,11 +125,12 @@ export class PaperlessAPI {
     const isJson = !options.body || typeof options.body === "string";
 
     const mergedHeaders = {
-      Authorization: `Token ${this.token}`,
-      Accept: `application/json; version=${this.apiVersion}`,
       "Accept-Language": "en-US,en;q=0.9",
+      ...this.extraHeaders,
+      Accept: `application/json; version=${this.apiVersion}`,
       ...(isJson ? { "Content-Type": "application/json" } : {}),
-      ...headersToObject(options.headers),
+      ...omitHeaders(headersToObject(options.headers), ["authorization"]),
+      Authorization: `Token ${this.token}`,
     };
 
     try {
@@ -51,6 +139,7 @@ export class PaperlessAPI {
         method: options.method || "GET",
         headers: mergedHeaders,
         data: options.body,
+        ...this.credentialGuard,
       });
 
       const body = response.data;
@@ -146,10 +235,13 @@ export class PaperlessAPI {
         formData,
         {
           headers: {
-            Authorization: `Token ${this.token}`,
+            ...this.extraHeaders,
             Accept: `application/json; version=${this.apiVersion}`,
+            Authorization: `Token ${this.token}`,
+            // form-data computes the multipart boundary, so it must win here.
             ...formData.getHeaders(),
           },
+          ...this.credentialGuard,
         }
       );
 
@@ -193,9 +285,11 @@ export class PaperlessAPI {
       `${this.baseUrl}/api/documents/${id}/download/${query}`,
       {
         headers: {
+          ...this.extraHeaders,
           Authorization: `Token ${this.token}`,
         },
         responseType: "arraybuffer",
+        ...this.credentialGuard,
       }
     );
     return response;
@@ -206,9 +300,11 @@ export class PaperlessAPI {
       `${this.baseUrl}/api/documents/${id}/thumb/`,
       {
         headers: {
+          ...this.extraHeaders,
           Authorization: `Token ${this.token}`,
         },
         responseType: "arraybuffer",
+        ...this.credentialGuard,
       }
     );
     return response;

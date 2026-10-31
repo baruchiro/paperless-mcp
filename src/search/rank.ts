@@ -19,7 +19,8 @@ export function fuse(vector: Hit[], text: Hit[], k = 60): Fused[] {
 
   function addRanks(hits: Hit[], side: "vector" | "text") {
     const bestRank = new Map<number, number>();
-    hits.forEach((hit, rank) => {
+    hits.forEach((hit, index) => {
+      const rank = index + 1;
       if (!bestRank.has(hit.documentId)) bestRank.set(hit.documentId, rank);
     });
     for (const hit of hits) {

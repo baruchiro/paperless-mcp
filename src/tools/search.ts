@@ -44,11 +44,10 @@ export function registerSearchTools(
       limit: z
         .number()
         .int()
-        .min(1)
-        .max(50)
         .optional()
         .default(10)
-        .describe("Maximum number of results, 1 to 50"),
+        .transform((value) => Math.max(1, Math.min(50, value)))
+        .describe("Maximum number of results; clamped to 1 to 50"),
     },
     withErrorHandling(async (args) => {
       const { query, limit } = args;

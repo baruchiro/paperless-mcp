@@ -292,3 +292,38 @@ test(
     assert.deepEqual(paths, []);
   }
 );
+
+test(
+  "a limit over 50 is clamped to 50 results instead of an error",
+  { timeout: 5000 },
+  async () => {
+    const vector = Array.from({ length: 60 }, (_, i) =>
+      hit(i + 1, 0.9 - i / 1000)
+    );
+    const store = fakeStore({ vector });
+    const embedder = fakeEmbedder({});
+    const documents = vector.map((h) => ({
+      id: h.documentId,
+      title: `Doc ${h.documentId}`,
+      created: "2026-01-01",
+      correspondent: null,
+      document_type: null,
+      tags: [],
+    }));
+    const { api } = fakeApi(documents);
+
+    await withClient(
+      api,
+      { store, embedder, publicUrl: "https://paperless.example.test" },
+      async (client) => {
+        const result = (await client.callTool({
+          name: "semantic_search",
+          arguments: { query: "invoice", limit: 100 },
+        })) as CallToolResult;
+        assert.ok(!result.isError);
+        const body = parseToolText(result);
+        assert.equal(body.results.length, 50);
+      }
+    );
+  }
+);

@@ -42,8 +42,8 @@ test("k changes the scores as 1/(k+rank)", () => {
   const defaultK = fuse(vector, text);
   const customK = fuse(vector, text, 10);
 
-  assert.equal(defaultK[0].score, 1 / (60 + 0));
-  assert.equal(customK[0].score, 1 / (10 + 0));
+  assert.equal(defaultK[0].score, 1 / (60 + 1));
+  assert.equal(customK[0].score, 1 / (10 + 1));
 });
 
 test("the passage of a fused document is the vector hit's text when there is one", () => {

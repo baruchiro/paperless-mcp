@@ -57,6 +57,14 @@ export class OllamaEmbedder {
       );
     }
     const body = (await response.json()) as EmbedResponse;
+    if (
+      !Array.isArray(body.embeddings) ||
+      body.embeddings.length !== input.length
+    ) {
+      throw new EmbeddingUnavailable(
+        "Ollama answered with a missing or mismatched embeddings array"
+      );
+    }
     return body.embeddings;
   }
 }

@@ -6,9 +6,10 @@ import { EmbeddingUnavailable, OllamaEmbedder, QUERY_PREFIX } from "./embedder";
 
 interface FakeOptions {
   fail?: boolean;
+  malformed?: "missing" | "short";
 }
 
-function fakeOllama({ fail = false }: FakeOptions = {}) {
+function fakeOllama({ fail = false, malformed }: FakeOptions = {}) {
   const requests: { model: string; input: string[] }[] = [];
   const server = http.createServer((req, res) => {
     let body = "";
@@ -21,10 +22,17 @@ function fakeOllama({ fail = false }: FakeOptions = {}) {
       }
       const parsed = JSON.parse(body);
       requests.push(parsed);
-      const embeddings = parsed.input.map((text: string) =>
+      res.writeHead(200, { "Content-Type": "application/json" });
+      if (malformed === "missing") {
+        res.end(JSON.stringify({}));
+        return;
+      }
+      let embeddings = parsed.input.map((text: string) =>
         Array.from(text).map((c) => c.charCodeAt(0))
       );
-      res.writeHead(200, { "Content-Type": "application/json" });
+      if (malformed === "short") {
+        embeddings = embeddings.slice(1);
+      }
       res.end(JSON.stringify({ embeddings }));
     });
   });
@@ -85,6 +93,41 @@ describe("OllamaEmbedder", () => {
       });
       await assert.rejects(
         () => embedder.embedQuery("hipoteca"),
+        EmbeddingUnavailable
+      );
+    } finally {
+      server.close();
+    }
+  });
+
+  test("a 200 answer without embeddings throws EmbeddingUnavailable", async () => {
+    const { server } = fakeOllama({ malformed: "missing" });
+    const url = await listen(server);
+    try {
+      const embedder = new OllamaEmbedder({
+        url,
+        model: "qwen3-embedding:0.6b",
+      });
+      await assert.rejects(
+        () => embedder.embedQuery("hipoteca"),
+        EmbeddingUnavailable
+      );
+    } finally {
+      server.close();
+    }
+  });
+
+  test("a 200 answer with fewer embeddings than inputs throws EmbeddingUnavailable", async () => {
+    const { server } = fakeOllama({ malformed: "short" });
+    const url = await listen(server);
+    try {
+      const embedder = new OllamaEmbedder({
+        url,
+        model: "qwen3-embedding:0.6b",
+      });
+      const texts = Array.from({ length: 16 }, (_, i) => `doc-${i}`);
+      await assert.rejects(
+        () => embedder.embedDocuments(texts),
         EmbeddingUnavailable
       );
     } finally {

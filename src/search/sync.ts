@@ -40,6 +40,10 @@ function toNameMap(rows: { id: number; name: string }[]): Map<number, string> {
   return new Map(rows.map((row) => [row.id, row.name]));
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export class IndexSync {
   private readonly api: PaperlessAPI;
   private readonly store: SearchStore;
@@ -72,7 +76,7 @@ export class IndexSync {
   start(intervalMs = 600_000): void {
     const scheduled = () =>
       this.run().catch((err) =>
-        console.error(`[paperless-mcp] index: run failed: ${err}`)
+        console.error(`[paperless-mcp] index: run failed: ${errorMessage(err)}`)
       );
     void scheduled();
     this.timer = setInterval(scheduled, intervalMs).unref();
@@ -93,13 +97,11 @@ export class IndexSync {
     };
 
     const remote = new Map<number, string>();
-    let path: string | null = DOCUMENT_LIST_PATH;
-    while (path) {
-      const page = await this.api.request(path);
-      for (const row of page.results as { id: number; modified: string }[]) {
-        remote.set(row.id, row.modified);
-      }
-      path = page.next ? pathAfterApi(page.next) : null;
+    const rows = await this.listAll<{ id: number; modified: string }>(
+      DOCUMENT_LIST_PATH
+    );
+    for (const row of rows) {
+      remote.set(row.id, row.modified);
     }
 
     const indexed = await this.store.indexed();
@@ -140,7 +142,9 @@ export class IndexSync {
           throw err;
         }
         report.failed++;
-        console.error(`[paperless-mcp] index: document ${id} failed: ${err}`);
+        console.error(
+          `[paperless-mcp] index: document ${id} failed: ${errorMessage(err)}`
+        );
       }
     }
 
@@ -160,23 +164,42 @@ export class IndexSync {
           throw err;
         }
         report.failed++;
-        console.error(`[paperless-mcp] index: document ${id} failed: ${err}`);
+        console.error(
+          `[paperless-mcp] index: document ${id} failed: ${errorMessage(err)}`
+        );
       }
     }
 
     return report;
   }
 
+  // Reused by the document list: a Paperless list answer may span several
+  // pages, and `next` is the only reliable way to find the rest of them.
+  private async listAll<T>(path: string): Promise<T[]> {
+    const rows: T[] = [];
+    let next: string | null = path;
+    while (next) {
+      const page = await this.api.request(next);
+      rows.push(...(page.results as T[]));
+      next = page.next ? pathAfterApi(page.next) : null;
+    }
+    return rows;
+  }
+
   private async loadNames(): Promise<NameMaps> {
     const [correspondents, documentTypes, tags] = await Promise.all([
-      this.api.request("/correspondents/"),
-      this.api.request("/document_types/"),
-      this.api.request("/tags/"),
+      this.listAll<{ id: number; name: string }>(
+        "/correspondents/?page_size=1000"
+      ),
+      this.listAll<{ id: number; name: string }>(
+        "/document_types/?page_size=1000"
+      ),
+      this.listAll<{ id: number; name: string }>("/tags/?page_size=1000"),
     ]);
     return {
-      correspondents: toNameMap(correspondents.results),
-      documentTypes: toNameMap(documentTypes.results),
-      tags: toNameMap(tags.results),
+      correspondents: toNameMap(correspondents),
+      documentTypes: toNameMap(documentTypes),
+      tags: toNameMap(tags),
     };
   }
 

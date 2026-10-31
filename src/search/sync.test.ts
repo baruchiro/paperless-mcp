@@ -26,12 +26,31 @@ interface FakeDoc {
   tags: number[];
 }
 
+function paginated<T>(
+  items: T[],
+  basePath: string,
+  pageSize: number,
+  page: number
+) {
+  const start = (page - 1) * pageSize;
+  const slice = items.slice(start, start + pageSize);
+  const hasNext = start + pageSize < items.length;
+  const join = basePath.includes("?") ? "&" : "?";
+  return {
+    count: items.length,
+    next: hasNext ? `/api${basePath}${join}page=${page + 1}` : null,
+    previous: null,
+    results: slice,
+  };
+}
+
 function fakePaperless(opts: {
   documents: FakeDoc[];
   correspondents?: { id: number; name: string }[];
   documentTypes?: { id: number; name: string }[];
   tags?: { id: number; name: string }[];
   pageSize?: number;
+  tagPageSize?: number;
 }) {
   const {
     documents,
@@ -39,6 +58,7 @@ function fakePaperless(opts: {
     documentTypes = [],
     tags = [],
     pageSize = 1000,
+    tagPageSize,
   } = opts;
   const detail = new Map(documents.map((d) => [d.id, d]));
   let listCalls = 0;
@@ -48,21 +68,44 @@ function fakePaperless(opts: {
       listCalls++;
       const url = new URL(path, "http://x");
       const page = Number(url.searchParams.get("page") ?? "1");
-      const start = (page - 1) * pageSize;
-      const slice = documents.slice(start, start + pageSize);
-      const hasNext = start + pageSize < documents.length;
+      const result = paginated(
+        documents,
+        "/documents/?fields=id,modified&page_size=1000",
+        pageSize,
+        page
+      );
       return {
-        count: documents.length,
-        next: hasNext
-          ? `/api/documents/?fields=id,modified&page_size=1000&page=${page + 1}`
-          : null,
-        previous: null,
-        results: slice.map((d) => ({ id: d.id, modified: d.modified })),
+        ...result,
+        results: result.results.map((d) => ({
+          id: d.id,
+          modified: d.modified,
+        })),
       };
     }
-    if (path === "/correspondents/") return { results: correspondents };
-    if (path === "/document_types/") return { results: documentTypes };
-    if (path === "/tags/") return { results: tags };
+    if (path.startsWith("/correspondents/")) {
+      return {
+        count: correspondents.length,
+        next: null,
+        previous: null,
+        results: correspondents,
+      };
+    }
+    if (path.startsWith("/document_types/")) {
+      return {
+        count: documentTypes.length,
+        next: null,
+        previous: null,
+        results: documentTypes,
+      };
+    }
+    if (path.startsWith("/tags/")) {
+      if (tagPageSize) {
+        const url = new URL(path, "http://x");
+        const page = Number(url.searchParams.get("page") ?? "1");
+        return paginated(tags, "/tags/", tagPageSize, page);
+      }
+      return { count: tags.length, next: null, previous: null, results: tags };
+    }
     const match = path.match(/^\/documents\/(\d+)\/$/);
     if (match) {
       const doc = detail.get(Number(match[1]));
@@ -377,6 +420,30 @@ test("the document list follows next across pages", async () => {
     assert.equal(report.added, 2);
     const indexed = await store.indexed();
     assert.equal(indexed.size, 2);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("a tag on page 2 of /tags/ still appears in the metadata chunk", async () => {
+  const { pool, store } = await newStore();
+  try {
+    const { api } = fakePaperless({
+      documents: [doc({ id: 1, tags: [2] })],
+      tags: [
+        { id: 1, name: "primera" },
+        { id: 2, name: "segunda" },
+      ],
+      tagPageSize: 1,
+    });
+    const { embedder } = fakeEmbedder();
+    await new IndexSync({ api, store, embedder }).run();
+
+    const chunk = await pool.query(
+      "SELECT text FROM chunks WHERE document_id = $1 AND position = 0",
+      [1]
+    );
+    assert.match(chunk.rows[0].text, /segunda/);
   } finally {
     await pool.end();
   }

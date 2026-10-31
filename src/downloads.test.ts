@@ -211,17 +211,82 @@ describe("download links", () => {
   );
 
   test(
-    "with no filename header and a non-PDF content type, the name has no extension",
+    "with no filename header, an original image/jpeg download gets .jpg",
     { timeout: 5000 },
     () =>
       withDownloads(
         { headers: { "content-type": "image/jpeg" } },
+        async ({ downloads, local }) => {
+          const link = downloads.request(55, "tok", true);
+          const res = await fetch(local(link.url));
+          assert.equal(
+            res.headers.get("content-disposition"),
+            'attachment; filename="document-55.jpg"'
+          );
+        }
+      )
+  );
+
+  test(
+    "with no filename header and a type with no known extension, the name has none",
+    { timeout: 5000 },
+    () =>
+      withDownloads(
+        { headers: { "content-type": "application/octet-stream" } },
         async ({ downloads, local }) => {
           const link = downloads.request(55, "tok", false);
           const res = await fetch(local(link.url));
           assert.equal(
             res.headers.get("content-disposition"),
             'attachment; filename="document-55"'
+          );
+        }
+      )
+  );
+
+  test(
+    "with no filename header, each type the upload links accept gets its extension",
+    { timeout: 5000 },
+    async () => {
+      const cases: Array<[string, string]> = [
+        ["application/pdf", ".pdf"],
+        ["image/png", ".png"],
+        ["image/jpeg", ".jpg"],
+        ["image/tiff", ".tiff"],
+        ["image/gif", ".gif"],
+        ["image/webp", ".webp"],
+        ["image/heic", ".heic"],
+        ["image/heif", ".heic"],
+      ];
+      for (const [contentType, ext] of cases) {
+        await withDownloads(
+          { headers: { "content-type": contentType } },
+          async ({ downloads, local }) => {
+            const link = downloads.request(55, "tok", false);
+            const res = await fetch(local(link.url));
+            assert.equal(
+              res.headers.get("content-disposition"),
+              `attachment; filename="document-55${ext}"`,
+              contentType
+            );
+          }
+        );
+      }
+    }
+  );
+
+  test(
+    "a Content-Type with a parameter after ; is matched on its type alone",
+    { timeout: 5000 },
+    () =>
+      withDownloads(
+        { headers: { "content-type": "image/jpeg; charset=binary" } },
+        async ({ downloads, local }) => {
+          const link = downloads.request(55, "tok", false);
+          const res = await fetch(local(link.url));
+          assert.equal(
+            res.headers.get("content-disposition"),
+            'attachment; filename="document-55.jpg"'
           );
         }
       )

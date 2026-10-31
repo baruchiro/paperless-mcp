@@ -155,6 +155,19 @@ export class Downloads {
   }
 }
 
+// The extension of the fallback name, one for each type the upload links
+// accept (ruling R6 of task-7-brief.md); any other type gets none.
+const EXTENSIONS: Record<string, string> = {
+  "application/pdf": ".pdf",
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/tiff": ".tiff",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "image/heic": ".heic",
+  "image/heif": ".heic",
+};
+
 // Paperless gives the name as `filename="..."` or `filename*=UTF-8''...`;
 // only the plain form is parsed (ruling of task-7-brief.md).
 function downloadName(
@@ -164,6 +177,7 @@ function downloadName(
 ): string {
   const match = disposition ? /filename="([^"]*)"/.exec(disposition) : null;
   if (match) return fileName(match[1]);
-  const ext = contentType === "application/pdf" ? ".pdf" : "";
+  const type = contentType.split(";")[0].trim();
+  const ext = EXTENSIONS[type] ?? "";
   return fileName(`document-${documentId}${ext}`);
 }

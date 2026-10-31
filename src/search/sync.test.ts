@@ -448,3 +448,90 @@ test("a tag on page 2 of /tags/ still appears in the metadata chunk", async () =
     await pool.end();
   }
 });
+
+function loopingDocumentsApi(normal: boolean): PaperlessAPI {
+  const page = {
+    count: 1,
+    next: "/api/documents/?fields=id,modified&page_size=1000",
+    previous: null,
+    results: [{ id: 1, modified: "2024-01-01T00:00:00.000Z" }],
+  };
+  const detail = {
+    title: "Documento 1",
+    content: "contenido",
+    created: "2024-01-01T00:00:00.000Z",
+    modified: "2024-01-01T00:00:00.000Z",
+    correspondent: null,
+    document_type: null,
+    tags: [],
+  };
+  return {
+    request: async (path: string) => {
+      // A real HTTP call always yields a macrotask; without this, a
+      // runaway loop of synchronously-resolved promises would starve
+      // node:test's own timeout timer and hang the test for real.
+      await new Promise((resolve) => setImmediate(resolve));
+      if (path.startsWith("/documents/?fields=id,modified&page_size=1000")) {
+        return normal ? { ...page, next: null } : page;
+      }
+      if (path === "/documents/1/") return detail;
+      if (
+        path.startsWith("/correspondents/") ||
+        path.startsWith("/document_types/") ||
+        path.startsWith("/tags/")
+      ) {
+        return { count: 0, next: null, previous: null, results: [] };
+      }
+      throw new Error(`unexpected request ${path}`);
+    },
+  } as unknown as PaperlessAPI;
+}
+
+test(
+  "a next that points back to an earlier page makes run() reject, index unchanged",
+  { timeout: 5000 },
+  async () => {
+    const { pool, store } = await newStore();
+    try {
+      const api = loopingDocumentsApi(false);
+      const { embedder } = fakeEmbedder();
+      const sync = new IndexSync({ api, store, embedder });
+
+      await assert.rejects(() => sync.run(), /same next page two times/);
+      const indexed = await store.indexed();
+      assert.equal(indexed.size, 0);
+    } finally {
+      await pool.end();
+    }
+  }
+);
+
+test(
+  "after a rejected run, a later run() on the same sync starts fresh and succeeds",
+  { timeout: 5000 },
+  async () => {
+    const { pool, store } = await newStore();
+    try {
+      let normal = false;
+      const api = {
+        request: (path: string) => loopingDocumentsApi(normal).request(path),
+      } as unknown as PaperlessAPI;
+      const { embedder } = fakeEmbedder();
+      const sync = new IndexSync({ api, store, embedder });
+
+      await assert.rejects(() => sync.run());
+
+      normal = true;
+      const report = await sync.run();
+      assert.deepEqual(report, {
+        added: 1,
+        updated: 0,
+        deleted: 0,
+        metadataRefreshed: 0,
+        failed: 0,
+      });
+    } finally {
+      await pool.end();
+    }
+  }
+);

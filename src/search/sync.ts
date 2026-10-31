@@ -5,6 +5,7 @@ import { SearchStore, StoredChunk } from "./store";
 
 const METADATA_REFRESH_MS = 24 * 60 * 60 * 1000;
 const DOCUMENT_LIST_PATH = "/documents/?fields=id,modified&page_size=1000";
+const MAX_LIST_PAGES = 10_000;
 
 export interface SyncReport {
   added: number;
@@ -175,10 +176,22 @@ export class IndexSync {
 
   // Reused by the document list: a Paperless list answer may span several
   // pages, and `next` is the only reliable way to find the rest of them.
+  // A repeated or endless `next` must not hang the sync, so this tracks
+  // the pages already seen and gives up after a maximum count.
   private async listAll<T>(path: string): Promise<T[]> {
     const rows: T[] = [];
+    const seen = new Set<string>();
     let next: string | null = path;
     while (next) {
+      if (seen.has(next)) {
+        throw new Error(`Paperless gave the same next page two times: ${next}`);
+      }
+      if (seen.size >= MAX_LIST_PAGES) {
+        throw new Error(
+          `Paperless gave more than ${MAX_LIST_PAGES} pages for ${path}`
+        );
+      }
+      seen.add(next);
       const page = await this.api.request(next);
       rows.push(...(page.results as T[]));
       next = page.next ? pathAfterApi(page.next) : null;

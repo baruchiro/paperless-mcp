@@ -22,7 +22,9 @@ export async function testPool(): Promise<Pool> {
 
   const pool = new Pool({ connectionString: url });
   pool.on("connect", (client) => {
-    client.query(`SET search_path TO "${schema}"`);
+    client
+      .query(`SET search_path TO "${schema}"`)
+      .catch((err) => client.emit("error", err));
   });
   return pool;
 }

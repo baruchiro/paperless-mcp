@@ -17,12 +17,17 @@ export function chunkText(text: string): ChunkResult {
 
   const chunks: string[] = [];
   let start = 0;
+  let reachedEnd = false;
   while (start < normalized.length && chunks.length < MAX_CHUNKS) {
     chunks.push(normalized.slice(start, start + CHUNK_SIZE));
+    if (start + CHUNK_SIZE >= normalized.length) {
+      reachedEnd = true;
+      break;
+    }
     start += CHUNK_SIZE - CHUNK_OVERLAP;
   }
 
-  const truncated = start < normalized.length;
+  const truncated = !reachedEnd && chunks.length >= MAX_CHUNKS;
   return { chunks, truncated };
 }
 

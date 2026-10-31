@@ -21,6 +21,17 @@ test("chunkText cuts a long text into overlapping chunks", () => {
   );
 });
 
+test("chunkText does not emit a chunk that is already inside the previous one", () => {
+  const text = "z".repeat(3700);
+  const result = chunkText(text);
+  assert.equal(result.chunks.length, 2);
+  assert.equal(result.chunks[1].length, 1900);
+  assert.equal(
+    result.chunks[1],
+    text.slice(text.length - result.chunks[1].length)
+  );
+});
+
 test("chunkText stops at 1000 chunks and marks the result truncated", () => {
   const text = "y".repeat(1001 * 1800);
   const result = chunkText(text);

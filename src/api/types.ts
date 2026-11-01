@@ -130,6 +130,25 @@ export interface Correspondent {
 export interface GetCorrespondentsResponse
   extends PaginationResponse<Correspondent> {}
 
+export interface StoragePath {
+  id: number;
+  slug: string;
+  name: string;
+  path: string;
+  match?: string;
+  matching_algorithm?: MatchingAlgorithm;
+  is_insensitive?: boolean;
+  document_count: number;
+  owner?: number | null;
+  user_can_change: boolean;
+}
+
+export interface GetStoragePathsResponse
+  extends Partial<PaginationResponse<StoragePath>> {
+  count: number;
+  results: StoragePath[];
+}
+
 export interface DocumentType {
   id: number;
   slug: string;

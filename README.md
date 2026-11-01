@@ -447,6 +447,19 @@ create_tag({
 })
 ```
 
+### Storage Path Operations
+
+#### list_storage_paths
+List one page of storage paths, including IDs, names, path templates and matching rules. This is a read-only operation; it does not create paths or modify documents.
+
+Optional parameters: `page`, `page_size` (positive integers), `id`, `id__in` (integer array), `full_perms`, `ordering`, and the `icontains`, `iendswith`, `iexact`, `istartswith` filters for `name` and `path` (e.g. `name__icontains`).
+
+Returns the API pagination envelope (`count`, `results`, and available `next`, `previous`, `all` fields). Use `page` to request subsequent pages; matching algorithms retain their numeric API values.
+
+```typescript
+list_storage_paths({ page: 1, page_size: 100, name__icontains: "Invoices" })
+```
+
 ### Correspondent Operations
 
 #### list_correspondents

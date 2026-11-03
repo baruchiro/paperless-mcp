@@ -757,7 +757,8 @@ test("the host of the next URL does not matter, also when it starts with api", a
       },
     } as unknown as PaperlessAPI;
     const sync = new IndexSync({ api, store, embedder: fakeEmbedder().embedder });
-    await sync.run().catch(() => undefined);
+    // The document details are not the point of this test; the sync logs their failure.
+    await captureErrors(() => sync.run());
 
     assert.ok(
       paths.includes("/documents/?fields=id,modified&page_size=1000&ordering=id&page=2"),

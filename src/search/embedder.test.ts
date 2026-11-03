@@ -78,9 +78,27 @@ describe("OllamaEmbedder", () => {
       assert.equal(requests[1].input.length, 4);
       assert.deepEqual(requests[0].input.concat(requests[1].input), texts);
       assert.equal(embeddings.length, 20);
+      const codes = (text: string) =>
+        Array.from(text).map((c) => c.charCodeAt(0));
+      assert.deepEqual(embeddings[0], codes("doc-0"));
+      assert.deepEqual(embeddings[19], codes("doc-19"));
     } finally {
       server.close();
     }
+  });
+
+  test("a connection that Ollama refuses throws EmbeddingUnavailable", async () => {
+    const { server } = fakeOllama();
+    const url = await listen(server);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    const embedder = new OllamaEmbedder({
+      url,
+      model: "qwen3-embedding:0.6b",
+    });
+    await assert.rejects(
+      () => embedder.embedQuery("hipoteca"),
+      EmbeddingUnavailable
+    );
   });
 
   test("a non-200 answer throws EmbeddingUnavailable", async () => {

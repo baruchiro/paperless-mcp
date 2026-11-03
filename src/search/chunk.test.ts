@@ -64,3 +64,17 @@ test("metadataText drops the label when the correspondent is missing", () => {
   );
   assert.ok(!text.includes("Remitente"));
 });
+
+test("chunkText of exactly 1000 chunks is not truncated", () => {
+  const result = chunkText("y".repeat(999 * 1800 + 2000));
+  assert.equal(result.chunks.length, 1000);
+  assert.equal(result.truncated, false);
+});
+
+test("metadataText drops the label when the document type is missing", () => {
+  const text = metadataText(
+    { title: "Nota", created: "2026-02-01" },
+    { correspondent: "Endesa", tags: [] }
+  );
+  assert.ok(!text.includes("Tipo"));
+});

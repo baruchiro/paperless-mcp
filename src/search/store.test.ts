@@ -227,3 +227,64 @@ test("textHits gives one hit for each document, so a long document does not hide
     await pool.end();
   }
 });
+
+test("replaceDocument with a chunk that fails leaves the old chunks of the document", async () => {
+  const { pool, store } = await newStore();
+  try {
+    await store.replaceDocument(document(1, "2024-01-01T00:00:00.000Z"), [
+      { kind: "metadata", text: "vieja", embedding: basisVector(0) },
+      { kind: "content", text: "contenido viejo", embedding: basisVector(0) },
+    ]);
+
+    await assert.rejects(() =>
+      store.replaceDocument(
+        { ...document(1, "2024-02-02T00:00:00.000Z"), title: "Nuevo" },
+        [
+          { kind: "metadata", text: "nueva", embedding: basisVector(1) },
+          // A vector with the wrong number of dimensions fails the insert.
+          { kind: "content", text: "roto", embedding: [1, 2, 3] },
+        ]
+      )
+    );
+
+    const chunks = await pool.query(
+      "SELECT text FROM chunks WHERE document_id = 1 ORDER BY position"
+    );
+    assert.deepEqual(chunks.rows, [
+      { text: "vieja" },
+      { text: "contenido viejo" },
+    ]);
+    const row = await pool.query("SELECT title FROM documents WHERE id = 1");
+    assert.equal(row.rows[0].title, "Documento 1");
+  } finally {
+    await pool.end();
+  }
+});
+
+test("replaceMetadata with a chunk that fails leaves the old chunk and metadata_at", async () => {
+  const { pool, store } = await newStore();
+  try {
+    await store.replaceDocument(document(1, "2024-01-01T00:00:00.000Z"), [
+      { kind: "metadata", text: "vieja", embedding: basisVector(0) },
+    ]);
+
+    await assert.rejects(() =>
+      store.replaceMetadata(
+        1,
+        { kind: "metadata", text: "rota", embedding: [1, 2, 3] },
+        "2024-03-03T00:00:00.000Z"
+      )
+    );
+
+    const chunks = await pool.query(
+      "SELECT text FROM chunks WHERE document_id = 1"
+    );
+    assert.deepEqual(chunks.rows, [{ text: "vieja" }]);
+    assert.equal(
+      (await store.indexed()).get(1)?.metadataAt,
+      "2024-01-01T00:00:00.000Z"
+    );
+  } finally {
+    await pool.end();
+  }
+});

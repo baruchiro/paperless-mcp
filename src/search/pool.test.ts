@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createSearchPool } from "./pool";
 
-test("the pool survives an idle-client error and times out a connect", async () => {
+test("the pool survives an idle-client error and sets a 10 s connect timeout", async () => {
   const pool = createSearchPool("postgres://127.0.0.1:1/none");
   const logged: string[] = [];
   const original = console.error;

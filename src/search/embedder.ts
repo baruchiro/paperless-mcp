@@ -1,3 +1,6 @@
+import { embedErrors } from "../metrics";
+import { tracer } from "../tracing";
+
 const BATCH_SIZE = 16;
 const DOCUMENT_TIMEOUT_MS = 300_000;
 const QUERY_TIMEOUT_MS = 30_000;
@@ -40,6 +43,7 @@ export class OllamaEmbedder {
   }
 
   private async embed(input: string[], timeoutMs: number): Promise<number[][]> {
+    return tracer.startActiveSpan("embed", async (span) => {
     let response: Response;
     try {
       response = await fetch(`${this.url}/api/embed`, {
@@ -66,5 +70,13 @@ export class OllamaEmbedder {
       );
     }
     return body.embeddings;
+    } catch (err) {
+    embedErrors.inc();
+    span.recordException(err as Error);
+    throw err;
+    } finally {
+    span.end();
+    }
+    });
   }
 }

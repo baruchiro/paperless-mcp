@@ -141,6 +141,16 @@ export class SearchStore {
     await this.pool.query("DELETE FROM documents WHERE id = ANY($1)", [ids]);
   }
 
+  async countDocuments(): Promise<number> {
+    const r = await this.pool.query("SELECT count(*) FROM documents");
+    return parseInt(r.rows[0].count, 10);
+  }
+
+  async countChunks(): Promise<number> {
+    const r = await this.pool.query("SELECT count(*) FROM chunks");
+    return parseInt(r.rows[0].count, 10);
+  }
+
   // Both searches give the best chunk of each document. Chunk lists let one
   // long document fill the list, and a document that matches only by meaning
   // would drop out.

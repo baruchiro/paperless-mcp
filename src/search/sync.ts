@@ -2,6 +2,13 @@ import { PaperlessAPI } from "../api/PaperlessAPI";
 import { chunkText, metadataText } from "./chunk";
 import { EmbeddingUnavailable, OllamaEmbedder } from "./embedder";
 import { SearchStore, StoredChunk } from "./store";
+import { tracer } from "../tracing";
+import {
+  chunksIndexed,
+  documentsIndexed,
+  syncDuration,
+  syncRuns,
+} from "../metrics";
 
 const METADATA_REFRESH_MS = 24 * 60 * 60 * 1000;
 // Pages in the order of the id do not move when a document is added during the list. A delete can still move a row, so the sync compares the row count.
@@ -99,6 +106,8 @@ export class IndexSync {
   }
 
   private async doRun(): Promise<SyncReport> {
+    const endTimer = syncDuration.startTimer();
+    return tracer.startActiveSpan("sync", async (span) => {
     const report: SyncReport = {
       added: 0,
       updated: 0,
@@ -191,7 +200,21 @@ export class IndexSync {
       }
     }
 
+    syncRuns.inc({ outcome: "success" });
+    try {
+      documentsIndexed.set(await this.store.countDocuments());
+      chunksIndexed.set(await this.store.countChunks());
+    } catch { /* gauge update is best-effort */ }
     return report;
+    } catch (err) {
+    syncRuns.inc({ outcome: "failure" });
+    span.recordException(err as Error);
+    throw err;
+    } finally {
+    endTimer();
+    span.end();
+    }
+    });
   }
 
   // A Paperless list can have several pages, and `next` gives the next page.

@@ -4,6 +4,8 @@ import { PaperlessAPI } from "../api/PaperlessAPI";
 import { EmbeddingUnavailable, OllamaEmbedder } from "../search/embedder";
 import { fuse } from "../search/rank";
 import { SearchStore } from "../search/store";
+import { searchRequests } from "../metrics";
+import { tracer } from "../tracing";
 import { withErrorHandling } from "./utils/middlewares";
 
 const CANDIDATES_PER_LIST = 50;
@@ -51,63 +53,71 @@ export function registerSearchTools(
     },
     withErrorHandling(async (args) => {
       const { query, limit } = args;
-      let vectorHits: Awaited<ReturnType<SearchStore["vectorHits"]>> = [];
-      let semantic: "ok" | "unavailable" = "ok";
+      return tracer.startActiveSpan("semantic_search", async (span) => {
+        let vectorHits: Awaited<ReturnType<SearchStore["vectorHits"]>> = [];
+        let semantic: "ok" | "unavailable" = "ok";
 
-      try {
-        const embedding = await search.embedder.embedQuery(query);
-        vectorHits = await search.store.vectorHits(
-          embedding,
+        try {
+          const embedding = await search.embedder.embedQuery(query);
+          vectorHits = await search.store.vectorHits(
+            embedding,
+            CANDIDATES_PER_LIST
+          );
+        } catch (err) {
+          if (!(err instanceof EmbeddingUnavailable)) throw err;
+          semantic = "unavailable";
+        }
+
+        const textHits = await search.store.textHits(
+          query,
           CANDIDATES_PER_LIST
         );
-      } catch (err) {
-        if (!(err instanceof EmbeddingUnavailable)) throw err;
-        semantic = "unavailable";
-      }
+        const fused = fuse(vectorHits, textHits);
 
-      const textHits = await search.store.textHits(query, CANDIDATES_PER_LIST);
-      const fused = fuse(vectorHits, textHits);
+        if (fused.length === 0) {
+          searchRequests.inc({ semantic });
+          return jsonResult({ results: [], strong_match: false, semantic });
+        }
 
-      if (fused.length === 0) {
-        return jsonResult({ results: [], strong_match: false, semantic });
-      }
+        const ids = fused.map((f) => f.documentId);
+        const page = await api.request(
+          `/documents/?id__in=${ids.join(
+            ","
+          )}&fields=${DOCUMENT_FIELDS}&page_size=${ids.length}`
+        );
+        const byId = new Map<number, CallerDocument>(
+          (page.results as CallerDocument[]).map((doc) => [doc.id, doc])
+        );
 
-      const ids = fused.map((f) => f.documentId);
-      const page = await api.request(
-        `/documents/?id__in=${ids.join(
-          ","
-        )}&fields=${DOCUMENT_FIELDS}&page_size=${ids.length}`
-      );
-      const byId = new Map<number, CallerDocument>(
-        (page.results as CallerDocument[]).map((doc) => [doc.id, doc])
-      );
+        const results = fused
+          .filter((f) => byId.has(f.documentId))
+          .slice(0, limit)
+          .map((f) => {
+            const doc = byId.get(f.documentId)!;
+            return {
+              id: doc.id,
+              title: doc.title,
+              created: doc.created,
+              correspondent: doc.correspondent,
+              document_type: doc.document_type,
+              tags: doc.tags,
+              passage: f.passage.slice(0, PASSAGE_MAX_LENGTH),
+              matched: f.matched,
+              link: `${search.publicUrl}/documents/${doc.id}/details`,
+            };
+          });
 
-      const results = fused
-        .filter((f) => byId.has(f.documentId))
-        .slice(0, limit)
-        .map((f) => {
-          const doc = byId.get(f.documentId)!;
-          return {
-            id: doc.id,
-            title: doc.title,
-            created: doc.created,
-            correspondent: doc.correspondent,
-            document_type: doc.document_type,
-            tags: doc.tags,
-            passage: f.passage.slice(0, PASSAGE_MAX_LENGTH),
-            matched: f.matched,
-            link: `${search.publicUrl}/documents/${doc.id}/details`,
-          };
-        });
+        const top = fused.find((f) => byId.has(f.documentId));
+        const strongMatch = top
+          ? (top.bestSimilarity !== null &&
+              top.bestSimilarity >= STRONG_MATCH) ||
+            top.matched === "words" ||
+            top.matched === "both"
+          : false;
 
-      const top = fused.find((f) => byId.has(f.documentId));
-      const strongMatch = top
-        ? (top.bestSimilarity !== null && top.bestSimilarity >= STRONG_MATCH) ||
-          top.matched === "words" ||
-          top.matched === "both"
-        : false;
-
-      return jsonResult({ results, strong_match: strongMatch, semantic });
+        searchRequests.inc({ semantic });
+        return jsonResult({ results, strong_match: strongMatch, semantic });
+      });
     })
   );
 }

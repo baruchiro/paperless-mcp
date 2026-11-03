@@ -4,7 +4,6 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 import { parseArgs } from "node:util";
-import { Pool } from "pg";
 import { PaperlessAPI } from "./api/PaperlessAPI";
 import {
   createMcpServer,
@@ -14,6 +13,7 @@ import {
 import { Downloads } from "./downloads";
 import { searchConfig } from "./search/config";
 import { OllamaEmbedder } from "./search/embedder";
+import { createSearchPool } from "./search/pool";
 import { SearchStore } from "./search/store";
 import { IndexSync } from "./search/sync";
 import type { SearchDependencies } from "./tools/search";
@@ -93,7 +93,7 @@ try {
 }
 
 async function startSearch(settings: NonNullable<typeof searchSettings>) {
-  const store = new SearchStore(new Pool({ connectionString: settings.databaseUrl }));
+  const store = new SearchStore(createSearchPool(settings.databaseUrl));
   const embedder = new OllamaEmbedder({ url: settings.ollamaUrl, model: settings.model });
   await store.migrate();
   new IndexSync({

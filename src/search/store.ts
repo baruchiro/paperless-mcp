@@ -22,9 +22,9 @@ export interface Hit {
 }
 
 const VECTOR_DIMENSIONS = 1024;
+// A document has at most 1000 chunks. This many nearest chunks keep other documents in the list.
+const CANDIDATE_CHUNKS = 1000;
 
-// The extensions live in schema public; qualify them so the hidden test
-// search_path (set to one schema only) still resolves them.
 function toVectorLiteral(embedding: number[]): string {
   return `[${embedding.join(",")}]`;
 }
@@ -32,6 +32,7 @@ function toVectorLiteral(embedding: number[]): string {
 export class SearchStore {
   constructor(private readonly pool: Pool) {}
 
+  // The extensions are in the schema public. Qualify their names, because the test search_path has one schema only and hides them.
   async migrate(): Promise<void> {
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS documents (
@@ -140,25 +141,52 @@ export class SearchStore {
     await this.pool.query("DELETE FROM documents WHERE id = ANY($1)", [ids]);
   }
 
+  // Both searches give the best chunk of each document. Chunk lists let one
+  // long document fill the list, and a document that matches only by meaning
+  // would drop out.
   async vectorHits(embedding: number[], limit: number): Promise<Hit[]> {
-    const literal = toVectorLiteral(embedding);
-    const result = await this.pool.query(
-      `SELECT document_id, position, text,
-              1 - (embedding::public.halfvec(${VECTOR_DIMENSIONS}) OPERATOR(public.<=>) $1::public.halfvec(${VECTOR_DIMENSIONS})) AS score
-       FROM chunks
-       ORDER BY embedding::public.halfvec(${VECTOR_DIMENSIONS}) OPERATOR(public.<=>) $1::public.halfvec(${VECTOR_DIMENSIONS})
-       LIMIT $2`,
-      [literal, limit]
-    );
-    return result.rows.map(toHit);
+    const distance = `embedding::public.halfvec(${VECTOR_DIMENSIONS}) OPERATOR(public.<=>) $1::public.halfvec(${VECTOR_DIMENSIONS})`;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // The index scan gives 40 rows by default. The iterative scan goes on until it has all the candidates.
+      await client.query("SET LOCAL hnsw.iterative_scan = relaxed_order");
+      const result = await client.query(
+        `WITH nearest AS MATERIALIZED (
+           SELECT document_id, position, text, ${distance} AS distance
+           FROM chunks
+           ORDER BY ${distance}
+           LIMIT ${CANDIDATE_CHUNKS}
+         ), best AS (
+           SELECT DISTINCT ON (document_id) document_id, position, text, distance
+           FROM nearest
+           ORDER BY document_id, distance
+         )
+         SELECT document_id, position, text, 1 - distance AS score
+         FROM best
+         ORDER BY distance
+         LIMIT $2`,
+        [toVectorLiteral(embedding), limit]
+      );
+      await client.query("COMMIT");
+      return result.rows.map(toHit);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async textHits(query: string, limit: number): Promise<Hit[]> {
     const result = await this.pool.query(
-      `SELECT document_id, position, text,
-              ts_rank_cd(tsv, websearch_to_tsquery('simple', public.unaccent($1))) AS score
-       FROM chunks
-       WHERE tsv @@ websearch_to_tsquery('simple', public.unaccent($1))
+      `SELECT document_id, position, text, score FROM (
+         SELECT DISTINCT ON (document_id) document_id, position, text,
+                ts_rank_cd(tsv, websearch_to_tsquery('simple', public.unaccent($1))) AS score
+         FROM chunks
+         WHERE tsv @@ websearch_to_tsquery('simple', public.unaccent($1))
+         ORDER BY document_id, score DESC
+       ) AS best
        ORDER BY score DESC
        LIMIT $2`,
       [query, limit]

@@ -178,3 +178,52 @@ test("replaceMetadata replaces the position-0 chunk and the document's metadata_
     await pool.end();
   }
 });
+
+function nearVector(): number[] {
+  const vector = basisVector(0);
+  vector[1] = 0.5;
+  return vector;
+}
+
+test("vectorHits gives one hit for each document, so a long document does not hide another one", async () => {
+  const { pool, store } = await newStore();
+  try {
+    const long: StoredChunk[] = Array.from({ length: 60 }, (_, i) => ({
+      kind: "content",
+      text: `largo ${i}`,
+      embedding: basisVector(0),
+    }));
+    await store.replaceDocument(document(1, "2024-01-01T00:00:00.000Z"), long);
+    await store.replaceDocument(document(2, "2024-01-01T00:00:00.000Z"), [
+      { kind: "content", text: "corto", embedding: nearVector() },
+    ]);
+
+    const hits = await store.vectorHits(basisVector(0), 50);
+
+    assert.deepEqual(hits.map((hit) => hit.documentId).sort(), [1, 2]);
+    assert.equal(hits[0].documentId, 1);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("textHits gives one hit for each document, so a long document does not hide another one", async () => {
+  const { pool, store } = await newStore();
+  try {
+    const long: StoredChunk[] = Array.from({ length: 60 }, (_, i) => ({
+      kind: "content",
+      text: `hipoteca hipoteca hipoteca ${i}`,
+      embedding: basisVector(0),
+    }));
+    await store.replaceDocument(document(1, "2024-01-01T00:00:00.000Z"), long);
+    await store.replaceDocument(document(2, "2024-01-01T00:00:00.000Z"), [
+      { kind: "content", text: "una hipoteca", embedding: basisVector(1) },
+    ]);
+
+    const hits = await store.textHits("hipoteca", 50);
+
+    assert.deepEqual(hits.map((hit) => hit.documentId).sort(), [1, 2]);
+  } finally {
+    await pool.end();
+  }
+});

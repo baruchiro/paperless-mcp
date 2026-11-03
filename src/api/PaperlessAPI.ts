@@ -52,6 +52,7 @@ export class PaperlessAPI {
         method: options.method || "GET",
         headers: mergedHeaders,
         data: options.body,
+        signal: options.signal ?? undefined,
       });
 
       const body = response.data;

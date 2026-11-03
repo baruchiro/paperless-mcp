@@ -38,7 +38,9 @@ function paginated<T>(
   const join = basePath.includes("?") ? "&" : "?";
   return {
     count: items.length,
-    next: hasNext ? `/api${basePath}${join}page=${page + 1}` : null,
+    next: hasNext
+      ? `http://paperless.test/api${basePath}${join}page=${page + 1}`
+      : null,
     previous: null,
     results: slice,
   };
@@ -51,6 +53,10 @@ function fakePaperless(opts: {
   tags?: { id: number; name: string }[];
   pageSize?: number;
   tagPageSize?: number;
+  /** The count that the first page of the document list claims. */
+  count?: number;
+  /** Documents whose detail request fails. */
+  failDetail?: number[];
 }) {
   const {
     documents,
@@ -62,20 +68,23 @@ function fakePaperless(opts: {
   } = opts;
   const detail = new Map(documents.map((d) => [d.id, d]));
   let listCalls = 0;
+  const listPaths: string[] = [];
 
   const request = async (path: string) => {
     if (path.startsWith("/documents/?fields=id,modified&page_size=1000")) {
       listCalls++;
+      listPaths.push(path);
       const url = new URL(path, "http://x");
       const page = Number(url.searchParams.get("page") ?? "1");
       const result = paginated(
         documents,
-        "/documents/?fields=id,modified&page_size=1000",
+        "/documents/?fields=id,modified&page_size=1000&ordering=id",
         pageSize,
         page
       );
       return {
         ...result,
+        count: opts.count ?? result.count,
         results: result.results.map((d) => ({
           id: d.id,
           modified: d.modified,
@@ -108,6 +117,9 @@ function fakePaperless(opts: {
     }
     const match = path.match(/^\/documents\/(\d+)\/$/);
     if (match) {
+      if (opts.failDetail?.includes(Number(match[1]))) {
+        throw new Error(`detail of ${match[1]} failed`);
+      }
       const doc = detail.get(Number(match[1]));
       if (!doc) throw new Error(`document ${match[1]} not found`);
       return doc;
@@ -118,6 +130,7 @@ function fakePaperless(opts: {
   return {
     api: { request } as unknown as PaperlessAPI,
     listCalls: () => listCalls,
+    listPaths,
   };
 }
 
@@ -452,7 +465,7 @@ test("a tag on page 2 of /tags/ still appears in the metadata chunk", async () =
 function loopingDocumentsApi(normal: boolean): PaperlessAPI {
   const page = {
     count: 1,
-    next: "/api/documents/?fields=id,modified&page_size=1000",
+    next: "http://paperless.test/api/documents/?fields=id,modified&page_size=1000&ordering=id",
     previous: null,
     results: [{ id: 1, modified: "2024-01-01T00:00:00.000Z" }],
   };
@@ -535,3 +548,222 @@ test(
     }
   }
 );
+
+async function captureErrors<T>(run: () => Promise<T>) {
+  const logged: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => logged.push(args.join(" "));
+  try {
+    return { value: await run(), logged };
+  } finally {
+    console.error = original;
+  }
+}
+
+test("the document list is ordered by id, so a page does not move during the run", async () => {
+  const { pool, store } = await newStore();
+  try {
+    const { api, listPaths } = fakePaperless({ documents: [doc({ id: 1 })] });
+    const { embedder } = fakeEmbedder();
+    await new IndexSync({ api, store, embedder }).run();
+    assert.match(listPaths[0], /[?&]ordering=id(&|$)/);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("a list with fewer rows than its count deletes nothing and logs it", async () => {
+  const { pool, store } = await newStore();
+  try {
+    const first = fakePaperless({
+      documents: [doc({ id: 1 }), doc({ id: 2 })],
+    });
+    const { embedder } = fakeEmbedder();
+    await new IndexSync({ api: first.api, store, embedder }).run();
+
+    // Paperless says 2 documents, but the pages gave only document 1.
+    const moved = fakePaperless({ documents: [doc({ id: 1 })], count: 2 });
+    const { value: report, logged } = await captureErrors(() =>
+      new IndexSync({ api: moved.api, store, embedder }).run()
+    );
+
+    assert.equal(report.deleted, 0);
+    assert.ok((await store.indexed()).has(2));
+    assert.equal(logged.length, 1);
+    assert.match(logged[0], /index: .*delete/);
+  } finally {
+    await pool.end();
+  }
+});
+
+test(
+  "a Paperless request that never answers makes run() reject, and the next run() asks again",
+  { timeout: 5000 },
+  async () => {
+  const { pool, store } = await newStore();
+  try {
+    let calls = 0;
+    const api = {
+      request: (_path: string, options?: RequestInit) => {
+        calls++;
+        return new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () =>
+            reject(new Error("canceled"))
+          );
+        });
+      },
+    } as unknown as PaperlessAPI;
+    const { embedder } = fakeEmbedder();
+    const sync = new IndexSync({ api, store, embedder, requestTimeoutMs: 20 });
+
+    await assert.rejects(() => sync.run(), /canceled/);
+    await assert.rejects(() => sync.run(), /canceled/);
+    assert.equal(calls, 2);
+  } finally {
+    await pool.end();
+  }
+  }
+);
+
+test("start() runs one time at once, logs a failed run and stops with stop()", async () => {
+  let calls = 0;
+  const api = {
+    request: async () => {
+      calls++;
+      throw new Error("Paperless is down");
+    },
+  } as unknown as PaperlessAPI;
+  const { embedder } = fakeEmbedder();
+  const sync = new IndexSync({
+    api,
+    store: {} as unknown as SearchStore,
+    embedder,
+  });
+
+  const { logged } = await captureErrors(async () => {
+    sync.start(60_000);
+    for (let i = 0; i < 10; i++) await new Promise(setImmediate);
+    sync.stop();
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(logged.length, 1);
+  assert.match(logged[0], /^\[paperless-mcp\] index: run failed: .*Paperless is down/);
+});
+
+test("a metadata refresh that fails for one document counts as failed and goes on", async () => {
+  const { pool, store } = await newStore();
+  try {
+    let now = Date.parse("2024-01-01T00:00:00.000Z");
+    const documents = [doc({ id: 1 }), doc({ id: 2 })];
+    const { embedder } = fakeEmbedder();
+    await new IndexSync({
+      api: fakePaperless({ documents }).api,
+      store,
+      embedder,
+      now: () => now,
+    }).run();
+
+    now += 25 * 60 * 60 * 1000;
+    const broken = fakePaperless({ documents, failDetail: [1] });
+    const { value: report, logged } = await captureErrors(() =>
+      new IndexSync({ api: broken.api, store, embedder, now: () => now }).run()
+    );
+
+    assert.deepEqual(report, {
+      added: 0,
+      updated: 0,
+      deleted: 0,
+      metadataRefreshed: 1,
+      failed: 1,
+    });
+    assert.equal(logged.length, 1);
+    assert.match(logged[0], /document 1 failed/);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("EmbeddingUnavailable in a metadata refresh stops the run", async () => {
+  const { pool, store } = await newStore();
+  try {
+    let now = Date.parse("2024-01-01T00:00:00.000Z");
+    let ollamaDown = false;
+    const documents = [doc({ id: 1 })];
+    const { api } = fakePaperless({ documents });
+    const { embedder } = fakeEmbedder({
+      failFor: () => ollamaDown,
+      failWith: () => new EmbeddingUnavailable("Ollama is down"),
+    });
+    await new IndexSync({ api, store, embedder, now: () => now }).run();
+
+    now += 25 * 60 * 60 * 1000;
+    ollamaDown = true;
+    const sync = new IndexSync({ api, store, embedder, now: () => now });
+    const { value } = await captureErrors(() =>
+      sync.run().then(
+        () => undefined,
+        (err) => err
+      )
+    );
+
+    assert.ok(value instanceof EmbeddingUnavailable);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("a next that never ends makes run() reject after the page limit", async () => {
+  const { pool, store } = await newStore();
+  try {
+    const api = {
+      request: async (path: string) => {
+        const page = Number(new URL(path, "http://x").searchParams.get("page") ?? "1");
+        return {
+          count: 1,
+          next: `http://paperless.test/api/documents/?fields=id,modified&page_size=1000&ordering=id&page=${page + 1}`,
+          previous: null,
+          results: [{ id: page, modified: "2024-01-01T00:00:00.000Z" }],
+        };
+      },
+    } as unknown as PaperlessAPI;
+    const { embedder } = fakeEmbedder();
+    const sync = new IndexSync({ api, store, embedder, maxListPages: 3 });
+
+    await assert.rejects(() => sync.run(), /more than 3 pages/);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("the host of the next URL does not matter, also when it starts with api", async () => {
+  const { pool, store } = await newStore();
+  try {
+    const paths: string[] = [];
+    const api = {
+      request: async (path: string) => {
+        paths.push(path);
+        if (path.startsWith("/documents/?")) {
+          return path.includes("page=2")
+            ? { count: 2, next: null, previous: null, results: [{ id: 2, modified: "2024-01-01T00:00:00.000Z" }] }
+            : {
+                count: 2,
+                next: "https://api.paperless.test/api/documents/?fields=id,modified&page_size=1000&ordering=id&page=2",
+                previous: null,
+                results: [{ id: 1, modified: "2024-01-01T00:00:00.000Z" }],
+              };
+        }
+        return { count: 0, next: null, previous: null, results: [] };
+      },
+    } as unknown as PaperlessAPI;
+    const sync = new IndexSync({ api, store, embedder: fakeEmbedder().embedder });
+    await sync.run().catch(() => undefined);
+
+    assert.ok(
+      paths.includes("/documents/?fields=id,modified&page_size=1000&ordering=id&page=2"),
+      paths.join("\n")
+    );
+  } finally {
+    await pool.end();
+  }
+});

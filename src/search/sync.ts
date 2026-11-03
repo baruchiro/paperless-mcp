@@ -4,8 +4,12 @@ import { EmbeddingUnavailable, OllamaEmbedder } from "./embedder";
 import { SearchStore, StoredChunk } from "./store";
 
 const METADATA_REFRESH_MS = 24 * 60 * 60 * 1000;
-const DOCUMENT_LIST_PATH = "/documents/?fields=id,modified&page_size=1000";
+// Pages in the order of the id do not move when a document is added or deleted during the list.
+const DOCUMENT_LIST_PATH =
+  "/documents/?fields=id,modified&page_size=1000&ordering=id";
 const MAX_LIST_PAGES = 10_000;
+// Without a limit, a Paperless that never answers would keep the run pending for ever.
+const REQUEST_TIMEOUT_MS = 60_000;
 
 export interface SyncReport {
   added: number;
@@ -31,10 +35,10 @@ interface DocumentDetail {
   tags: number[];
 }
 
-// The Paperless list answer gives `next` as a full URL; the API only takes the part after /api.
+// The Paperless list answer gives `next` as a full URL; the API only takes the part after the /api segment.
 function pathAfterApi(url: string): string {
-  const index = url.indexOf("/api");
-  return url.slice(index + "/api".length);
+  const { pathname, search } = new URL(url);
+  return pathname.slice(pathname.indexOf("/api/") + "/api".length) + search;
 }
 
 function toNameMap(rows: { id: number; name: string }[]): Map<number, string> {
@@ -50,6 +54,8 @@ export class IndexSync {
   private readonly store: SearchStore;
   private readonly embedder: OllamaEmbedder;
   private readonly now: () => number;
+  private readonly requestTimeoutMs: number;
+  private readonly maxListPages: number;
   private timer?: ReturnType<typeof setInterval>;
   private running?: Promise<SyncReport>;
 
@@ -58,11 +64,15 @@ export class IndexSync {
     store: SearchStore;
     embedder: OllamaEmbedder;
     now?: () => number;
+    requestTimeoutMs?: number;
+    maxListPages?: number;
   }) {
     this.api = opts.api;
     this.store = opts.store;
     this.embedder = opts.embedder;
     this.now = opts.now ?? Date.now;
+    this.requestTimeoutMs = opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
+    this.maxListPages = opts.maxListPages ?? MAX_LIST_PAGES;
   }
 
   run(): Promise<SyncReport> {
@@ -98,7 +108,7 @@ export class IndexSync {
     };
 
     const remote = new Map<number, string>();
-    const rows = await this.listAll<{ id: number; modified: string }>(
+    const { rows, count } = await this.listAll<{ id: number; modified: string }>(
       DOCUMENT_LIST_PATH
     );
     for (const row of rows) {
@@ -107,7 +117,16 @@ export class IndexSync {
 
     const indexed = await this.store.indexed();
 
-    const toDelete = [...indexed.keys()].filter((id) => !remote.has(id));
+    // A list with fewer rows than its count lost a row to a change during the run. Delete nothing, because a missing row would remove a document from the index.
+    const listComplete = rows.length === count;
+    if (!listComplete) {
+      console.error(
+        `[paperless-mcp] index: the list has ${rows.length} documents, but Paperless counts ${count}; skipping the delete step`
+      );
+    }
+    const toDelete = listComplete
+      ? [...indexed.keys()].filter((id) => !remote.has(id))
+      : [];
     if (toDelete.length > 0) {
       await this.store.deleteDocuments(toDelete);
       report.deleted = toDelete.length;
@@ -174,29 +193,38 @@ export class IndexSync {
     return report;
   }
 
-  // Reused by the document list: a Paperless list answer may span several
-  // pages, and `next` is the only reliable way to find the rest of them.
-  // A repeated or endless `next` must not hang the sync, so this tracks
-  // the pages already seen and gives up after a maximum count.
-  private async listAll<T>(path: string): Promise<T[]> {
+  // A Paperless list can have several pages, and `next` gives the next page.
+  // Track the pages that you already got, and stop with an error after
+  // `MAX_LIST_PAGES` pages, because a repeated or endless `next` would stop the sync.
+  private async listAll<T>(
+    path: string
+  ): Promise<{ rows: T[]; count: number }> {
     const rows: T[] = [];
     const seen = new Set<string>();
+    let count = 0;
     let next: string | null = path;
     while (next) {
       if (seen.has(next)) {
         throw new Error(`Paperless gave the same next page two times: ${next}`);
       }
-      if (seen.size >= MAX_LIST_PAGES) {
+      if (seen.size >= this.maxListPages) {
         throw new Error(
-          `Paperless gave more than ${MAX_LIST_PAGES} pages for ${path}`
+          `Paperless gave more than ${this.maxListPages} pages for ${path}`
         );
       }
       seen.add(next);
-      const page = await this.api.request(next);
+      const page = await this.get(next);
+      if (seen.size === 1) count = page.count;
       rows.push(...(page.results as T[]));
       next = page.next ? pathAfterApi(page.next) : null;
     }
-    return rows;
+    return { rows, count };
+  }
+
+  private get(path: string) {
+    return this.api.request(path, {
+      signal: AbortSignal.timeout(this.requestTimeoutMs),
+    });
   }
 
   private async loadNames(): Promise<NameMaps> {
@@ -210,9 +238,9 @@ export class IndexSync {
       this.listAll<{ id: number; name: string }>("/tags/?page_size=1000"),
     ]);
     return {
-      correspondents: toNameMap(correspondents),
-      documentTypes: toNameMap(documentTypes),
-      tags: toNameMap(tags),
+      correspondents: toNameMap(correspondents.rows),
+      documentTypes: toNameMap(documentTypes.rows),
+      tags: toNameMap(tags.rows),
     };
   }
 
@@ -235,7 +263,7 @@ export class IndexSync {
   }
 
   private async syncDocument(id: number, names: NameMaps): Promise<void> {
-    const doc: DocumentDetail = await this.api.request(`/documents/${id}/`);
+    const doc: DocumentDetail = await this.get(`/documents/${id}/`);
     const metaText = this.metadataTextFor(doc, names);
     const { chunks, truncated } = chunkText(doc.content ?? "");
     const texts = [metaText, ...chunks];
@@ -260,7 +288,7 @@ export class IndexSync {
   }
 
   private async refreshMetadata(id: number, names: NameMaps): Promise<void> {
-    const doc: DocumentDetail = await this.api.request(`/documents/${id}/`);
+    const doc: DocumentDetail = await this.get(`/documents/${id}/`);
     const metaText = this.metadataTextFor(doc, names);
     const [embedding] = await this.embedder.embedDocuments([metaText]);
     await this.store.replaceMetadata(

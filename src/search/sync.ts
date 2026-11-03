@@ -121,7 +121,7 @@ export class IndexSync {
     const listComplete = rows.length === count;
     if (!listComplete) {
       console.error(
-        `[paperless-mcp] index: the list has ${rows.length} documents, but Paperless counts ${count}; skipping the delete step`
+        `[paperless-mcp] index: the list has ${rows.length} documents, but Paperless counts ${count}; the delete step is skipped`
       );
     }
     const toDelete = listComplete

@@ -364,8 +364,9 @@ function metadataFields(metadata: UploadMetadata, tagId: number) {
 }
 
 // The name goes unescaped into the multipart request to Paperless: a quote or
-// a line break there would change the headers of the part.
-function fileName(name: string) {
+// a line break there would change the headers of the part. Downloads reuses
+// this to clean the file name Paperless sends back (src/downloads.ts).
+export function fileName(name: string) {
   const base = name.split(/[\\/]/).pop() || "upload";
   return base.replace(/[\x00-\x1f\x7f"]/g, "_").slice(-200);
 }

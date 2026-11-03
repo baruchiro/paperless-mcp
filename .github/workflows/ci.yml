@@ -9,6 +9,18 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v5
         with:
@@ -19,5 +31,11 @@ jobs:
           node-version-file: ".node-version"
       - name: Install dependencies
         run: npm ci
+      - name: Add pgvector and unaccent to the test database
+        run: psql "postgres://postgres:test@localhost:5432/postgres" -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS unaccent;"
+        env:
+          PGPASSWORD: test
       - name: Run tests
         run: npm test
+        env:
+          TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/postgres

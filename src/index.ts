@@ -10,6 +10,13 @@ import {
   getBearerToken,
   sendUnauthorized,
 } from "./server";
+import { Downloads } from "./downloads";
+import { searchConfig } from "./search/config";
+import { OllamaEmbedder } from "./search/embedder";
+import { createSearchPool } from "./search/pool";
+import { SearchStore } from "./search/store";
+import { IndexSync } from "./search/sync";
+import type { SearchDependencies } from "./tools/search";
 import { Uploads, uploadConfig } from "./uploads";
 const { version } = require("../package.json") as { version: string };
 
@@ -63,6 +70,9 @@ if (noAuth && !resolvedToken) {
 }
 
 let uploads: Uploads | undefined;
+let downloads: Downloads | undefined;
+let search: SearchDependencies | undefined;
+let searchSettings: ReturnType<typeof searchConfig>;
 try {
   const upload = uploadConfig(process.env, useHttp!);
   if (upload) {
@@ -70,10 +80,29 @@ try {
       api: new PaperlessAPI(resolvedBaseUrl, upload.token),
       publicUrl: upload.publicUrl,
     });
+    // Download links share the public URL of the upload links.
+    downloads = new Downloads({
+      paperlessUrl: resolvedBaseUrl,
+      publicUrl: upload.publicUrl,
+    });
   }
+  searchSettings = searchConfig(process.env, useHttp!);
 } catch (error) {
   console.error((error as Error).message);
   process.exit(1);
+}
+
+async function startSearch(settings: NonNullable<typeof searchSettings>) {
+  const store = new SearchStore(createSearchPool(settings.databaseUrl));
+  const embedder = new OllamaEmbedder({ url: settings.ollamaUrl, model: settings.model });
+  await store.migrate();
+  new IndexSync({
+    api: new PaperlessAPI(resolvedBaseUrl!, settings.syncToken),
+    store,
+    embedder,
+  }).start();
+  search = { store, embedder, publicUrl: resolvedPublicUrl! };
+  console.log("[paperless-mcp] Semantic search is enabled.");
 }
 
 function buildServer(requestToken: string) {
@@ -83,10 +112,19 @@ function buildServer(requestToken: string) {
     version,
     publicUrl: resolvedPublicUrl!,
     uploads,
+    search,
+    downloads,
   });
 }
 
 async function main() {
+  // A server without its index would answer wrong, so a failed start stops it.
+  if (searchSettings) {
+    await startSearch(searchSettings).catch((error) => {
+      console.error(`[paperless-mcp] Semantic search failed to start: ${error.message}`);
+      process.exit(1);
+    });
+  }
   if (useHttp) {
     if (noAuth) {
       console.log(
@@ -107,6 +145,10 @@ async function main() {
     if (uploads) {
       app.use(uploads.router());
       console.log("[paperless-mcp] Upload links are enabled at /upload/.");
+    }
+    if (downloads) {
+      app.use(downloads.router());
+      console.log("[paperless-mcp] Download links are enabled at /download/.");
     }
     app.use(express.json());
 

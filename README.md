@@ -69,7 +69,11 @@ Add these to your MCP config file:
 | `PAPERLESS_API_VERSION` | No | `9` | Paperless-ngx REST API version. `9` works on Paperless-ngx v2.x (recent) and v3.x. Paperless-ngx v3.0.0 dropped support for versions below `9`, so older defaults now return HTTP 406. If you see HTTP 406 errors, set this to a version your server supports. |
 | `PAPERLESS_MCP_UPLOAD_PATHS` | No | — | Colon-separated list of allowed directories for `file_path` uploads. **Recommended for security.** Example: `/var/uploads:/tmp/scans` |
 | `PAPERLESS_UPLOAD_API_KEY` | No | — | HTTP mode only. The token of a Paperless user for upload links (see `request_upload`). Give this user only these permissions: add documents, and view tags, correspondents, document types and tasks. Set it with `PAPERLESS_UPLOAD_PUBLIC_URL`. |
-| `PAPERLESS_UPLOAD_PUBLIC_URL` | No | — | HTTP mode only. The public base URL of the route `/upload/<token>`, for example `https://paperless-upload.example.com`. Set it with `PAPERLESS_UPLOAD_API_KEY`. |
+| `PAPERLESS_UPLOAD_PUBLIC_URL` | No | — | HTTP mode only. The public base URL of the route `/upload/<token>`, also used for `/download/<token>`, for example `https://paperless-upload.example.com`. Set it with `PAPERLESS_UPLOAD_API_KEY`. It also turns on `request_download`. |
+| `DATABASE_URL` | No | — | HTTP mode only. The Postgres database of the search index. It needs the extensions `vector` and `unaccent` in the schema `public`. Set it with the three variables that follow, or set none of the four. |
+| `OLLAMA_URL` | No | — | HTTP mode only. The base URL of the Ollama server that makes the embeddings, for example `http://ollama:11434`. |
+| `EMBEDDING_MODEL` | No | — | HTTP mode only. The Ollama model for the embeddings, for example `qwen3-embedding:0.6b`. The index has 1024 dimensions. |
+| `PAPERLESS_SYNC_API_KEY` | No | — | HTTP mode only. The token of a Paperless user that can view all documents. The index sync uses it. |
 
 That's it! Now you can ask Claude to help you manage your Paperless-NGX documents.
 
@@ -374,7 +378,7 @@ post_document({
 #### request_upload / check_upload
 Upload a file without base64 in the conversation. These tools exist only in HTTP mode, when you set `PAPERLESS_UPLOAD_API_KEY` and `PAPERLESS_UPLOAD_PUBLIC_URL`.
 
-`request_upload` makes a single-use link `<PAPERLESS_UPLOAD_PUBLIC_URL>/upload/<token>` and keeps the given title, tags, correspondent and document type. The link expires after 15 minutes. The first try uses the link, also when the try fails.
+`request_upload` makes a single-use link `<PAPERLESS_UPLOAD_PUBLIC_URL>/upload/<token>` and keeps the given title, tags, correspondent and document type. The link expires after 15 minutes. The link works once, also when the upload fails.
 
 - A person opens the link (`GET` gives a form) and selects the file.
 - An agent with a shell runs `curl -F file=@<path> <link>`.
@@ -384,6 +388,20 @@ The server accepts one PDF, PNG, JPEG, TIFF, GIF, WebP or HEIF file of at most 5
 `check_upload(upload_id)` gives `pending`, `receiving`, `expired`, `failed`, `submitted`, `unknown` or the status of the Paperless task. After `SUCCESS`, it also gives `document_id`.
 
 Both tools first examine the token of the caller: it must be able to view tags. The link is the only check on the upload route, so make only the path `/upload/` public. The links are in memory: run one replica.
+
+#### semantic_search
+Search the documents by meaning and by words together. This tool exists only in HTTP mode, when you set `DATABASE_URL`, `OLLAMA_URL`, `EMBEDDING_MODEL` and `PAPERLESS_SYNC_API_KEY`.
+
+The server starts a sync of the index at start and then every 10 minutes. It makes the metadata chunks again once a day. The tool gives the strongest matches first. The field `strong_match` tells if the best match is strong. If Ollama does not answer, the tool uses word matches only and says so. The tool shows only documents that the token of the caller can view.
+
+```typescript
+semantic_search({ query: "car insurance renewal", limit: 10 })
+```
+
+#### request_download
+Make a single-use link to download the file of one document. This tool exists only in HTTP mode, when you set `PAPERLESS_UPLOAD_API_KEY` and `PAPERLESS_UPLOAD_PUBLIC_URL`.
+
+`request_download(document_id, original?)` gives a link `<PAPERLESS_UPLOAD_PUBLIC_URL>/download/<token>`. The link expires after 15 minutes. The link works once, also when the download fails. The server gets the file with the token of the caller, so the tool refuses a document that the caller cannot view. Make only the path `/download/` public. The links are in memory: run one replica.
 
 ### Document Notes
 
@@ -745,7 +763,7 @@ The server will show clear error messages if:
 
 ### Unit tests
 
-Run the unit test suite (no external dependencies required):
+The search tests need a Postgres database with the extensions `vector` and `unaccent`. Set `TEST_DATABASE_URL` to its URL, then run the tests:
 
 ```bash
 npm test

@@ -44,9 +44,16 @@ function hit(
   return { documentId, position: 0, text, score };
 }
 
-function fakeStore(opts: { vector?: Hit[]; text?: Hit[] }): SearchStore {
+function fakeStore(opts: {
+  vector?: Hit[];
+  text?: Hit[];
+  vectorError?: Error;
+}): SearchStore {
   return {
-    vectorHits: async () => opts.vector ?? [],
+    vectorHits: async () => {
+      if (opts.vectorError) throw opts.vectorError;
+      return opts.vector ?? [];
+    },
     textHits: async () => opts.text ?? [],
   } as unknown as SearchStore;
 }
@@ -73,6 +80,37 @@ function fakeApi(documents: Array<Record<string, unknown>>): {
     },
   } as unknown as PaperlessAPI;
   return { api, paths };
+}
+
+function paperlessDoc(id: number) {
+  return {
+    id,
+    title: `Doc ${id}`,
+    created: "2026-01-01",
+    correspondent: null,
+    document_type: null,
+    tags: [],
+  };
+}
+
+const PUBLIC_URL = "https://paperless.example.test";
+
+async function search(
+  deps: { store: SearchStore; documents: Array<Record<string, unknown>> },
+  args: Record<string, unknown> = {}
+) {
+  let result: CallToolResult | undefined;
+  await withClient(
+    fakeApi(deps.documents).api,
+    { store: deps.store, embedder: fakeEmbedder({}), publicUrl: PUBLIC_URL },
+    async (client) => {
+      result = (await client.callTool({
+        name: "semantic_search",
+        arguments: { query: "invoice", ...args },
+      })) as CallToolResult;
+    }
+  );
+  return result!;
 }
 
 async function withClient(
@@ -327,3 +365,62 @@ test(
     );
   }
 );
+
+test("a best similarity of exactly 0.45 is a strong match", async () => {
+  const result = await search({
+    store: fakeStore({ vector: [hit(1, 0.45)] }),
+    documents: [paperlessDoc(1)],
+  });
+  assert.equal(parseToolText(result).strong_match, true);
+});
+
+test("the strong match is judged on the top document the caller can see", async () => {
+  // Document 1 has the best similarity, but the caller's token cannot view it.
+  const result = await search({
+    store: fakeStore({ vector: [hit(1, 0.9), hit(2, 0.3)] }),
+    documents: [paperlessDoc(2)],
+  });
+  const body = parseToolText(result);
+  assert.deepEqual(
+    body.results.map((r: any) => r.id),
+    [2]
+  );
+  assert.equal(body.strong_match, false);
+});
+
+test("a limit of 0 gives one result", async () => {
+  const vector = [hit(1, 0.9), hit(2, 0.8), hit(3, 0.7)];
+  const result = await search(
+    { store: fakeStore({ vector }), documents: vector.map((h) => paperlessDoc(h.documentId)) },
+    { limit: 0 }
+  );
+  assert.equal(parseToolText(result).results.length, 1);
+});
+
+test("with no limit, the tool gives 10 results", async () => {
+  const vector = Array.from({ length: 15 }, (_, i) => hit(i + 1, 0.9 - i / 100));
+  const result = await search({
+    store: fakeStore({ vector }),
+    documents: vector.map((h) => paperlessDoc(h.documentId)),
+  });
+  assert.equal(parseToolText(result).results.length, 10);
+});
+
+test("an error of the store that is not EmbeddingUnavailable is a tool error", async () => {
+  const result = await search({
+    store: fakeStore({ vectorError: new Error("db") }),
+    documents: [],
+  });
+  assert.equal(result.isError, true);
+});
+
+test("the results keep the rank order, not the order of the Paperless answer", async () => {
+  const result = await search({
+    store: fakeStore({ vector: [hit(1, 0.9), hit(2, 0.8)] }),
+    documents: [paperlessDoc(2), paperlessDoc(1)],
+  });
+  assert.deepEqual(
+    parseToolText(result).results.map((r: any) => r.id),
+    [1, 2]
+  );
+});

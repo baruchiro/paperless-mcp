@@ -66,3 +66,13 @@ test("a document only in the text list uses the text hit's passage and matched w
   assert.equal(result[0].bestSimilarity, null);
   assert.equal(result[0].passage, "text-3-0");
 });
+
+test("a document with several hits in one list counts only its best rank", () => {
+  const vector = [hit(1, 0, 0.9), hit(1, 1, 0.8), hit(1, 2, 0.7)];
+  const text = [hit(2, 0, 1.0)];
+
+  const result = fuse(vector, text);
+
+  assert.equal(result[0].documentId, 1);
+  assert.equal(result[0].score, 1 / 61);
+});

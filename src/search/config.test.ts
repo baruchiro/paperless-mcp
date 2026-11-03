@@ -13,9 +13,10 @@ describe("searchConfig", () => {
   test("gives the four values in HTTP mode", () => {
     assert.deepEqual(searchConfig(all, true), {
       databaseUrl: "postgres://db/paperless_mcp",
-      ollamaUrl: "http://ollama:11434",
+      embeddingUrl: "http://ollama:11434",
       model: "qwen3-embedding:0.6b",
       syncToken: "sync-token",
+      provider: "ollama",
     });
   });
 
@@ -30,5 +31,44 @@ describe("searchConfig", () => {
   test("refuses three of the four values", () => {
     const { EMBEDDING_MODEL: _model, ...three } = all;
     assert.throws(() => searchConfig(three, true), /all four/);
+  });
+
+  test("takes the OpenAI provider from EMBEDDING_PROVIDER", () => {
+    const config = searchConfig(
+      {
+        ...all,
+        EMBEDDING_PROVIDER: "openai",
+        EMBEDDING_URL: "http://openai:8080",
+      },
+      true
+    );
+    assert.deepEqual(config, {
+      databaseUrl: "postgres://db/paperless_mcp",
+      embeddingUrl: "http://openai:8080",
+      model: "qwen3-embedding:0.6b",
+      syncToken: "sync-token",
+      provider: "openai",
+    });
+  });
+
+  test("an OpenAI provider without EMBEDDING_URL falls back to OLLAMA_URL", () => {
+    const config = searchConfig({ ...all, EMBEDDING_PROVIDER: "openai" }, true);
+    assert.equal(config?.embeddingUrl, "http://ollama:11434");
+    assert.equal(config?.provider, "openai");
+  });
+
+  test("refuses an unknown provider", () => {
+    assert.throws(
+      () => searchConfig({ ...all, EMBEDDING_PROVIDER: "vertex" }, true),
+      /EMBEDDING_PROVIDER/
+    );
+  });
+
+  test("an OpenAI provider needs a URL from one of the two variables", () => {
+    const { OLLAMA_URL: _url, ...noUrl } = all;
+    assert.throws(
+      () => searchConfig({ ...noUrl, EMBEDDING_PROVIDER: "openai" }, true),
+      /all four/
+    );
   });
 });

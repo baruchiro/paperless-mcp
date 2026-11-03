@@ -1,6 +1,6 @@
 import { PaperlessAPI } from "../api/PaperlessAPI";
 import { chunkText, metadataText } from "./chunk";
-import { EmbeddingUnavailable, OllamaEmbedder } from "./embedder";
+import { EmbeddingUnavailable, type Embedder } from "./embedder";
 import { SearchStore, StoredChunk } from "./store";
 import { tracer } from "../tracing";
 import {
@@ -59,7 +59,7 @@ function errorMessage(err: unknown): string {
 export class IndexSync {
   private readonly api: PaperlessAPI;
   private readonly store: SearchStore;
-  private readonly embedder: OllamaEmbedder;
+  private readonly embedder: Embedder;
   private readonly now: () => number;
   private readonly requestTimeoutMs: number;
   private readonly maxListPages: number;
@@ -69,7 +69,7 @@ export class IndexSync {
   constructor(opts: {
     api: PaperlessAPI;
     store: SearchStore;
-    embedder: OllamaEmbedder;
+    embedder: Embedder;
     now?: () => number;
     requestTimeoutMs?: number;
     maxListPages?: number;
@@ -108,6 +108,20 @@ export class IndexSync {
   private async doRun(): Promise<SyncReport> {
     const endTimer = syncDuration.startTimer();
     return tracer.startActiveSpan("sync", async (span) => {
+      try {
+        return await this.syncAll();
+      } catch (err) {
+        syncRuns.inc({ outcome: "failure" });
+        span.recordException(err as Error);
+        throw err;
+      } finally {
+        endTimer();
+        span.end();
+      }
+    });
+  }
+
+  private async syncAll(): Promise<SyncReport> {
     const report: SyncReport = {
       added: 0,
       updated: 0,
@@ -167,7 +181,7 @@ export class IndexSync {
       } catch (err) {
         if (err instanceof EmbeddingUnavailable) {
           console.error(
-            `[paperless-mcp] index: Ollama is unavailable, stopping the run`
+            `[paperless-mcp] index: the embedding server is unavailable, stopping the run`
           );
           throw err;
         }
@@ -189,7 +203,7 @@ export class IndexSync {
       } catch (err) {
         if (err instanceof EmbeddingUnavailable) {
           console.error(
-            `[paperless-mcp] index: Ollama is unavailable, stopping the run`
+            `[paperless-mcp] index: the embedding server is unavailable, stopping the run`
           );
           throw err;
         }
@@ -204,17 +218,10 @@ export class IndexSync {
     try {
       documentsIndexed.set(await this.store.countDocuments());
       chunksIndexed.set(await this.store.countChunks());
-    } catch { /* gauge update is best-effort */ }
-    return report;
-    } catch (err) {
-    syncRuns.inc({ outcome: "failure" });
-    span.recordException(err as Error);
-    throw err;
-    } finally {
-    endTimer();
-    span.end();
+    } catch {
+      // The gauges are a view of the store, not part of the sync.
     }
-    });
+    return report;
   }
 
   // A Paperless list can have several pages, and `next` gives the next page.

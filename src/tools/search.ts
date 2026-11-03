@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { PaperlessAPI } from "../api/PaperlessAPI";
-import { EmbeddingUnavailable, OllamaEmbedder } from "../search/embedder";
+import { EmbeddingUnavailable, type Embedder } from "../search/embedder";
 import { fuse } from "../search/rank";
 import { SearchStore } from "../search/store";
 import { searchRequests } from "../metrics";
@@ -28,7 +28,7 @@ interface CallerDocument {
 
 export interface SearchDependencies {
   store: SearchStore;
-  embedder: OllamaEmbedder;
+  embedder: Embedder;
   publicUrl: string;
 }
 

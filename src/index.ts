@@ -9,7 +9,11 @@ import { PaperlessAPI } from "./api/PaperlessAPI";
 import { createMcpServer, getBearerToken, sendUnauthorized } from "./server";
 import { Downloads } from "./downloads";
 import { searchConfig } from "./search/config";
-import { OllamaEmbedder } from "./search/embedder";
+import {
+  OllamaEmbedder,
+  OpenAIEmbedder,
+  type Embedder,
+} from "./search/embedder";
 import { createSearchPool } from "./search/pool";
 import { SearchStore } from "./search/store";
 import { IndexSync } from "./search/sync";
@@ -92,10 +96,16 @@ try {
 
 async function startSearch(settings: NonNullable<typeof searchSettings>) {
   const store = new SearchStore(createSearchPool(settings.databaseUrl));
-  const embedder = new OllamaEmbedder({
-    url: settings.ollamaUrl,
-    model: settings.model,
-  });
+  const embedder: Embedder =
+    settings.provider === "openai"
+      ? new OpenAIEmbedder({
+          url: settings.embeddingUrl,
+          model: settings.model,
+        })
+      : new OllamaEmbedder({
+          url: settings.embeddingUrl,
+          model: settings.model,
+        });
   await store.migrate();
   new IndexSync({
     api: new PaperlessAPI(resolvedBaseUrl!, settings.syncToken),
@@ -103,7 +113,9 @@ async function startSearch(settings: NonNullable<typeof searchSettings>) {
     embedder,
   }).start();
   search = { store, embedder, publicUrl: resolvedPublicUrl! };
-  console.log("[paperless-mcp] Semantic search is enabled.");
+  console.log(
+    `[paperless-mcp] Semantic search is enabled (${settings.provider} embeddings).`
+  );
 }
 
 function buildServer(requestToken: string) {

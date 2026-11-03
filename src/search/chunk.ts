@@ -8,7 +8,7 @@ export interface ChunkResult {
   truncated: boolean;
 }
 
-// Chunk size follows the bake-off: ~512 tokens, 200-character overlap, obsidian-mcp's MAX_CHUNKS_PER_NOTE cap.
+// A chunk has 2000 characters, about 512 tokens, and the overlap is 200 characters. A document has a maximum of 1000 chunks.
 export function chunkText(text: string): ChunkResult {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized === "") {

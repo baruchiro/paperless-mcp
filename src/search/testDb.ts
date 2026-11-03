@@ -7,7 +7,7 @@ export async function testPool(): Promise<Pool> {
   const url = process.env.TEST_DATABASE_URL;
   if (!url) {
     throw new Error(
-      "TEST_DATABASE_URL is not set: start the Postgres of the project shell"
+      "TEST_DATABASE_URL is not set. Set it to a Postgres database that has the extensions vector and unaccent."
     );
   }
 

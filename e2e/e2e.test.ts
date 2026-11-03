@@ -257,6 +257,63 @@ describe("Paperless MCP E2E scenario", () => {
     assert.strictEqual(found.name, RUN_CORRESPONDENT);
   });
 
+  it("list_storage_paths filters and paginates paths provisioned in Paperless", async () => {
+    const prefix = `e2e-storage-${Date.now()}`;
+    const paths: Array<{ id: number; name: string; path: string }> = [];
+    try {
+      for (const suffix of ["a", "b"]) {
+        const response = await fetch(`${PAPERLESS_URL}/api/storage_paths/`, {
+          method: "POST",
+          headers: {
+            Authorization: `Token ${PAPERLESS_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: `${prefix}-${suffix}`, path: `${prefix}/${suffix}` }),
+        });
+        assert.equal(response.status, 201, "storage path fixture creation failed");
+        const { id, name, path } = await response.json() as { id: number; name: string; path: string };
+        paths.push({ id, name, path });
+      }
+
+      const { tools } = await client.listTools();
+      assert.ok(tools.some((tool) => tool.name === "list_storage_paths"));
+      for (const page of [1, 2]) {
+        const result = await client.callTool({
+          name: "list_storage_paths",
+          arguments: { name__istartswith: prefix, ordering: "name", page, page_size: 1 },
+        }) as ToolResult;
+        assertOk(result, "list_storage_paths");
+        const data = parseToolText(result) as {
+          count: number;
+          next: string | null;
+          previous: string | null;
+          results: Array<{ id: number; name: string; path: string }>;
+        };
+        assert.equal(data.count, 2);
+        assert.deepEqual(data.results.map(({ id, name, path }) => ({ id, name, path })), [paths[page - 1]]);
+        assert.equal(data.next === null, page === 2);
+        assert.equal(data.previous === null, page === 1);
+      }
+
+      const missing = await client.callTool({
+        name: "list_storage_paths",
+        arguments: { path__iexact: `${prefix}/missing` },
+      }) as ToolResult;
+      assertOk(missing, "list_storage_paths (no match)");
+      const empty = parseToolText(missing) as { count: number; results: unknown[] };
+      assert.equal(empty.count, 0);
+      assert.deepEqual(empty.results, []);
+    } finally {
+      for (const { id } of paths) {
+        const response = await fetch(`${PAPERLESS_URL}/api/storage_paths/${id}/`, {
+          method: "DELETE",
+          headers: { Authorization: `Token ${PAPERLESS_TOKEN}` },
+        });
+        assert.equal(response.status, 204, "storage path fixture cleanup failed");
+      }
+    }
+  });
+
   it("list_document_types returns the document type created earlier in this run", async () => {
     assert.ok(state.documentTypeId, "document type must be created first");
     const result = (await client.callTool({

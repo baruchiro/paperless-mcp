@@ -2,4 +2,4 @@
 "@baruchiro/paperless-mcp": minor
 ---
 
-Add the read-only list_storage_paths tool with pagination and storage-path filters.
+Add list_storage_paths to discover existing Paperless storage paths, with pagination and name/path filters.

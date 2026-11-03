@@ -75,7 +75,7 @@ export class Downloads {
     });
 
     router.get("/download/:token", async (req, res) => {
-      // The first try uses the link, also when Paperless then fails.
+      // take deletes the link before the request to Paperless, so a link works once, also when Paperless fails.
       const entry = this.take(req.params.token);
       if (!entry) {
         res.status(404).type("text").send(NOT_FOUND_TEXT);
@@ -123,7 +123,10 @@ export class Downloads {
         contentType
       )}"`
     );
-    if (length) res.set("Content-Length", length);
+    // fetch decodes a gzip answer, so the length of the encoded body is wrong for the stream.
+    if (length && !upstream.headers.get("content-encoding")) {
+      res.set("Content-Length", length);
+    }
 
     try {
       await pipeline(Readable.fromWeb(upstream.body as never), res);
@@ -155,8 +158,7 @@ export class Downloads {
   }
 }
 
-// The extension of the fallback name, one for each type the upload links
-// accept (ruling R6 of task-7-brief.md); any other type gets none.
+// One extension for each type that the upload links accept. Any other type gets none.
 const EXTENSIONS: Record<string, string> = {
   "application/pdf": ".pdf",
   "image/png": ".png",
@@ -168,8 +170,8 @@ const EXTENSIONS: Record<string, string> = {
   "image/heif": ".heic",
 };
 
-// Paperless gives the name as `filename="..."` or `filename*=UTF-8''...`;
-// only the plain form is parsed (ruling of task-7-brief.md).
+// Paperless gives the name as `filename="..."` or `filename*=UTF-8''...`.
+// Parse only the plain form. A name in the other form gets the fallback name.
 function downloadName(
   disposition: string | null,
   documentId: number,

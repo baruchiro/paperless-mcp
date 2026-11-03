@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, test } from "node:test";
 import express from "express";
+import { gzipSync } from "node:zlib";
 import { Downloads } from "./downloads";
 
 const PDF = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
@@ -12,12 +13,23 @@ interface FakeOptions {
   headers?: Record<string, string>;
   body?: Buffer;
   refuse?: boolean;
+  /** Send 10 bytes of a 1000 byte body, then destroy the socket. */
+  cut?: boolean;
 }
 
 function fakePaperless(opts: FakeOptions = {}) {
   const requests: Array<{ path: string; token: string | undefined }> = [];
   const server = createServer((req, res) => {
     requests.push({ path: req.url ?? "", token: req.headers.authorization });
+    if (opts.cut) {
+      res.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-length": "1000",
+      });
+      res.write("0123456789");
+      setTimeout(() => res.destroy(), 20);
+      return;
+    }
     res.writeHead(
       opts.status ?? 200,
       opts.headers ?? { "content-type": "application/pdf" }
@@ -380,6 +392,83 @@ describe("download links", () => {
           downloads as unknown as { byToken: Map<string, unknown> }
         ).byToken;
         assert.equal(byToken.size, 0);
+      })
+  );
+
+  test(
+    "a gzip answer of Paperless reaches the client whole, with no compressed Content-Length",
+    { timeout: 5000 },
+    () => {
+      const plain = Buffer.from("%PDF-1.7\n" + "page content\n".repeat(2000));
+      const packed = gzipSync(plain);
+      assert.ok(packed.length < plain.length / 4);
+      return withDownloads(
+        {
+          headers: {
+            "content-type": "application/pdf",
+            "content-encoding": "gzip",
+            "content-length": String(packed.length),
+          },
+          body: packed,
+        },
+        async ({ downloads, local }) => {
+          const link = downloads.request(1, "tok", false);
+          const res = await fetch(local(link.url));
+          assert.equal(res.status, 200);
+          assert.deepEqual(Buffer.from(await res.arrayBuffer()), plain);
+        }
+      );
+    }
+  );
+
+  test(
+    "request gives an expiry 15 minutes after now",
+    { timeout: 5000 },
+    () =>
+      withDownloads({}, async ({ downloads }) => {
+        const link = downloads.request(1, "tok", false);
+        assert.equal(
+          link.expires_at,
+          new Date(1_000_000 + 15 * 60_000).toISOString()
+        );
+      })
+  );
+
+  test(
+    "request removes the links that expired earlier",
+    { timeout: 5000 },
+    () =>
+      withDownloads({}, async ({ downloads, advance }) => {
+        downloads.request(1, "tok", false);
+        advance(15 * 60_000 + 1);
+        downloads.request(2, "tok", false);
+        const byToken = (
+          downloads as unknown as { byToken: Map<string, unknown> }
+        ).byToken;
+        assert.equal(byToken.size, 1);
+      })
+  );
+
+  test(
+    "a Paperless that cuts the file short breaks the client's read and logs the failure",
+    { timeout: 5000 },
+    () =>
+      withDownloads({ cut: true }, async ({ downloads, local }) => {
+        const logged: string[] = [];
+        const original = console.error;
+        console.error = (...args: unknown[]) => logged.push(args.join(" "));
+        try {
+          const link = downloads.request(1, "tok", false);
+          const res = await fetch(local(link.url));
+          await assert.rejects(() => res.arrayBuffer());
+          // The pipeline closes the socket before its error reaches the log.
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        } finally {
+          console.error = original;
+        }
+        assert.equal(logged.length, 1);
+        assert.match(logged[0], /download .* failed while streaming/);
+        assert.doesNotMatch(logged[0], /tok\b/);
       })
   );
 });

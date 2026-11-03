@@ -4,7 +4,7 @@ import { EmbeddingUnavailable, OllamaEmbedder } from "./embedder";
 import { SearchStore, StoredChunk } from "./store";
 
 const METADATA_REFRESH_MS = 24 * 60 * 60 * 1000;
-// Pages in the order of the id do not move when a document is added or deleted during the list.
+// Pages in the order of the id do not move when a document is added during the list. A delete can still move a row, so the sync compares the row count.
 const DOCUMENT_LIST_PATH =
   "/documents/?fields=id,modified&page_size=1000&ordering=id";
 const MAX_LIST_PAGES = 10_000;
@@ -118,7 +118,7 @@ export class IndexSync {
 
     const indexed = await this.store.indexed();
 
-    // A list with fewer rows than its count lost a row to a change during the run. Delete nothing, because a missing row would remove a document from the index.
+    // A list whose rows differ from its count changed during the run. Delete nothing, because a missing row would remove a document from the index.
     const listComplete = rows.length === count;
     if (!listComplete) {
       console.error(

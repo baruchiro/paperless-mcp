@@ -207,6 +207,37 @@ test("vectorHits gives one hit for each document, so a long document does not hi
   }
 });
 
+test("vectorHits keeps another document when one document has the most rows a document can have", async () => {
+  const { pool, store } = await newStore();
+  try {
+    // One metadata chunk and 1000 text chunks, all nearer to the query than the chunk of document 2.
+    const full: StoredChunk[] = [
+      { kind: "metadata", text: "metadatos", embedding: basisVector(0) },
+      ...Array.from(
+        { length: 1000 },
+        (_, i): StoredChunk => ({
+          kind: "content",
+          text: `largo ${i}`,
+          embedding: basisVector(0),
+        })
+      ),
+    ];
+    await store.replaceDocument(document(1, "2024-01-01T00:00:00.000Z"), full);
+    await store.replaceDocument(document(2, "2024-01-01T00:00:00.000Z"), [
+      { kind: "content", text: "corto", embedding: nearVector() },
+    ]);
+
+    const hits = await store.vectorHits(basisVector(0), 50);
+
+    assert.deepEqual(
+      hits.map((hit) => hit.documentId),
+      [1, 2]
+    );
+  } finally {
+    await pool.end();
+  }
+});
+
 test("textHits gives one hit for each document, so a long document does not hide another one", async () => {
   const { pool, store } = await newStore();
   try {

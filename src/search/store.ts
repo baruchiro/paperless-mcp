@@ -22,8 +22,8 @@ export interface Hit {
 }
 
 const VECTOR_DIMENSIONS = 1024;
-// A document has at most 1000 chunks. This many nearest chunks keep other documents in the list.
-const CANDIDATE_CHUNKS = 1000;
+// A document has at most 1001 rows: one metadata chunk and 1000 text chunks. Take more nearest chunks than that, so that one document cannot fill the list.
+const CANDIDATE_CHUNKS = 1100;
 
 function toVectorLiteral(embedding: number[]): string {
   return `[${embedding.join(",")}]`;

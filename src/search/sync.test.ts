@@ -600,28 +600,33 @@ test(
   "a Paperless request that never answers makes run() reject, and the next run() asks again",
   { timeout: 5000 },
   async () => {
-  const { pool, store } = await newStore();
-  try {
-    let calls = 0;
-    const api = {
-      request: (_path: string, options?: RequestInit) => {
-        calls++;
-        return new Promise((_resolve, reject) => {
-          options?.signal?.addEventListener("abort", () =>
-            reject(new Error("canceled"))
-          );
-        });
-      },
-    } as unknown as PaperlessAPI;
-    const { embedder } = fakeEmbedder();
-    const sync = new IndexSync({ api, store, embedder, requestTimeoutMs: 20 });
+    const { pool, store } = await newStore();
+    try {
+      let calls = 0;
+      const api = {
+        request: (_path: string, options?: RequestInit) => {
+          calls++;
+          return new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener("abort", () =>
+              reject(new Error("canceled"))
+            );
+          });
+        },
+      } as unknown as PaperlessAPI;
+      const { embedder } = fakeEmbedder();
+      const sync = new IndexSync({
+        api,
+        store,
+        embedder,
+        requestTimeoutMs: 20,
+      });
 
-    await assert.rejects(() => sync.run(), /canceled/);
-    await assert.rejects(() => sync.run(), /canceled/);
-    assert.equal(calls, 2);
-  } finally {
-    await pool.end();
-  }
+      await assert.rejects(() => sync.run(), /canceled/);
+      await assert.rejects(() => sync.run(), /canceled/);
+      assert.equal(calls, 2);
+    } finally {
+      await pool.end();
+    }
   }
 );
 
@@ -648,7 +653,10 @@ test("start() runs one time at once, logs a failed run and stops with stop()", a
 
   assert.equal(calls, 1);
   assert.equal(logged.length, 1);
-  assert.match(logged[0], /^\[paperless-mcp\] index: run failed: .*Paperless is down/);
+  assert.match(
+    logged[0],
+    /^\[paperless-mcp\] index: run failed: .*Paperless is down/
+  );
 });
 
 test("a metadata refresh that fails for one document counts as failed and goes on", async () => {
@@ -718,10 +726,14 @@ test("a next that never ends makes run() reject after the page limit", async () 
   try {
     const api = {
       request: async (path: string) => {
-        const page = Number(new URL(path, "http://x").searchParams.get("page") ?? "1");
+        const page = Number(
+          new URL(path, "http://x").searchParams.get("page") ?? "1"
+        );
         return {
           count: 1,
-          next: `http://paperless.test/api/documents/?fields=id,modified&page_size=1000&ordering=id&page=${page + 1}`,
+          next: `http://paperless.test/api/documents/?fields=id,modified&page_size=1000&ordering=id&page=${
+            page + 1
+          }`,
           previous: null,
           results: [{ id: page, modified: "2024-01-01T00:00:00.000Z" }],
         };
@@ -745,7 +757,12 @@ test("the host of the next URL does not matter, also when it starts with api", a
         paths.push(path);
         if (path.startsWith("/documents/?")) {
           return path.includes("page=2")
-            ? { count: 2, next: null, previous: null, results: [{ id: 2, modified: "2024-01-01T00:00:00.000Z" }] }
+            ? {
+                count: 2,
+                next: null,
+                previous: null,
+                results: [{ id: 2, modified: "2024-01-01T00:00:00.000Z" }],
+              }
             : {
                 count: 2,
                 next: "https://api.paperless.test/api/documents/?fields=id,modified&page_size=1000&ordering=id&page=2",
@@ -756,12 +773,18 @@ test("the host of the next URL does not matter, also when it starts with api", a
         return { count: 0, next: null, previous: null, results: [] };
       },
     } as unknown as PaperlessAPI;
-    const sync = new IndexSync({ api, store, embedder: fakeEmbedder().embedder });
+    const sync = new IndexSync({
+      api,
+      store,
+      embedder: fakeEmbedder().embedder,
+    });
     // The document details are not the point of this test; the sync logs their failure.
     await captureErrors(() => sync.run());
 
     assert.ok(
-      paths.includes("/documents/?fields=id,modified&page_size=1000&ordering=id&page=2"),
+      paths.includes(
+        "/documents/?fields=id,modified&page_size=1000&ordering=id&page=2"
+      ),
       paths.join("\n")
     );
   } finally {

@@ -391,14 +391,19 @@ test("the strong match is judged on the top document the caller can see", async 
 test("a limit of 0 gives one result", async () => {
   const vector = [hit(1, 0.9), hit(2, 0.8), hit(3, 0.7)];
   const result = await search(
-    { store: fakeStore({ vector }), documents: vector.map((h) => paperlessDoc(h.documentId)) },
+    {
+      store: fakeStore({ vector }),
+      documents: vector.map((h) => paperlessDoc(h.documentId)),
+    },
     { limit: 0 }
   );
   assert.equal(parseToolText(result).results.length, 1);
 });
 
 test("with no limit, the tool gives 10 results", async () => {
-  const vector = Array.from({ length: 15 }, (_, i) => hit(i + 1, 0.9 - i / 100));
+  const vector = Array.from({ length: 15 }, (_, i) =>
+    hit(i + 1, 0.9 - i / 100)
+  );
   const result = await search({
     store: fakeStore({ vector }),
     documents: vector.map((h) => paperlessDoc(h.documentId)),

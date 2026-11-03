@@ -421,17 +421,14 @@ describe("download links", () => {
     }
   );
 
-  test(
-    "request gives an expiry 15 minutes after now",
-    { timeout: 5000 },
-    () =>
-      withDownloads({}, async ({ downloads }) => {
-        const link = downloads.request(1, "tok", false);
-        assert.equal(
-          link.expires_at,
-          new Date(1_000_000 + 15 * 60_000).toISOString()
-        );
-      })
+  test("request gives an expiry 15 minutes after now", { timeout: 5000 }, () =>
+    withDownloads({}, async ({ downloads }) => {
+      const link = downloads.request(1, "tok", false);
+      assert.equal(
+        link.expires_at,
+        new Date(1_000_000 + 15 * 60_000).toISOString()
+      );
+    })
   );
 
   test(

@@ -108,9 +108,10 @@ export class IndexSync {
     };
 
     const remote = new Map<number, string>();
-    const { rows, count } = await this.listAll<{ id: number; modified: string }>(
-      DOCUMENT_LIST_PATH
-    );
+    const { rows, count } = await this.listAll<{
+      id: number;
+      modified: string;
+    }>(DOCUMENT_LIST_PATH);
     for (const row of rows) {
       remote.set(row.id, row.modified);
     }

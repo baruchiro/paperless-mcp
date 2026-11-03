@@ -6,6 +6,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PaperlessAPI } from "./api/PaperlessAPI";
 import { createMcpServer, getBearerToken } from "./server";
+import { Downloads } from "./downloads";
+import type { SearchDependencies } from "./tools/search";
 import { Uploads } from "./uploads";
 
 function reqWith(authorization?: string): express.Request {
@@ -86,4 +88,26 @@ test("the upload tools are registered only when uploads are configured", async (
   const withUploads = await toolNames(createMcpServer({ ...options, uploads }));
   assert.ok(withUploads.includes("request_upload"));
   assert.ok(withUploads.includes("check_upload"));
+});
+
+test("semantic_search is registered only when search is given", async () => {
+  const options = { baseUrl: "http://p", token: "t", version: "1", publicUrl: "http://p" };
+
+  const plain = await toolNames(createMcpServer(options));
+  assert.ok(!plain.includes("semantic_search"));
+
+  const search = { publicUrl: "http://p" } as SearchDependencies;
+  const withSearch = await toolNames(createMcpServer({ ...options, search }));
+  assert.ok(withSearch.includes("semantic_search"));
+});
+
+test("request_download is registered only when downloads are given", async () => {
+  const options = { baseUrl: "http://p", token: "t", version: "1", publicUrl: "http://p" };
+
+  const plain = await toolNames(createMcpServer(options));
+  assert.ok(!plain.includes("request_download"));
+
+  const downloads = new Downloads({ paperlessUrl: "http://p", publicUrl: "https://d" });
+  const withDownloads = await toolNames(createMcpServer({ ...options, downloads }));
+  assert.ok(withDownloads.includes("request_download"));
 });

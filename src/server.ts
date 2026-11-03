@@ -9,7 +9,10 @@ import { registerDocumentTypeTools } from "./tools/documentTypes";
 import { registerMailTools } from "./tools/mail";
 import { registerNoteTools } from "./tools/notes";
 import { registerTagTools } from "./tools/tags";
+import { registerDownloadTools } from "./tools/downloads";
+import { registerSearchTools, type SearchDependencies } from "./tools/search";
 import { registerUploadTools } from "./tools/uploads";
+import { Downloads } from "./downloads";
 import { Uploads } from "./uploads";
 
 export interface CreateMcpServerOptions {
@@ -19,6 +22,10 @@ export interface CreateMcpServerOptions {
   publicUrl: string;
   /** Upload links; the upload tools exist only when this is set. */
   uploads?: Uploads;
+  /** The search index; the semantic_search tool exists only when this is set. */
+  search?: SearchDependencies;
+  /** Download links; the request_download tool exists only when this is set. */
+  downloads?: Downloads;
 }
 
 export function createMcpServer({
@@ -27,6 +34,8 @@ export function createMcpServer({
   version,
   publicUrl,
   uploads,
+  search,
+  downloads,
 }: CreateMcpServerOptions): McpServer {
   const api = new PaperlessAPI(baseUrl, token);
   const server = new McpServer(
@@ -42,6 +51,8 @@ export function createMcpServer({
   registerCustomFieldTools(server, api);
   registerMailTools(server, api);
   if (uploads) registerUploadTools(server, api, uploads);
+  if (search) registerSearchTools(server, api, search);
+  if (downloads) registerDownloadTools(server, api, downloads, token);
   return server;
 }
 

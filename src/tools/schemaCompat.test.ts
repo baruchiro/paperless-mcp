@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Downloads } from "../downloads";
 import { createMcpServer } from "../server";
+import type { SearchDependencies } from "./search";
 
 // Strict MCP clients and gateways reject an array-valued `type` and silently drop
 // the whole tool (#138). A JSON Schema converter reaches that form by collapsing a
@@ -32,6 +34,12 @@ test("no tool advertises an array-form `type` (#138)", async () => {
     token: "test-token",
     version: "0.0.0-test",
     publicUrl: "http://paperless.test",
+    // The tools of the optional features have schemas too.
+    search: { publicUrl: "http://paperless.test" } as SearchDependencies,
+    downloads: new Downloads({
+      paperlessUrl: "http://paperless.test",
+      publicUrl: "http://download.test",
+    }),
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "schema-compat-test", version: "1.0.0" });
@@ -39,6 +47,8 @@ test("no tool advertises an array-form `type` (#138)", async () => {
 
   try {
     const { tools } = await client.listTools();
+    const names = tools.map((tool) => tool.name);
+    assert.ok(names.includes("semantic_search") && names.includes("request_download"));
     const found = tools
       .flatMap((tool) =>
         arrayFormTypes(tool.inputSchema).map((hit) => `${tool.name} ${hit}`)

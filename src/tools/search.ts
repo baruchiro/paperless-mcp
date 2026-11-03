@@ -4,7 +4,7 @@ import { PaperlessAPI } from "../api/PaperlessAPI";
 import { EmbeddingUnavailable, type Embedder } from "../search/embedder";
 import { fuse } from "../search/rank";
 import { SearchStore } from "../search/store";
-import { searchRequests } from "../metrics";
+import { searchDuration, searchRequests } from "../metrics";
 import { tracer } from "../tracing";
 import { withErrorHandling } from "./utils/middlewares";
 
@@ -54,6 +54,7 @@ export function registerSearchTools(
     withErrorHandling(async (args) => {
       const { query, limit } = args;
       return tracer.startActiveSpan("semantic_search", async (span) => {
+        const endTimer = searchDuration.startTimer();
         let vectorHits: Awaited<ReturnType<SearchStore["vectorHits"]>> = [];
         let semantic: "ok" | "unavailable" = "ok";
 
@@ -76,6 +77,7 @@ export function registerSearchTools(
 
         if (fused.length === 0) {
           searchRequests.inc({ semantic });
+          endTimer({ semantic });
           return jsonResult({ results: [], strong_match: false, semantic });
         }
 
@@ -116,6 +118,7 @@ export function registerSearchTools(
           : false;
 
         searchRequests.inc({ semantic });
+        endTimer({ semantic });
         return jsonResult({ results, strong_match: strongMatch, semantic });
       });
     })

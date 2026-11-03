@@ -12,6 +12,7 @@ import { registerTagTools } from "./tools/tags";
 import { registerDownloadTools } from "./tools/downloads";
 import { registerSearchTools, type SearchDependencies } from "./tools/search";
 import { registerUploadTools } from "./tools/uploads";
+import { toolDuration } from "./metrics";
 import { Downloads } from "./downloads";
 import { Uploads } from "./uploads";
 
@@ -42,6 +43,7 @@ export function createMcpServer({
     { name: "paperless-ngx", version },
     { instructions: buildInstructions(publicUrl) }
   );
+  timeTools(server);
   registerDocumentTools(server, api);
   registerDocumentResources(server, api);
   registerNoteTools(server, api);
@@ -54,6 +56,34 @@ export function createMcpServer({
   if (search) registerSearchTools(server, api, search);
   if (downloads) registerDownloadTools(server, api, downloads, token);
   return server;
+}
+
+/**
+ * Time each tool call in one place, so the tool files stay as they are. The
+ * callback is the last argument of server.tool(); a throw and a result with
+ * isError both count as an error.
+ */
+export function timeTools(server: McpServer): void {
+  const register = server.tool.bind(server) as (...args: any[]) => unknown;
+  (server as any).tool = (name: string, ...rest: any[]) => {
+    const last = rest.length - 1;
+    const callback = rest[last];
+    rest[last] = async (...args: unknown[]) => {
+      const end = toolDuration.startTimer({ tool: name });
+      let outcome = "ok";
+      try {
+        const result = await callback(...args);
+        if (result?.isError) outcome = "error";
+        return result;
+      } catch (err) {
+        outcome = "error";
+        throw err;
+      } finally {
+        end({ outcome });
+      }
+    };
+    return register(name, ...rest);
+  };
 }
 
 export interface ResolveTokenOptions {

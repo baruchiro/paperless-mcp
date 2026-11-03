@@ -20,6 +20,7 @@ import {
   Note,
   Tag,
 } from "./types";
+import { apiDuration } from "../metrics";
 import { headersToObject } from "./utils";
 
 export class PaperlessAPI {
@@ -47,13 +48,30 @@ export class PaperlessAPI {
     };
 
     try {
+      const end = apiDuration.startTimer({
+        method: (options.method || "GET").toUpperCase(),
+      });
       const response = await axios<T>({
         url,
         method: options.method || "GET",
         headers: mergedHeaders,
         data: options.body,
         signal: options.signal ?? undefined,
-      });
+      }).then(
+        (res) => {
+          end({ status: String(res.status) });
+          return res;
+        },
+        (err) => {
+          end({
+            status:
+              axios.isAxiosError(err) && err.response
+                ? String(err.response.status)
+                : "error",
+          });
+          throw err;
+        }
+      );
 
       const body = response.data;
       if (response.status < 200 || response.status >= 300) {

@@ -19,7 +19,7 @@ import { SearchStore } from "./search/store";
 import { IndexSync } from "./search/sync";
 import type { SearchDependencies } from "./tools/search";
 import { Uploads, uploadConfig } from "./uploads";
-import { register } from "./metrics";
+import { httpTiming, register } from "./metrics";
 const { version } = require("../package.json") as { version: string };
 
 const {
@@ -156,6 +156,8 @@ async function main() {
     }
 
     const app = express();
+    // First, so that each route is timed, also an upload that a router ends.
+    app.use(httpTiming);
     // The upload route reads its body as a stream, so it comes before the JSON parser.
     if (uploads) {
       app.use(uploads.router());

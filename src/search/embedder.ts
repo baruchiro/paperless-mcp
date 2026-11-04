@@ -100,9 +100,10 @@ export class OllamaEmbedder implements Embedder {
 }
 
 /**
- * The OpenAI embeddings API: one request for a list of texts, and answers in
- * `data`, each item with its `index`. Its input length is the limit, not this
- * server's batch size, so every text goes in one request.
+ * The OpenAI embeddings API: a request with a list of texts, and answers in
+ * `data`, each item with its `index`. A server such as TEI refuses a request
+ * with too many inputs (413), and a document can have more chunks than that
+ * limit, so the texts go in batches of BATCH_SIZE, as for Ollama.
  */
 export class OpenAIEmbedder implements Embedder {
   private readonly url: string;
@@ -115,48 +116,57 @@ export class OpenAIEmbedder implements Embedder {
     this.timeoutMs = opts.timeoutMs ?? DOCUMENT_TIMEOUT_MS;
   }
 
+  // One span, and one error count, for the whole call: traced() wraps the loop,
+  // not each request.
   embedDocuments(texts: string[]): Promise<number[][]> {
-    return this.embed(texts, this.timeoutMs);
+    return traced(async () => {
+      const embeddings: number[][] = [];
+      for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+        const batch = texts.slice(i, i + BATCH_SIZE);
+        embeddings.push(...(await this.request(batch, this.timeoutMs)));
+      }
+      return embeddings;
+    });
   }
 
   async embedQuery(query: string): Promise<number[]> {
-    const [embedding] = await this.embed(
-      [QUERY_PREFIX + query],
-      QUERY_TIMEOUT_MS
+    const [embedding] = await traced(() =>
+      this.request([QUERY_PREFIX + query], QUERY_TIMEOUT_MS)
     );
     return embedding;
   }
 
-  private embed(input: string[], timeoutMs: number): Promise<number[][]> {
-    return traced(async () => {
-      let response: Response;
-      try {
-        response = await fetch(`${this.url}/v1/embeddings`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: this.model, input }),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-      } catch (err) {
-        throw new EmbeddingUnavailable(
-          `The embedding server did not answer: ${err}`
-        );
-      }
-      if (!response.ok) {
-        throw new EmbeddingUnavailable(
-          `The embedding server answered with status ${response.status}`
-        );
-      }
-      const body = (await response.json()) as OpenAIEmbedResponse;
-      if (!Array.isArray(body.data) || body.data.length !== input.length) {
-        throw new EmbeddingUnavailable(
-          "The embedding server answered with a missing or mismatched data array"
-        );
-      }
-      return body.data
-        .slice()
-        .sort((a, b) => a.index - b.index)
-        .map((item) => item.embedding);
-    });
+  private async request(
+    input: string[],
+    timeoutMs: number
+  ): Promise<number[][]> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.url}/v1/embeddings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: this.model, input }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err) {
+      throw new EmbeddingUnavailable(
+        `The embedding server did not answer: ${err}`
+      );
+    }
+    if (!response.ok) {
+      throw new EmbeddingUnavailable(
+        `The embedding server answered with status ${response.status}`
+      );
+    }
+    const body = (await response.json()) as OpenAIEmbedResponse;
+    if (!Array.isArray(body.data) || body.data.length !== input.length) {
+      throw new EmbeddingUnavailable(
+        "The embedding server answered with a missing or mismatched data array"
+      );
+    }
+    return body.data
+      .slice()
+      .sort((a, b) => a.index - b.index)
+      .map((item) => item.embedding);
   }
 }

@@ -1,5 +1,17 @@
 # @baruchiro/paperless-mcp
 
+## 2.3.0
+
+### Minor Changes
+
+- 0892297: Add list_storage_paths to discover existing Paperless storage paths, with pagination and name/path filters.
+
+### Patch Changes
+
+- 54b0bc5: Move `typescript` from `dependencies` to `devDependencies`
+
+  The compiled entrypoint (`build/index.js`) doesn't need the TypeScript compiler at runtime, but it was declared as a production dependency, so it shipped in the production container image even after pruning devDependencies. It now stays out of a `--omit=dev` install.
+
 ## 2.2.1
 
 ### Patch Changes

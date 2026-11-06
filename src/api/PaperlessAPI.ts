@@ -16,6 +16,7 @@ import {
   MailAccount,
   MailRule,
   GetTagsResponse,
+  GetStoragePathsResponse,
   Note,
   Tag,
 } from "./types";
@@ -273,6 +274,11 @@ export class PaperlessAPI {
     return this.request<void>(`/tags/${id}/`, {
       method: "DELETE",
     });
+  }
+
+  async getStoragePaths(queryString?: string): Promise<GetStoragePathsResponse> {
+    const url = queryString ? `/storage_paths/?${queryString}` : "/storage_paths/";
+    return this.request<GetStoragePathsResponse>(url);
   }
 
   // Correspondent operations

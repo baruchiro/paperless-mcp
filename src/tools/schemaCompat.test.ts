@@ -12,6 +12,25 @@ import { createMcpServer } from "../server";
 // walks every advertised schema rather than a field list: bumping that pin, moving
 // off zod v4, or adding a construct that reintroduces the form fails here.
 
+// A draft-07 `$schema` dialect label anywhere in an advertised schema makes
+// 2020-12-only clients (Claude Code / Claude Desktop) silently drop the whole
+// tool (#170). The SDK's zod->JSON-Schema conversion stamps it, so createMcpServer
+// strips it from the tools/list response; this walks every advertised schema to
+// prove none survives and fails if the strip ever regresses.
+function schemaDialectKeys(node: unknown, path = ""): string[] {
+  if (Array.isArray(node)) {
+    return node.flatMap((item, i) => schemaDialectKeys(item, `${path}[${i}]`));
+  }
+  if (!node || typeof node !== "object") {
+    return [];
+  }
+  return Object.entries(node as Record<string, unknown>).flatMap(([key, value]) =>
+    key === "$schema"
+      ? [`${path}.$schema = ${JSON.stringify(value)}`]
+      : schemaDialectKeys(value, `${path}.${key}`)
+  );
+}
+
 function arrayFormTypes(node: unknown, path = ""): string[] {
   if (Array.isArray(node)) {
     return node.flatMap((item, i) => arrayFormTypes(item, `${path}[${i}]`));
@@ -26,7 +45,7 @@ function arrayFormTypes(node: unknown, path = ""): string[] {
   );
 }
 
-test("no tool advertises an array-form `type` (#138)", async () => {
+async function listAdvertisedTools() {
   const server = createMcpServer({
     baseUrl: "http://paperless.test",
     token: "test-token",
@@ -36,18 +55,33 @@ test("no tool advertises an array-form `type` (#138)", async () => {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "schema-compat-test", version: "1.0.0" });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-
   try {
     const { tools } = await client.listTools();
-    const found = tools
-      .flatMap((tool) =>
-        arrayFormTypes(tool.inputSchema).map((hit) => `${tool.name} ${hit}`)
-      )
-      .sort();
-
-    assert.deepEqual(found, []);
+    return tools;
   } finally {
     await client.close();
     await server.close();
   }
+}
+
+test("no tool advertises a draft-07 `$schema` dialect (#170)", async () => {
+  const tools = await listAdvertisedTools();
+  const found = tools
+    .flatMap((tool) =>
+      schemaDialectKeys(tool.inputSchema).map((hit) => `${tool.name} ${hit}`)
+    )
+    .sort();
+
+  assert.deepEqual(found, []);
+});
+
+test("no tool advertises an array-form `type` (#138)", async () => {
+  const tools = await listAdvertisedTools();
+  const found = tools
+    .flatMap((tool) =>
+      arrayFormTypes(tool.inputSchema).map((hit) => `${tool.name} ${hit}`)
+    )
+    .sort();
+
+  assert.deepEqual(found, []);
 });

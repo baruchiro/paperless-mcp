@@ -18,6 +18,28 @@ export interface CreateMcpServerOptions {
   publicUrl: string;
 }
 
+// The MCP TypeScript SDK's zod->JSON-Schema conversion stamps every tool's
+// `inputSchema` with a draft-07 dialect label
+// (`"$schema": "http://json-schema.org/draft-07/schema#"`). MCP clients that
+// validate tool schemas against JSON Schema 2020-12 only (Claude Code / Claude
+// Desktop, as of ~Aug 2026) silently drop every tool that declares it, so the
+// whole toolset disappears from those clients (#170 /
+// anthropics/claude-code#88882). Strip the dialect label from advertised
+// schemas; it carries no validation meaning here. Remove once the SDK emits
+// 2020-12 (or omits `$schema`).
+function stripSchemaDialect(node: unknown): void {
+  if (Array.isArray(node)) {
+    for (const item of node) stripSchemaDialect(item);
+    return;
+  }
+  if (node && typeof node === "object") {
+    delete (node as Record<string, unknown>).$schema;
+    for (const value of Object.values(node as Record<string, unknown>)) {
+      stripSchemaDialect(value);
+    }
+  }
+}
+
 export function createMcpServer({
   baseUrl,
   token,
@@ -38,6 +60,34 @@ export function createMcpServer({
   registerCustomFieldTools(server, api);
   registerMailTools(server, api);
   registerStoragePathTools(server, api);
+
+  // Strip the draft-07 `$schema` dialect label from the SDK-generated
+  // tools/list response so 2020-12-only clients keep the tools (see
+  // stripSchemaDialect above). There is no public post-processing hook for
+  // tools/list, so wrap the handler the SDK registered on the low-level server.
+  const requestHandlers = (
+    server.server as unknown as {
+      _requestHandlers: Map<
+        string,
+        (request: unknown, extra: unknown) => unknown
+      >;
+    }
+  )._requestHandlers;
+  const originalListTools = requestHandlers.get("tools/list");
+  if (!originalListTools) {
+    throw new Error(
+      "paperless-mcp (#170): tools/list handler not registered — MCP SDK " +
+        "internals changed; re-verify the $schema strip."
+    );
+  }
+  requestHandlers.set("tools/list", async (request, extra) => {
+    const result = (await originalListTools(request, extra)) as {
+      tools?: unknown;
+    };
+    stripSchemaDialect(result?.tools);
+    return result;
+  });
+
   return server;
 }
 

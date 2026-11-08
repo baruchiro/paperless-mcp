@@ -20,7 +20,7 @@ function isStatusChoiceError(err: unknown): boolean {
 export function registerTaskTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "list_tasks",
-    "List Paperless consumer-queue tasks, including failed uploads (unsupported file type, duplicate of an existing document, unreadable file). Each task has its status, file name, result message (the failure reason) and related document. Use status failure with acknowledged false to find failures nobody has handled yet.",
+    "List Paperless consumer-queue tasks, including failed uploads (unsupported file type, duplicate of an existing document, unreadable file). Each task has its status, result message (the failure reason), and, for uploads, the file name and related document; these two can be null for other tasks. Use status failure with acknowledged false to find failures nobody has handled yet.",
     {
       acknowledged: z.boolean().optional(),
       status: z

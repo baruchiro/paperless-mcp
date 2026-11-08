@@ -314,6 +314,79 @@ describe("Paperless MCP E2E scenario", () => {
     }
   });
 
+  it("list_tasks reports a failed upload and acknowledge_tasks clears it", async () => {
+    const fileName = `e2e-corrupt-${Date.now()}.pdf`;
+    const { tools } = await client.listTools();
+    assert.ok(tools.some((tool) => tool.name === "list_tasks"));
+    assert.ok(tools.some((tool) => tool.name === "acknowledge_tasks"));
+
+    // A PDF header followed by garbage passes the upload check, then fails in the consumer.
+    const form = new FormData();
+    form.append("document", new Blob([`%PDF-1.4\nnot a real pdf ${fileName}\n`]), fileName);
+    const upload = await fetch(`${PAPERLESS_URL}/api/documents/post_document/`, {
+      method: "POST",
+      headers: { Authorization: `Token ${PAPERLESS_TOKEN}` },
+      body: form,
+    });
+    assert.equal(upload.status, 200, "corrupt PDF upload was rejected before reaching the consumer");
+
+    type Task = {
+      id: number;
+      task_name: string;
+      task_file_name: string;
+      type: string;
+      status: string;
+      result: string | null;
+      acknowledged: boolean;
+    };
+    const listTasks = async (args: Record<string, unknown>): Promise<Task[]> => {
+      const result = (await client.callTool({ name: "list_tasks", arguments: args })) as ToolResult;
+      assertOk(result, "list_tasks");
+      const data = parseToolText(result);
+      assert.ok(Array.isArray(data), "list_tasks should return the task array as-is");
+      return data as Task[];
+    };
+
+    const unacknowledgedUploads = { acknowledged: false, task_name: "consume_file" };
+    let task: Task | undefined;
+    for (let attempt = 0; attempt < 60 && !task; attempt++) {
+      task = (await listTasks(unacknowledgedUploads)).find(
+        (t) => t.task_file_name === fileName && t.status === "FAILURE"
+      );
+      if (!task) await new Promise((r) => setTimeout(r, 1000));
+    }
+    assert.ok(task, `no FAILURE task for ${fileName} within 60s`);
+    assert.equal(task.acknowledged, false);
+    assert.ok(task.result?.includes(fileName), `task result should name the file, got ${task.result}`);
+
+    assert.ok((await listTasks({ type: task.type })).some((t) => t.id === task.id));
+    assert.ok(!(await listTasks({ task_name: "check_sanity" })).some((t) => t.id === task.id));
+
+    // Paperless 3.x validates the status filter against lowercase values even
+    // for API version 9, so the documented uppercase value is rejected there.
+    const byStatus = (await client.callTool({
+      name: "list_tasks",
+      arguments: { status: "FAILURE" },
+    })) as ToolResult;
+    if (byStatus.isError) {
+      assert.match(JSON.stringify(byStatus), /not one of the available choices/);
+    } else {
+      const failed = parseToolText(byStatus) as Task[];
+      assert.ok(failed.some((t) => t.id === task.id));
+      assert.ok(failed.every((t) => t.status === "FAILURE"));
+    }
+
+    const ack = (await client.callTool({
+      name: "acknowledge_tasks",
+      arguments: { tasks: [task.id] },
+    })) as ToolResult;
+    assertOk(ack, "acknowledge_tasks");
+    assert.deepEqual(parseToolText(ack), { result: 1 });
+
+    assert.ok(!(await listTasks(unacknowledgedUploads)).some((t) => t.id === task.id));
+    assert.ok((await listTasks({ acknowledged: true })).some((t) => t.id === task.id));
+  });
+
   it("list_document_types returns the document type created earlier in this run", async () => {
     assert.ok(state.documentTypeId, "document type must be created first");
     const result = (await client.callTool({

@@ -177,7 +177,7 @@ export interface PaperlessTask {
   status?: PaperlessTaskStatus;
   result?: string | null;
   acknowledged?: boolean;
-  related_document: string | null;
+  related_document: string | number | null;
   owner?: number | null;
 }
 

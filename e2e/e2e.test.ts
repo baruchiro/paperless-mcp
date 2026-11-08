@@ -362,19 +362,9 @@ describe("Paperless MCP E2E scenario", () => {
     assert.ok((await listTasks({ type: task.type })).some((t) => t.id === task.id));
     assert.ok(!(await listTasks({ task_name: "check_sanity" })).some((t) => t.id === task.id));
 
-    // Paperless 3.x validates the status filter against lowercase values even
-    // for API version 9, so the documented uppercase value is rejected there.
-    const byStatus = (await client.callTool({
-      name: "list_tasks",
-      arguments: { status: "FAILURE" },
-    })) as ToolResult;
-    if (byStatus.isError) {
-      assert.match(JSON.stringify(byStatus), /not one of the available choices/);
-    } else {
-      const failed = parseToolText(byStatus) as Task[];
-      assert.ok(failed.some((t) => t.id === task.id));
-      assert.ok(failed.every((t) => t.status === "FAILURE"));
-    }
+    const failed = await listTasks({ status: "failure" });
+    assert.ok(failed.some((t) => t.id === task.id));
+    assert.ok(failed.every((t) => t.status === "FAILURE"));
 
     const ack = (await client.callTool({
       name: "acknowledge_tasks",

@@ -4,21 +4,34 @@ import { PaperlessAPI } from "../api/PaperlessAPI";
 import { withErrorHandling } from "./utils/middlewares";
 import { buildQueryString } from "./utils/queryString";
 
+// Paperless 3.x validates the status filter against lowercase values, while
+// 2.x only accepts uppercase ones.
+function isStatusChoiceError(err: unknown): boolean {
+  const data = (err as any)?.response?.data;
+  return (
+    (err as any)?.response?.status === 400 &&
+    Array.isArray(data?.status) &&
+    data.status.some((m: unknown) =>
+      String(m).includes("is not one of the available choices")
+    )
+  );
+}
+
 export function registerTaskTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "list_tasks",
-    "List Paperless consumer-queue tasks, including failed uploads (unsupported file type, duplicate of an existing document, unreadable file). Each task has its status, file name, result message (the failure reason) and related document. Use status FAILURE with acknowledged false to find failures nobody has handled yet.",
+    "List Paperless consumer-queue tasks, including failed uploads (unsupported file type, duplicate of an existing document, unreadable file). Each task has its status, file name, result message (the failure reason) and related document. Use status failure with acknowledged false to find failures nobody has handled yet.",
     {
       acknowledged: z.boolean().optional(),
       status: z
         .enum([
-          "FAILURE",
-          "PENDING",
-          "RECEIVED",
-          "RETRY",
-          "REVOKED",
-          "STARTED",
-          "SUCCESS",
+          "failure",
+          "pending",
+          "received",
+          "retry",
+          "revoked",
+          "started",
+          "success",
         ])
         .optional(),
       task_name: z
@@ -31,9 +44,17 @@ export function registerTaskTools(server: McpServer, api: PaperlessAPI) {
         .optional(),
       type: z.enum(["auto_task", "scheduled_task", "manual_task"]).optional(),
     },
-    withErrorHandling(async (args) => {
+    withErrorHandling(async ({ status, ...filters }) => {
       if (!api) throw new Error("Please configure API connection first");
-      const tasks = await api.getTasks(buildQueryString(args));
+      const getTasks = (statusValue?: string) =>
+        api.getTasks(buildQueryString({ ...filters, status: statusValue }));
+      let tasks;
+      try {
+        tasks = await getTasks(status);
+      } catch (err) {
+        if (!status || !isStatusChoiceError(err)) throw err;
+        tasks = await getTasks(status.toUpperCase());
+      }
       return {
         content: [{ type: "text", text: JSON.stringify(tasks) }],
       };

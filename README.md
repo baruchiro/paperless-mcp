@@ -465,12 +465,12 @@ list_storage_paths({ page: 1, page_size: 100, name__icontains: "Invoices" })
 #### list_tasks
 List Paperless consumer-queue tasks, including uploads that failed to consume (unsupported file type, duplicate of an existing document, unreadable file). The failure reason is in each task's `result`.
 
-Optional parameters: `acknowledged` (boolean), `status` (`FAILURE`, `PENDING`, `RECEIVED`, `RETRY`, `REVOKED`, `STARTED`, `SUCCESS`), `task_name` (`consume_file`, `train_classifier`, `check_sanity`, `index_optimize`), `type` (`auto_task`, `scheduled_task`, `manual_task`).
+Optional parameters: `acknowledged` (boolean), `status` (`failure`, `pending`, `received`, `retry`, `revoked`, `started`, `success`; sent in the casing Paperless 3.x expects, retried in uppercase for Paperless 2.x), `task_name` (`consume_file`, `train_classifier`, `check_sanity`, `index_optimize`), `type` (`auto_task`, `scheduled_task`, `manual_task`).
 
 Returns the array of tasks as returned by Paperless (`id`, `task_file_name`, `status`, `result`, `related_document`, dates, `acknowledged`).
 
 ```typescript
-list_tasks({ status: "FAILURE", acknowledged: false })
+list_tasks({ status: "failure", acknowledged: false })
 ```
 
 #### acknowledge_tasks

@@ -149,6 +149,42 @@ export interface GetStoragePathsResponse
   results: StoragePath[];
 }
 
+export type PaperlessTaskStatus =
+  | "FAILURE"
+  | "PENDING"
+  | "RECEIVED"
+  | "RETRY"
+  | "REVOKED"
+  | "STARTED"
+  | "SUCCESS";
+
+export type PaperlessTaskName =
+  | "consume_file"
+  | "train_classifier"
+  | "check_sanity"
+  | "index_optimize";
+
+export type PaperlessTaskType = "auto_task" | "scheduled_task" | "manual_task";
+
+export interface PaperlessTask {
+  id: number;
+  task_id: string;
+  task_name?: PaperlessTaskName | null;
+  task_file_name?: string | null;
+  date_created?: string | null;
+  date_done?: string | null;
+  type?: PaperlessTaskType;
+  status?: PaperlessTaskStatus;
+  result?: string | null;
+  acknowledged?: boolean;
+  related_document: string | number | null;
+  owner?: number | null;
+}
+
+export interface AcknowledgeTasksResult {
+  result: number;
+}
+
 export interface DocumentType {
   id: number;
   slug: string;

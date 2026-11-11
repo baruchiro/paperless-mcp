@@ -1,6 +1,7 @@
 import axios, { AxiosResponse } from "axios";
 import FormData from "form-data";
 import {
+  AcknowledgeTasksResult,
   BulkEditDocumentsResult,
   BulkEditParameters,
   Correspondent,
@@ -18,6 +19,7 @@ import {
   GetTagsResponse,
   GetStoragePathsResponse,
   Note,
+  PaperlessTask,
   Tag,
 } from "./types";
 import { headersToObject } from "./utils";
@@ -279,6 +281,19 @@ export class PaperlessAPI {
   async getStoragePaths(queryString?: string): Promise<GetStoragePathsResponse> {
     const url = queryString ? `/storage_paths/?${queryString}` : "/storage_paths/";
     return this.request<GetStoragePathsResponse>(url);
+  }
+
+  // Task operations
+  async getTasks(queryString?: string): Promise<PaperlessTask[]> {
+    const url = queryString ? `/tasks/?${queryString}` : "/tasks/";
+    return this.request<PaperlessTask[]>(url);
+  }
+
+  async acknowledgeTasks(tasks: number[]): Promise<AcknowledgeTasksResult> {
+    return this.request<AcknowledgeTasksResult>("/tasks/acknowledge/", {
+      method: "POST",
+      body: JSON.stringify({ tasks }),
+    });
   }
 
   // Correspondent operations

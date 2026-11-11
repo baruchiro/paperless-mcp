@@ -460,6 +460,33 @@ Returns the API pagination envelope (`count`, `results`, and available `next`, `
 list_storage_paths({ page: 1, page_size: 100, name__icontains: "Invoices" })
 ```
 
+### Task Operations
+
+#### list_tasks
+List Paperless consumer-queue tasks, including uploads that failed to consume (unsupported file type, duplicate of an existing document, unreadable file). The failure reason is in each task's `result`.
+
+Optional parameters: `acknowledged` (boolean), `status` (`failure`, `pending`, `received`, `retry`, `revoked`, `started`, `success`; sent in the casing Paperless 3.x expects, retried in uppercase for Paperless 2.x), `task_name` (`consume_file`, `train_classifier`, `check_sanity`, `index_optimize`), `type` (`auto_task`, `scheduled_task`, `manual_task`).
+
+Returns the array of tasks as returned by Paperless (`id`, `task_file_name`, `status`, `result`, `related_document`, dates, `acknowledged`). `task_file_name` and `related_document` can be `null` for tasks that are not uploads.
+
+On Paperless-ngx 2.14.7, which only supports up to API version 7 (set `PAPERLESS_API_VERSION=7`), the filters are ignored and acknowledged tasks are not returned.
+
+```typescript
+list_tasks({ status: "failure", acknowledged: false })
+```
+
+#### acknowledge_tasks
+Mark tasks as acknowledged by their numeric IDs from `list_tasks`. This only sets the `acknowledged` flag; it does not delete or retry tasks.
+
+Parameters:
+- tasks: Array of task IDs
+
+Returns `{ "result": <number of tasks acknowledged> }`.
+
+```typescript
+acknowledge_tasks({ tasks: [12, 13] })
+```
+
 ### Correspondent Operations
 
 #### list_correspondents

@@ -17,6 +17,11 @@ export interface CreateMcpServerOptions {
   token: string;
   version: string;
   publicUrl: string;
+  /**
+   * Headers added to every Paperless-NGX request, for instances behind a
+   * reverse proxy that requires its own credentials (e.g. Cloudflare Access).
+   */
+  extraHeaders?: Record<string, string>;
 }
 
 export function createMcpServer({
@@ -24,8 +29,9 @@ export function createMcpServer({
   token,
   version,
   publicUrl,
+  extraHeaders,
 }: CreateMcpServerOptions): McpServer {
-  const api = new PaperlessAPI(baseUrl, token);
+  const api = new PaperlessAPI(baseUrl, token, extraHeaders);
   const server = new McpServer(
     { name: "paperless-ngx", version },
     { instructions: buildInstructions(publicUrl) }

@@ -68,8 +68,46 @@ Add these to your MCP config file:
 | `PAPERLESS_PUBLIC_URL` | No | `PAPERLESS_URL` | Public-facing URL for document links |
 | `PAPERLESS_API_VERSION` | No | `9` | Paperless-ngx REST API version. `9` works on Paperless-ngx v2.x (recent) and v3.x. Paperless-ngx v3.0.0 dropped support for versions below `9`, so older defaults now return HTTP 406. If you see HTTP 406 errors, set this to a version your server supports. |
 | `PAPERLESS_MCP_UPLOAD_PATHS` | No | — | Colon-separated list of allowed directories for `file_path` uploads. **Recommended for security.** Example: `/var/uploads:/tmp/scans` |
+| `PAPERLESS_EXTRA_HEADERS` | No | — | JSON object of extra headers sent with every request. See [Instances behind an authenticating proxy](#instances-behind-an-authenticating-proxy). |
 
 That's it! Now you can ask Claude to help you manage your Paperless-NGX documents.
+
+### Instances behind an authenticating proxy
+
+If your Paperless-NGX instance sits behind a reverse proxy that requires its own credentials — Cloudflare Access, an API gateway, or a proxy expecting a shared secret — the proxy rejects the MCP server before Paperless ever sees the request. `PAPERLESS_EXTRA_HEADERS` adds headers to every outbound request so it can get through:
+
+```json
+{
+  "mcpServers": {
+    "paperless": {
+      "command": "npx",
+      "args": ["-y", "@baruchiro/paperless-mcp"],
+      "env": {
+        "PAPERLESS_URL": "https://paperless.example.com",
+        "PAPERLESS_API_KEY": "your-api-token",
+        "PAPERLESS_EXTRA_HEADERS": "{\"CF-Access-Client-Id\":\"<client-id>.access\",\"CF-Access-Client-Secret\":\"<client-secret>\"}"
+      }
+    }
+  }
+}
+```
+
+The same headers can be passed on the command line, repeating the flag once per header:
+
+```bash
+npx @baruchiro/paperless-mcp \
+  --baseUrl https://paperless.example.com --token your-api-token \
+  --header "CF-Access-Client-Id: <client-id>.access" \
+  --header "CF-Access-Client-Secret: <client-secret>"
+```
+
+`--header` takes precedence over `PAPERLESS_EXTRA_HEADERS` for the same header name, compared case-insensitively as HTTP requires. Header names and values are validated at startup, so a typo fails immediately instead of surfacing later as a connection error.
+
+Three header names are reserved, because the client sets them itself, and configuring them is rejected rather than silently ignored: `Authorization` carries the Paperless-NGX API token, `Accept` pins the API version, and `Content-Type` follows the request body. A proxy that needs its own `Authorization` header is therefore not supported.
+
+While extra headers are configured, a redirect that leaves the configured origin is refused rather than followed, so the headers cannot reach a host you did not configure. The check looks at the real redirect target, so it also holds when requests go through an HTTP proxy from the environment (`HTTPS_PROXY`), and a loopback base URL bypasses such a proxy altogether.
+
+> These headers are usually credentials, so two things follow. `PAPERLESS_URL` must use `https://` whenever extra headers are configured — a cleartext `http://` base URL is refused, apart from loopback addresses for local testing. And prefer `PAPERLESS_EXTRA_HEADERS` over `--header`: command-line arguments are visible in shell history and to anyone who can list processes on the machine.
 
 ### Example Usage
 

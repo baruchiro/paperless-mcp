@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 import { parseArgs } from "node:util";
+import { canSendCredentials, parseExtraHeaders } from "./api/utils";
 import {
   createMcpServer,
   getBearerToken,
@@ -12,7 +13,15 @@ import {
 const { version } = require("../package.json") as { version: string };
 
 const {
-  values: { baseUrl, token, http: useHttp, port, publicUrl, "no-auth": noAuth },
+  values: {
+    baseUrl,
+    token,
+    http: useHttp,
+    port,
+    publicUrl,
+    "no-auth": noAuth,
+    header: cliHeaders,
+  },
 } = parseArgs({
   options: {
     baseUrl: { type: "string" },
@@ -21,6 +30,7 @@ const {
     port: { type: "string" },
     publicUrl: { type: "string", default: "" },
     "no-auth": { type: "boolean", default: false },
+    header: { type: "string", multiple: true, default: [] },
   },
   allowPositionals: true,
 });
@@ -33,7 +43,7 @@ const resolvedPort = port ? parseInt(port, 10) : 3000;
 
 if (!resolvedBaseUrl) {
   console.error(
-    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth]"
+    'Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth] [--header "Name: value"]'
   );
   console.error(
     "Or set PAPERLESS_URL and PAPERLESS_API_KEY environment variables."
@@ -43,7 +53,7 @@ if (!resolvedBaseUrl) {
 
 if (!useHttp && !resolvedToken) {
   console.error(
-    "Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth]"
+    'Usage: paperless-mcp --baseUrl <url> --token <token> [--http] [--port <port>] [--publicUrl <url>] [--no-auth] [--header "Name: value"]'
   );
   console.error(
     "Or set PAPERLESS_URL and PAPERLESS_API_KEY environment variables."
@@ -60,12 +70,38 @@ if (noAuth && !resolvedToken) {
   process.exit(1);
 }
 
+let resolvedExtraHeaders: Record<string, string>;
+try {
+  resolvedExtraHeaders = parseExtraHeaders(
+    process.env.PAPERLESS_EXTRA_HEADERS,
+    cliHeaders
+  );
+} catch (error) {
+  console.error(
+    `[paperless-mcp] ${error instanceof Error ? error.message : String(error)}`
+  );
+  process.exit(1);
+}
+
+if (
+  Object.keys(resolvedExtraHeaders).length > 0 &&
+  !canSendCredentials(resolvedBaseUrl)
+) {
+  console.error(
+    "[paperless-mcp] Refusing to send configured headers to a cleartext HTTP base URL. " +
+      "Extra headers usually carry proxy credentials, so PAPERLESS_URL must use https:// " +
+      "(a loopback address is allowed for local testing)."
+  );
+  process.exit(1);
+}
+
 function buildServer(requestToken: string) {
   return createMcpServer({
     baseUrl: resolvedBaseUrl!,
     token: requestToken,
     version,
     publicUrl: resolvedPublicUrl!,
+    extraHeaders: resolvedExtraHeaders,
   });
 }
 

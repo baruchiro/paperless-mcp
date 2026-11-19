@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { spawn, ChildProcess } from "node:child_process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { connectMcpClient, parseToolText, ToolResult } from "./client";
-import { waitForDocumentTag } from "./waitForDocumentTag";
 
 const PAPERLESS_URL = process.env.PAPERLESS_URL ?? "http://localhost:8000";
 const PAPERLESS_TOKEN = process.env.PAPERLESS_TOKEN ?? "";
@@ -631,7 +630,20 @@ describe("Paperless MCP E2E scenario", () => {
     })) as ToolResult;
     assertOk(addResult, "bulk_edit_documents add_tags");
 
-    await waitForDocumentTag(client, state.documentId, state.tagId, true);
+    const docAfterAdd = (await client.callTool({
+      name: "get_document",
+      arguments: { id: state.documentId },
+    })) as ToolResult;
+    assertOk(docAfterAdd, "get_document after add_tags");
+    type TagItem = number | { id: number; name?: string };
+    const docData = parseToolText(docAfterAdd) as { tags: TagItem[] };
+    const tagIds = (docData.tags ?? []).map((t) =>
+      typeof t === "number" ? t : t.id
+    );
+    assert.ok(
+      tagIds.includes(state.tagId),
+      `tag ${state.tagId} should be on document after add_tags, got tags=${JSON.stringify(tagIds)}`
+    );
   });
 
   it("bulk_edit_documents remove_tags removes the tag and get_document reflects it", async () => {
@@ -647,7 +659,20 @@ describe("Paperless MCP E2E scenario", () => {
     })) as ToolResult;
     assertOk(removeResult, "bulk_edit_documents remove_tags");
 
-    await waitForDocumentTag(client, state.documentId, state.tagId, false);
+    const docAfterRemove = (await client.callTool({
+      name: "get_document",
+      arguments: { id: state.documentId },
+    })) as ToolResult;
+    assertOk(docAfterRemove, "get_document after remove_tags");
+    type TagItem = number | { id: number; name?: string };
+    const removedData = parseToolText(docAfterRemove) as { tags: TagItem[] };
+    const removedTagIds = (removedData.tags ?? []).map((t) =>
+      typeof t === "number" ? t : t.id
+    );
+    assert.ok(
+      !removedTagIds.includes(state.tagId),
+      `tag ${state.tagId} should be removed, got tags=${JSON.stringify(removedTagIds)}`
+    );
   });
 
   it("create_custom_field creates a string field used by the filter tests", async () => {

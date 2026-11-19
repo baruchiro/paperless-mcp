@@ -823,3 +823,19 @@ describe("nullable foreign keys can still be cleared (#138)", () => {
   });
 
 });
+
+test("bulk document deletion is described as trashing and still requires confirmation", async () => {
+  const { api, calls } = createDocumentApi([]);
+  await withDocumentClient(api, async client => {
+    const tools = await client.listTools();
+    const bulk = tools.tools.find(tool => tool.name === "bulk_edit_documents");
+    assert.match(bulk?.description ?? "", /'delete' moves documents to the Paperless trash/);
+    assert.doesNotMatch(bulk?.description ?? "", /permanently deletes documents/);
+    const denied = await client.callTool({ name: "bulk_edit_documents", arguments: { documents: [1], method: "delete" } });
+    assert.equal(denied.isError, true);
+    assert.equal(calls.bulkEditDocuments.length, 0);
+    const allowed = await client.callTool({ name: "bulk_edit_documents", arguments: { documents: [1], method: "delete", confirm: true } });
+    assert.notEqual(allowed.isError, true);
+    assert.equal(calls.bulkEditDocuments.length, 1);
+  });
+});

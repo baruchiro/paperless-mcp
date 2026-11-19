@@ -77,7 +77,7 @@ export function registerTagTools(server: McpServer, api: PaperlessAPI) {
     "Update an existing tag's name, color, matching pattern, or matching algorithm.",
     {
       id: z.number(),
-      name: z.string(),
+      name: z.string().optional(),
       color: z
         .string()
         .regex(/^#[0-9A-Fa-f]{6}$/)

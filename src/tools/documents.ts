@@ -149,7 +149,7 @@ async function executeDocumentQuery(
 export function registerDocumentTools(server: McpServer, api: PaperlessAPI) {
   server.tool(
     "bulk_edit_documents",
-    "Perform bulk operations on multiple documents. Note: 'remove_tag' removes a tag from specific documents (tag remains in system), while 'delete_tag' permanently deletes a tag from the entire system. ⚠️ WARNING: 'delete' method permanently deletes documents and requires confirmation.",
+    "Perform bulk operations on multiple documents. Note: 'remove_tag' removes a tag from specific documents (tag remains in system), while 'delete_tag' permanently deletes a tag from the entire system. ⚠️ WARNING: 'delete' moves documents to the trash on Paperless-ngx 2.10+ (temporarily restorable; retention depends on server policy and documents may be permanently removed automatically or manually); older versions permanently delete them. Confirmation is required in all versions.",
     {
       documents: z.array(z.number()),
       method: z.enum([

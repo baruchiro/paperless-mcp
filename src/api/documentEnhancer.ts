@@ -80,22 +80,22 @@ async function enhanceDocumentsArray(
 
   const [correspondents, documentTypes, tags, customFields] = await Promise.all(
     [
-      api.getCorrespondents(),
-      api.getDocumentTypes(),
-      api.getTags(),
-      api.getCustomFields(),
+      api.getCorrespondents(undefined, documents.flatMap(doc => doc.correspondent ? [doc.correspondent] : [])),
+      api.getDocumentTypes(documents.flatMap(doc => doc.document_type ? [doc.document_type] : [])),
+      api.getTags(documents.flatMap(doc => doc.tags || [])),
+      api.getCustomFields(documents.flatMap(doc => (doc.custom_fields || []).map(field => field.field))),
     ]
   );
 
   const correspondentMap = new Map(
-    (correspondents.results || []).map((c) => [c.id, c.name])
+    correspondents.results.map((c) => [c.id, c.name])
   );
   const documentTypeMap = new Map(
-    (documentTypes.results || []).map((dt) => [dt.id, dt.name])
+    documentTypes.results.map((dt) => [dt.id, dt.name])
   );
-  const tagMap = new Map((tags.results || []).map((tag) => [tag.id, tag.name]));
+  const tagMap = new Map(tags.results.map((tag) => [tag.id, tag.name]));
   const customFieldMap = new Map(
-    (customFields.results || []).map((cf) => [cf.id, cf.name])
+    customFields.results.map((cf) => [cf.id, cf.name])
   );
 
   return documents

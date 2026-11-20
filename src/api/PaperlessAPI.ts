@@ -20,6 +20,7 @@ import {
   GetStoragePathsResponse,
   Note,
   PaperlessTask,
+  PaginationResponse,
   Tag,
 } from "./types";
 import { headersToObject } from "./utils";
@@ -36,7 +37,7 @@ export class PaperlessAPI {
     this.apiVersion = process.env.PAPERLESS_API_VERSION || "9";
   }
 
-  async request<T = any>(path: string, options: RequestInit = {}) {
+  async request<T = any>(path: string, options: RequestInit = {}, timeoutMs?: number) {
     const url = `${this.baseUrl}/api${path}`;
     const isJson = !options.body || typeof options.body === "string";
 
@@ -54,6 +55,7 @@ export class PaperlessAPI {
         method: options.method || "GET",
         headers: mergedHeaders,
         data: options.body,
+        ...(timeoutMs === undefined ? {} : { timeout: timeoutMs }),
       });
 
       const body = response.data;
@@ -253,9 +255,41 @@ export class PaperlessAPI {
     });
   }
 
+  private async getMetadata<T extends { id: number }>(
+    path: string,
+    resolveIds?: number[]
+  ): Promise<PaginationResponse<T>> {
+    if (resolveIds === undefined) return this.request<PaginationResponse<T>>(path);
+    const missing = new Set(resolveIds);
+    const results: T[] = [];
+    if (!missing.size) return { count: 0, next: null, previous: null, all: [], results };
+    const deadline = Date.now() + 10000;
+    let response: PaginationResponse<T> = { count: 0, next: null, previous: null, all: [], results };
+    for (let page = 1; page <= 20 && Date.now() < deadline; page++) {
+      try {
+        const separator = path.includes("?") ? "&" : "?";
+        response = await this.request<PaginationResponse<T>>(
+          `${path}${separator}page=${page}&page_size=100`, {}, Math.max(1, deadline - Date.now())
+        );
+      } catch (error) {
+        if (page === 1) throw error;
+        break;
+      }
+      for (const item of response.results) {
+        results.push(item);
+        missing.delete(item.id);
+      }
+      if (!response.next || !missing.size) break;
+    }
+    if (missing.size && response.next) {
+      console.warn("Metadata lookup incomplete; unresolved names will use IDs");
+    }
+    return { ...response, results };
+  }
+
   // Tag operations
-  async getTags(): Promise<GetTagsResponse> {
-    return this.request<GetTagsResponse>("/tags/");
+  async getTags(resolveIds?: number[]): Promise<GetTagsResponse> {
+    return this.getMetadata<Tag>("/tags/", resolveIds);
   }
 
   async createTag(data: Partial<Tag>): Promise<Tag> {
@@ -298,12 +332,13 @@ export class PaperlessAPI {
 
   // Correspondent operations
   async getCorrespondents(
-    queryString?: string
+    queryString?: string,
+    resolveIds?: number[]
   ): Promise<GetCorrespondentsResponse> {
     const url = queryString
       ? `/correspondents/?${queryString}`
       : "/correspondents/";
-    return this.request<GetCorrespondentsResponse>(url);
+    return this.getMetadata<Correspondent>(url, resolveIds);
   }
 
   async getCorrespondent(id: number): Promise<Correspondent> {
@@ -336,8 +371,8 @@ export class PaperlessAPI {
   }
 
   // Document type operations
-  async getDocumentTypes(): Promise<GetDocumentTypesResponse> {
-    return this.request<GetDocumentTypesResponse>("/document_types/");
+  async getDocumentTypes(resolveIds?: number[]): Promise<GetDocumentTypesResponse> {
+    return this.getMetadata<DocumentType>("/document_types/", resolveIds);
   }
 
   async createDocumentType(data: Partial<DocumentType>): Promise<DocumentType> {
@@ -413,8 +448,8 @@ export class PaperlessAPI {
   }
 
   // Custom field operations
-  async getCustomFields(): Promise<GetCustomFieldsResponse> {
-    return this.request<GetCustomFieldsResponse>("/custom_fields/");
+  async getCustomFields(resolveIds?: number[]): Promise<GetCustomFieldsResponse> {
+    return this.getMetadata<CustomField>("/custom_fields/", resolveIds);
   }
 
   async getCustomField(id: number): Promise<CustomField> {

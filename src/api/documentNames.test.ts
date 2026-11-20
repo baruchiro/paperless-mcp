@@ -5,8 +5,11 @@ import { PaperlessAPI } from "./PaperlessAPI";
 import { convertDocsWithNames } from "./documentEnhancer";
 import { createDocument } from "../test/mocks/paperlessApi";
 
-for (const laterPageFails of [false, true]) {
-  test(`document names beyond page one${laterPageFails ? " preserve available names when a later page fails" : " resolve across all metadata collections"}`, async () => {
+for (const { scenario, laterPageFails } of [
+  { scenario: "resolves names from later metadata pages", laterPageFails: false },
+  { scenario: "retains available names when a later page fails", laterPageFails: true },
+]) {
+  test(scenario, async () => {
     const http = createServer((req, res) => {
       const url = new URL(req.url!, "http://localhost");
       const page = Number(url.searchParams.get("page") || 1);

@@ -1,6 +1,6 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { PaperlessAPI } from "./PaperlessAPI";
-import { Document, DocumentsResponse, PaginationResponse } from "./types";
+import { Document, DocumentsResponse } from "./types";
 import { NamedItem } from "./utils";
 
 interface CustomField {
@@ -70,26 +70,6 @@ export async function convertDocsWithNames(
   };
 }
 
-async function collectPages<T>(
-  firstPage: Promise<PaginationResponse<T>>,
-  path: string,
-  api: PaperlessAPI
-): Promise<T[]> {
-  let response = await firstPage;
-  const results = [...(response.results || [])];
-  let page = 1;
-  while (response.next) {
-    try {
-      response = await api.request<PaginationResponse<T>>(`${path}?page=${++page}`);
-      results.push(...(response.results || []));
-    } catch {
-      console.warn(`Could not fetch all ${path} names; unresolved names will use IDs`);
-      break;
-    }
-  }
-  return results;
-}
-
 async function enhanceDocumentsArray(
   documents: Document[],
   api: PaperlessAPI
@@ -100,22 +80,22 @@ async function enhanceDocumentsArray(
 
   const [correspondents, documentTypes, tags, customFields] = await Promise.all(
     [
-      collectPages(api.getCorrespondents(), "/correspondents/", api),
-      collectPages(api.getDocumentTypes(), "/document_types/", api),
-      collectPages(api.getTags(), "/tags/", api),
-      collectPages(api.getCustomFields(), "/custom_fields/", api),
+      api.getCorrespondents(undefined, documents.flatMap(doc => doc.correspondent ? [doc.correspondent] : [])),
+      api.getDocumentTypes(documents.flatMap(doc => doc.document_type ? [doc.document_type] : [])),
+      api.getTags(documents.flatMap(doc => doc.tags || [])),
+      api.getCustomFields(documents.flatMap(doc => (doc.custom_fields || []).map(field => field.field))),
     ]
   );
 
   const correspondentMap = new Map(
-    correspondents.map((c) => [c.id, c.name])
+    correspondents.results.map((c) => [c.id, c.name])
   );
   const documentTypeMap = new Map(
-    documentTypes.map((dt) => [dt.id, dt.name])
+    documentTypes.results.map((dt) => [dt.id, dt.name])
   );
-  const tagMap = new Map(tags.map((tag) => [tag.id, tag.name]));
+  const tagMap = new Map(tags.results.map((tag) => [tag.id, tag.name]));
   const customFieldMap = new Map(
-    customFields.map((cf) => [cf.id, cf.name])
+    customFields.results.map((cf) => [cf.id, cf.name])
   );
 
   return documents

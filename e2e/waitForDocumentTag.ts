@@ -5,14 +5,14 @@ import { parseToolText, ToolResult } from "./client";
 
 // Paperless 3.5 queues bulk edits. Submission success does not mean the
 // document has changed yet. Retry only stale readback, never tool/API errors.
-export async function waitForDocumentTag(
+export const waitForDocumentTag = async (
   client: Pick<Client, "callTool">,
   documentId: number,
   tagId: number,
   present: boolean,
   timeoutMs = 15000,
   intervalMs = 250
-): Promise<void> {
+): Promise<void> => {
   const deadline = performance.now() + timeoutMs;
   let tagIds: number[] = [];
   while (performance.now() < deadline) {
@@ -34,4 +34,4 @@ export async function waitForDocumentTag(
     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
   }
   assert.fail(`Timed out after ${timeoutMs}ms waiting for tag ${tagId} to be ${present ? "present" : "absent"} on document ${documentId}; last tags=${JSON.stringify(tagIds)}`);
-}
+};

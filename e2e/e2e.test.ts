@@ -191,7 +191,7 @@ after(async () => {
 });
 
 describe("Paperless MCP E2E scenario", () => {
-  it("create_tag creates a tag and returns it with an id", async () => {
+  it("tag can be created and updated without resending its name", async () => {
     const result = (await client.callTool({
       name: "create_tag",
       arguments: { name: RUN_TAG },
@@ -201,9 +201,17 @@ describe("Paperless MCP E2E scenario", () => {
     assert.ok(typeof tag.id === "number", `tag.id should be a number, got ${JSON.stringify(tag)}`);
     assert.strictEqual(tag.name, RUN_TAG);
     state.tagId = tag.id;
+    const updated = await client.callTool({
+      name: "update_tag",
+      arguments: { id: tag.id, match: "partial-update", matching_algorithm: 1 },
+    }) as ToolResult;
+    assertOk(updated, "update_tag without name");
+    const partial = parseToolText(updated) as { name: string; match: string };
+    assert.equal(partial.name, RUN_TAG);
+    assert.equal(partial.match, "partial-update");
   });
 
-  it("create_correspondent creates a correspondent and returns it with an id", async () => {
+  it("correspondent can be created and updated without resending its name", async () => {
     const result = (await client.callTool({
       name: "create_correspondent",
       arguments: { name: RUN_CORRESPONDENT },
@@ -213,9 +221,17 @@ describe("Paperless MCP E2E scenario", () => {
     assert.ok(typeof correspondent.id === "number");
     assert.strictEqual(correspondent.name, RUN_CORRESPONDENT);
     state.correspondentId = correspondent.id;
+    const updated = await client.callTool({
+      name: "update_correspondent",
+      arguments: { id: correspondent.id, match: "partial-update", matching_algorithm: 1 },
+    }) as ToolResult;
+    assertOk(updated, "update_correspondent without name");
+    const partial = parseToolText(updated) as { name: string; match: string };
+    assert.equal(partial.name, RUN_CORRESPONDENT);
+    assert.equal(partial.match, "partial-update");
   });
 
-  it("create_document_type creates a document type and returns it with an id", async () => {
+  it("document_type can be created and updated without resending its name", async () => {
     const result = (await client.callTool({
       name: "create_document_type",
       arguments: { name: RUN_DOCUMENT_TYPE },
@@ -225,6 +241,14 @@ describe("Paperless MCP E2E scenario", () => {
     assert.ok(typeof docType.id === "number");
     assert.strictEqual(docType.name, RUN_DOCUMENT_TYPE);
     state.documentTypeId = docType.id;
+    const updated = await client.callTool({
+      name: "update_document_type",
+      arguments: { id: docType.id, match: "partial-update", matching_algorithm: 1 },
+    }) as ToolResult;
+    assertOk(updated, "update_document_type without name");
+    const partial = parseToolText(updated) as { name: string; match: string };
+    assert.equal(partial.name, RUN_DOCUMENT_TYPE);
+    assert.equal(partial.match, "partial-update");
   });
 
   it("list_tags returns the tag created earlier in this run", async () => {

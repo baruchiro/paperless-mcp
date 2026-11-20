@@ -85,7 +85,7 @@ export function registerDocumentTypeTools(
     "Update an existing document type's name, matching pattern, or matching algorithm.",
     {
       id: z.number(),
-      name: z.string(),
+      name: z.string().optional(),
       match: z.string().optional(),
       matching_algorithm: matchingAlgorithmSchema.optional(),
     },

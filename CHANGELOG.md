@@ -1,5 +1,11 @@
 # @baruchiro/paperless-mcp
 
+## 2.3.1
+
+### Patch Changes
+
+- 163e0af: Allow tag, correspondent and document type PATCH updates without supplying a name.
+
 ## 2.3.0
 
 ### Minor Changes

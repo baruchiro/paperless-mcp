@@ -1,7 +1,42 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { PaperlessAPI } from "./PaperlessAPI";
-import { Document, DocumentsResponse } from "./types";
+import { Document, DocumentsResponse, PaginationResponse } from "./types";
 import { NamedItem } from "./utils";
+
+// paperless-ngx's StandardPagination clamps page_size to this value (it does not
+// reject a larger request), and it is the most rows paperless returns in one
+// page. One request this size covers any realistic instance; beyond it,
+// fetchAllRows walks the remaining pages.
+const PAPERLESS_MAX_PAGE_SIZE = 100000;
+
+/**
+ * Fetch every row of a paginated Paperless list endpoint.
+ *
+ * The default Paperless page size is 25, so building an id->name map from a bare
+ * list call only covers the first 25 rows (ordered by name) and every other id
+ * silently falls back to its stringified number. Request the whole set in one
+ * page, then walk further pages only if the reported `count` somehow exceeds the
+ * server's page_size ceiling.
+ */
+async function fetchAllRows<T>(
+  fetchPage: (queryString?: string) => Promise<PaginationResponse<T>>
+): Promise<T[]> {
+  const firstPage = await fetchPage(`page_size=${PAPERLESS_MAX_PAGE_SIZE}`);
+  const rows = firstPage.results ? [...firstPage.results] : [];
+  const total = firstPage.count ?? rows.length;
+
+  for (let page = 2; rows.length < total; page++) {
+    const { results } = await fetchPage(
+      `page=${page}&page_size=${PAPERLESS_MAX_PAGE_SIZE}`
+    );
+    if (!results?.length) {
+      break;
+    }
+    rows.push(...results);
+  }
+
+  return rows;
+}
 
 interface CustomField {
   field: number;
@@ -78,25 +113,17 @@ async function enhanceDocumentsArray(
     return [];
   }
 
-  const [correspondents, documentTypes, tags, customFields] = await Promise.all(
-    [
-      api.getCorrespondents(),
-      api.getDocumentTypes(),
-      api.getTags(),
-      api.getCustomFields(),
-    ]
-  );
+  const [correspondents, documentTypes, tags, customFields] = await Promise.all([
+    fetchAllRows((queryString) => api.getCorrespondents(queryString)),
+    fetchAllRows((queryString) => api.getDocumentTypes(queryString)),
+    fetchAllRows((queryString) => api.getTags(queryString)),
+    fetchAllRows((queryString) => api.getCustomFields(queryString)),
+  ]);
 
-  const correspondentMap = new Map(
-    (correspondents.results || []).map((c) => [c.id, c.name])
-  );
-  const documentTypeMap = new Map(
-    (documentTypes.results || []).map((dt) => [dt.id, dt.name])
-  );
-  const tagMap = new Map((tags.results || []).map((tag) => [tag.id, tag.name]));
-  const customFieldMap = new Map(
-    (customFields.results || []).map((cf) => [cf.id, cf.name])
-  );
+  const correspondentMap = new Map(correspondents.map((c) => [c.id, c.name]));
+  const documentTypeMap = new Map(documentTypes.map((dt) => [dt.id, dt.name]));
+  const tagMap = new Map(tags.map((tag) => [tag.id, tag.name]));
+  const customFieldMap = new Map(customFields.map((cf) => [cf.id, cf.name]));
 
   return documents
     .map((doc) => {
